@@ -88,9 +88,7 @@ node -e "console.log(require('crypto').randomBytes(8).toString('hex'))"
 
 ### Phase 3: Deploy Backend to Render (15 minutes)
 
-See detailed guide: `RENDER_SETUP.md`
-
-**Quick Steps:**
+**Steps:**
 
 1. **Push to GitHub** (if not already)
    ```bash
@@ -134,9 +132,7 @@ See detailed guide: `RENDER_SETUP.md`
 
 ### Phase 4: Configure & Deploy Frontend to Vercel (10 minutes)
 
-See detailed guide: `VERCEL_FRONTEND_CONFIG.md`
-
-**Quick Steps:**
+**Steps:**
 
 1. **Set Vercel Environment Variables**
    - Go to Vercel project settings
@@ -371,6 +367,13 @@ NODE_ENV=production
 - Keep `.env.example` updated
 - Store actual values in secure password manager
 - Document all custom configurations
+
+## Quick Reference Files
+
+- **DEPLOYMENT_GUIDE.md** (this file) - Complete deployment walkthrough
+- **QUICK_DEPLOY_CHECKLIST.md** - Step-by-step checklist format
+- **BUILD_SUCCESS.md** - Build configuration and fixes applied
+- **render.yaml** - Render service configuration
 
 ## Support & Resources
 
