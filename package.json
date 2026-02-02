@@ -93,14 +93,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/danny-avila/LibreChat.git"
+    "url": "git+https://github.com/heza-ru/enablenext.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/danny-avila/LibreChat/issues"
+    "url": "https://github.com/heza-ru/enablenext/issues"
   },
-  "homepage": "https://librechat.ai/",
+  "homepage": "https://github.com/heza-ru/enablenext",
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
     "@eslint/compat": "^1.2.6",
