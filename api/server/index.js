@@ -62,20 +62,28 @@ const startServer = async () => {
   await performStartupChecks(appConfig);
   await updateInterfacePermissions(appConfig);
 
+  // Check if frontend is deployed separately (index.html doesn't exist)
   const indexPath = path.join(appConfig.paths.dist, 'index.html');
-  let indexHTML = fs.readFileSync(indexPath, 'utf8');
+  const isSeparateDeployment = !fs.existsSync(indexPath);
+  let indexHTML = '';
 
-  // In order to provide support to serving the application in a sub-directory
-  // We need to update the base href if the DOMAIN_CLIENT is specified and not the root path
-  if (process.env.DOMAIN_CLIENT) {
-    const clientUrl = new URL(process.env.DOMAIN_CLIENT);
-    const baseHref = clientUrl.pathname.endsWith('/')
-      ? clientUrl.pathname
-      : `${clientUrl.pathname}/`;
-    if (baseHref !== '/') {
-      logger.info(`Setting base href to ${baseHref}`);
-      indexHTML = indexHTML.replace(/base href="\/"/, `base href="${baseHref}"`);
+  if (!isSeparateDeployment) {
+    indexHTML = fs.readFileSync(indexPath, 'utf8');
+
+    // In order to provide support to serving the application in a sub-directory
+    // We need to update the base href if the DOMAIN_CLIENT is specified and not the root path
+    if (process.env.DOMAIN_CLIENT) {
+      const clientUrl = new URL(process.env.DOMAIN_CLIENT);
+      const baseHref = clientUrl.pathname.endsWith('/')
+        ? clientUrl.pathname
+        : `${clientUrl.pathname}/`;
+      if (baseHref !== '/') {
+        logger.info(`Setting base href to ${baseHref}`);
+        indexHTML = indexHTML.replace(/base href="\/"/, `base href="${baseHref}"`);
+      }
     }
+  } else {
+    logger.info('Running in API-only mode (separate frontend deployment)');
   }
 
   app.get('/health', (_req, res) => res.status(200).send('OK'));
@@ -162,20 +170,33 @@ const startServer = async () => {
 
   app.use(ErrorController);
 
-  app.use((req, res) => {
-    res.set({
-      'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',
-      Pragma: process.env.INDEX_PRAGMA || 'no-cache',
-      Expires: process.env.INDEX_EXPIRES || '0',
+  // Only serve frontend if not in separate deployment mode
+  if (!isSeparateDeployment) {
+    app.use((req, res) => {
+      res.set({
+        'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',
+        Pragma: process.env.INDEX_PRAGMA || 'no-cache',
+        Expires: process.env.INDEX_EXPIRES || '0',
+      });
+
+      const lang = req.cookies.lang || req.headers['accept-language']?.split(',')[0] || 'en-US';
+      const saneLang = lang.replace(/"/g, '&quot;');
+      let updatedIndexHtml = indexHTML.replace(/lang="en-US"/g, `lang="${saneLang}"`);
+
+      res.type('html');
+      res.send(updatedIndexHtml);
     });
-
-    const lang = req.cookies.lang || req.headers['accept-language']?.split(',')[0] || 'en-US';
-    const saneLang = lang.replace(/"/g, '&quot;');
-    let updatedIndexHtml = indexHTML.replace(/lang="en-US"/g, `lang="${saneLang}"`);
-
-    res.type('html');
-    res.send(updatedIndexHtml);
-  });
+  } else {
+    // API-only mode: return helpful message for non-API routes
+    app.use((req, res) => {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'This is an API-only server. Frontend is deployed separately.',
+        frontend: process.env.DOMAIN_CLIENT || 'Not configured',
+        apiEndpoints: '/api/*',
+      });
+    });
+  }
 
   app.listen(port, host, async (err) => {
     if (err) {

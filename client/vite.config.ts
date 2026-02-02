@@ -30,7 +30,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   // Set the directory where environment variables are loaded from and restrict prefixes
-  envDir: '../',
+  envDir: process.env.VERCEL ? '.' : '../',
   envPrefix: ['VITE_', 'SCRIPT_', 'DOMAIN_', 'ALLOW_'],
   plugins: [
     react(),

@@ -76,6 +76,7 @@ librechat.yml
 my.secrets
 !**/.env.example
 !**/.env.test.example
+!client/.env.production
 cache.json
 api/data/
 owner.yml
