@@ -19,7 +19,7 @@ The key insight: Vercel runs `npm run build` from the **client workspace**, so w
 "scripts": {
   "prebuild": "npm run build:packages",
   "prebuild:ci": "npm run build:packages",
-  "build:packages": "npm run build -w packages/data-provider && npm run build -w packages/client",
+  "build:packages": "npm --prefix .. run build:data-provider && npm --prefix .. run build:client-package",
   "build": "cross-env NODE_ENV=production vite build && node ./scripts/post-build.cjs",
   "build:ci": "cross-env NODE_ENV=development vite build --mode ci"
 }
@@ -27,9 +27,10 @@ The key insight: Vercel runs `npm run build` from the **client workspace**, so w
 
 **Why This Works:**
 - `prebuild` automatically runs **before** the `build` script
-- Uses npm workspace commands (`-w`) that work from any directory in the monorepo
+- Uses `npm --prefix ..` to execute npm from the root directory
+- This gives access to the workspace configuration defined in root `package.json`
+- Calls root build scripts that use workspace commands
 - Builds dependencies in correct order: data-provider → @librechat/client package
-- No reliance on `cd` commands or relative paths
 
 ### 2. Updated Root `package.json` Build Scripts
 Updated root scripts to use workspace commands for consistency:
@@ -63,42 +64,52 @@ Created a minimal PostCSS configuration for the @librechat/client package build 
 When Vercel runs the build:
 
 ```
-Vercel: npm run build (in client workspace)
+Vercel: npm run build (in /vercel/path0/client)
   ↓
 prebuild hook triggers automatically
   ↓
 npm run build:packages
   ↓
-1. npm run build -w packages/data-provider
-   → Builds librechat-data-provider
-   → Creates packages/data-provider/dist/
+npm --prefix .. run build:data-provider
+  → Executes from root: npm run build -w packages/data-provider
+  → Builds librechat-data-provider
+  → Creates packages/data-provider/dist/
   ↓
-2. npm run build -w packages/client
-   → Builds @librechat/client package
-   → Creates packages/client/dist/index.js
-   → Creates packages/client/dist/index.es.js
-   → Creates packages/client/dist/types/index.d.ts
+npm --prefix .. run build:client-package
+  → Executes from root: npm run build -w packages/client
+  → Builds @librechat/client package
+  → Creates packages/client/dist/index.js
+  → Creates packages/client/dist/index.es.js
+  → Creates packages/client/dist/types/index.d.ts
   ↓
 prebuild completes, build script runs
   ↓
-3. vite build (main client)
-   → Can now resolve @librechat/client imports
-   → vite-plugin-pwa can find package entry points
-   → Builds successfully to client/dist/
+vite build (main client)
+  → Can now resolve @librechat/client imports
+  → vite-plugin-pwa can find package entry points
+  → Builds successfully to client/dist/
 ```
 
-## Why Workspace Commands?
-Using `npm run build -w workspace-name` instead of `cd` commands provides:
-- **Context-aware**: Works from any directory in the monorepo
+## Why `npm --prefix` + Workspace Commands?
+Using `npm --prefix ..` to run root scripts that use workspace commands provides:
+- **Root context**: `--prefix ..` executes npm from the root directory where workspaces are defined
+- **Workspace access**: Root scripts can use `-w` flag to target specific workspaces
 - **Dependency resolution**: npm understands workspace relationships
-- **Reliability**: Consistent behavior in local, CI, and Vercel environments
+- **Reliability**: Works regardless of where Vercel starts the build
 - **Error handling**: Clear error messages with proper exit codes
+- **No path issues**: Avoids problems with `cd` commands and relative paths
 
 ## Key Insight: Vercel + Monorepos
-Vercel detects which workspace contains the frontend build and runs the build from **that workspace's directory**, not from the root. This is why:
-- Root-level build scripts were bypassed
-- `cd` commands in prebuild were failing (wrong starting directory)
-- Workspace commands (`-w`) are the correct solution
+Vercel detects which workspace contains the frontend build and runs the build from **that workspace's directory** (`/vercel/path0/client`), not from the root. This creates two challenges:
+
+1. **Workspace commands don't work from subdirectories**: When running `npm run build -w packages/client` from the client folder, npm can't find workspaces because they're defined in the root `package.json`
+
+2. **Solution: `npm --prefix ..`**: By using `npm --prefix ..`, we tell npm to execute commands from the parent (root) directory, giving access to the workspace configuration while still being called from the client's prebuild script
+
+This is why:
+- Root-level build scripts were initially bypassed
+- Direct workspace commands (`-w`) failed with "No workspaces found"
+- The `--prefix ..` approach solves both problems by bridging the gap between Vercel's build location and the workspace configuration
 
 ## Testing
 Deploy to Vercel. The build should now:
