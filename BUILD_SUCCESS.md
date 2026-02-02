@@ -132,3 +132,17 @@ Deploy to Vercel. The build should now:
 4. Build packages/client (@librechat/client) → dist/ with entry points
 5. Build main client with vite → client/dist/
 6. Successfully deploy static files from client/dist/
+
+## Deployment Configuration
+
+This project is now configured for separate backend/frontend deployment:
+
+- **Backend**: Deploy to Render (see `RENDER_SETUP.md`)
+- **Frontend**: Deploy to Vercel (see `VERCEL_FRONTEND_CONFIG.md`)
+- **Complete Guide**: See `DEPLOYMENT_GUIDE.md` for step-by-step instructions
+
+### Key Changes for Deployment:
+1. Frontend makes API calls to separate backend via `VITE_API_URL`
+2. CORS configured for cross-origin requests
+3. `vercel.json` updated for frontend-only deployment
+4. Backend health check endpoint available at `/api/health`

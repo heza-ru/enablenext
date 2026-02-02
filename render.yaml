@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: enablenext-backend
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build:packages
+    startCommand: npm run backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: TRUST_PROXY
+        value: 1
+      - key: CONSOLE_JSON
+        value: true
+      - key: DEBUG_LOGGING
+        value: false
+      # These will need to be set in Render dashboard
+      - key: MONGO_URI
+        sync: false
+      - key: DOMAIN_CLIENT
+        sync: false
+      - key: DOMAIN_SERVER
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CREDS_KEY
+        sync: false
+      - key: CREDS_IV
+        sync: false
+      - key: SESSION_EXPIRY
+        value: 900000
+      - key: REFRESH_TOKEN_EXPIRY
+        value: 604800000
+    healthCheckPath: /api/health

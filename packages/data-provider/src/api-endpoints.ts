@@ -3,7 +3,11 @@ import * as q from './types/queries';
 import { ResourceType } from './accessPermissions';
 
 let BASE_URL = '';
-if (
+
+// Check for environment variable first (for separate backend deployment)
+if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+  BASE_URL = import.meta.env.VITE_API_URL;
+} else if (
   typeof process === 'undefined' ||
   (process as typeof process & { browser?: boolean }).browser === true
 ) {
