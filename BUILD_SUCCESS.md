@@ -59,6 +59,19 @@ Set Vercel to build from the client workspace (matching what it was already doin
 ### 4. Added `postcss.config.js` to `packages/client`
 Created a minimal PostCSS configuration for the @librechat/client package build process.
 
+### 5. Added Missing `uuid` Dependency
+Added the `uuid` package to `client/package.json` dependencies:
+```json
+"dependencies": {
+  "uuid": "^9.0.1"
+}
+"devDependencies": {
+  "@types/uuid": "^9.0.8"
+}
+```
+
+The `uuid` package was being imported in multiple hooks but was not listed as a dependency, causing build failures when Vite tried to resolve the import.
+
 ## Build Order & Flow
 
 When Vercel runs the build:
