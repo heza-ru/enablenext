@@ -29,10 +29,5 @@
     "ANTHROPIC_API_KEY": "user_provided",
     "SESSION_EXPIRY": "900000",
     "REFRESH_TOKEN_EXPIRY": "604800000"
-  },
-  "functions": {
-    "api/server/index.js": {
-      "maxDuration": 30
-    }
   }
 }
