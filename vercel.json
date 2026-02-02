@@ -24,10 +24,6 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production",
-    "MONGO_URI": "@mongo_uri",
-    "ANTHROPIC_API_KEY": "user_provided",
-    "SESSION_EXPIRY": "900000",
-    "REFRESH_TOKEN_EXPIRY": "604800000"
+    "NODE_ENV": "production"
   }
 }
