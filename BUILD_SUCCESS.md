@@ -1,4 +1,4 @@
-# Vercel Build Fix
+# Vercel Build Fix - FINAL SOLUTION
 
 ## Problem
 The build was failing on Vercel with the error:
@@ -8,70 +8,103 @@ The package may have incorrect main/module/exports specified in its package.json
 ```
 
 ## Root Cause
-The `@librechat/client` package is a workspace package that needs to be built before the main client application can use it. Vercel was trying to build the client directly without first building the `@librechat/client` package, which meant the `dist` folder with the entry points (`dist/index.js`, `dist/index.es.js`, `dist/types/index.d.ts`) didn't exist.
+The `@librechat/client` package is a workspace package that needs to be built before the main client application can use it. **Vercel was running the build directly from the `client` workspace** (not from root), bypassing any root-level build orchestration. This meant the `@librechat/client` package's `dist` folder with entry points never got created.
 
 ## Solution
 
-### 1. Updated Root `package.json` Build Scripts
-Updated the build scripts to use npm workspace commands for reliable monorepo builds:
+### 1. Added `prebuild` Scripts to `client/package.json`
+The key insight: Vercel runs `npm run build` from the **client workspace**, so we need the prebuild logic in the client's package.json:
+
+```json
+"scripts": {
+  "prebuild": "npm run build:packages",
+  "prebuild:ci": "npm run build:packages",
+  "build:packages": "npm run build -w packages/data-provider && npm run build -w packages/client",
+  "build": "cross-env NODE_ENV=production vite build && node ./scripts/post-build.cjs",
+  "build:ci": "cross-env NODE_ENV=development vite build --mode ci"
+}
+```
+
+**Why This Works:**
+- `prebuild` automatically runs **before** the `build` script
+- Uses npm workspace commands (`-w`) that work from any directory in the monorepo
+- Builds dependencies in correct order: data-provider → @librechat/client package
+- No reliance on `cd` commands or relative paths
+
+### 2. Updated Root `package.json` Build Scripts
+Updated root scripts to use workspace commands for consistency:
 
 ```json
 "scripts": {
   "build": "npm run build:data-provider && npm run build:client-package && npm run build:client",
-  "vercel-build": "npm run build:data-provider && npm run build:client-package && npm run build:client",
   "build:data-provider": "npm run build -w packages/data-provider",
   "build:client-package": "npm run build -w packages/client",
   "build:client": "npm run build -w client"
 }
 ```
 
-**Key Changes:**
-- Changed from `cd packages/... && npm run build` to `npm run build -w workspace-name`
-- Using npm's `-w` (workspace) flag ensures proper context and dependency resolution
-- Added explicit `vercel-build` script (Vercel looks for this first)
-- Build order: data-provider → @librechat/client package → main client app
-
-### 2. Updated `vercel.json`
-Configured Vercel to build from the root with proper output directory:
+### 3. Updated `vercel.json`
+Set Vercel to build from the client workspace (matching what it was already doing):
 ```json
 {
-  "src": "package.json",
+  "src": "client/package.json",
   "use": "@vercel/static-build",
   "config": {
-    "distDir": "client/dist"
+    "distDir": "dist"
   }
 }
 ```
 
-### 3. Added `postcss.config.js` to `packages/client`
+### 4. Added `postcss.config.js` to `packages/client`
 Created a minimal PostCSS configuration for the @librechat/client package build process.
 
-## Build Order
-The correct build sequence is:
-1. Build `packages/data-provider` (librechat-data-provider) → creates its dist output
-2. Build `packages/client` (@librechat/client) → creates dist/index.js, dist/index.es.js, dist/types/
-3. Build main `client` application → can now resolve @librechat/client imports
+## Build Order & Flow
+
+When Vercel runs the build:
+
+```
+Vercel: npm run build (in client workspace)
+  ↓
+prebuild hook triggers automatically
+  ↓
+npm run build:packages
+  ↓
+1. npm run build -w packages/data-provider
+   → Builds librechat-data-provider
+   → Creates packages/data-provider/dist/
+  ↓
+2. npm run build -w packages/client
+   → Builds @librechat/client package
+   → Creates packages/client/dist/index.js
+   → Creates packages/client/dist/index.es.js
+   → Creates packages/client/dist/types/index.d.ts
+  ↓
+prebuild completes, build script runs
+  ↓
+3. vite build (main client)
+   → Can now resolve @librechat/client imports
+   → vite-plugin-pwa can find package entry points
+   → Builds successfully to client/dist/
+```
 
 ## Why Workspace Commands?
 Using `npm run build -w workspace-name` instead of `cd` commands provides:
-- **Proper context**: npm understands workspace relationships
-- **Dependency resolution**: Automatically handles workspace dependencies
-- **Reliability**: Works consistently across different environments (local, CI, Vercel)
-- **Error handling**: Better error messages and build failure detection
+- **Context-aware**: Works from any directory in the monorepo
+- **Dependency resolution**: npm understands workspace relationships
+- **Reliability**: Consistent behavior in local, CI, and Vercel environments
+- **Error handling**: Clear error messages with proper exit codes
 
-## How It Works
-When Vercel deploys:
-1. Runs `npm run build` or `npm run vercel-build` from root (per vercel.json)
-2. Executes build scripts in order using workspace commands
-3. Each workspace builds in isolation with proper dependency context
-4. `@librechat/client` package dist folder is populated with all entry points
-5. Main client build can successfully resolve and import from @librechat/client
-6. vite-plugin-pwa can now properly resolve the package entries
+## Key Insight: Vercel + Monorepos
+Vercel detects which workspace contains the frontend build and runs the build from **that workspace's directory**, not from the root. This is why:
+- Root-level build scripts were bypassed
+- `cd` commands in prebuild were failing (wrong starting directory)
+- Workspace commands (`-w`) are the correct solution
 
 ## Testing
-Deploy to Vercel and verify the build completes successfully. The build should:
-- Install all workspace dependencies
-- Build data-provider package → dist/
-- Build @librechat/client package → dist/ (with index.js, index.es.js, types/)
-- Build main client application → client/dist/
-- Output final static files to `client/dist`
+Deploy to Vercel. The build should now:
+1. Install all workspace dependencies
+2. Run `prebuild` automatically before building client
+3. Build packages/data-provider → dist/
+4. Build packages/client (@librechat/client) → dist/ with entry points
+5. Build main client with vite → client/dist/
+6. Successfully deploy static files from client/dist/
