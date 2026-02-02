@@ -48,6 +48,7 @@ const { getConvoFiles } = require('~/models/Conversation');
 const BaseClient = require('~/app/clients/BaseClient');
 const { getRoleByName } = require('~/models/Role');
 const { loadAgent } = require('~/models/Agent');
+const { buildWhatfixContext } = require('~/server/utils/whatfixContext');
 const { getMCPManager } = require('~/config');
 const db = require('~/models');
 
@@ -475,6 +476,13 @@ class AgentClient extends BaseClient {
      * This includes: file context (latest message), augmented prompt (RAG), memory context.
      */
     const sharedRunContextParts = [];
+
+    /** Whatfix role-based context from onboarding - includes user info and current date */
+    const user = this.options.req.user;
+    if (user?.onboarding?.role) {
+      const whatfixContext = buildWhatfixContext(user.onboarding, user);
+      sharedRunContextParts.push(whatfixContext);
+    }
 
     /** File context from the latest message (attachments) */
     const latestMessage = orderedMessages[orderedMessages.length - 1];

@@ -1,7 +1,7 @@
 {
-  "name": "@librechat/frontend",
+  "name": "@enable/frontend",
   "version": "v0.8.2",
-  "description": "",
+  "description": "Enable - AI chat application with multiple model support",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",

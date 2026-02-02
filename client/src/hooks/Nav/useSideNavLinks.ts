@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Blocks, MCPIcon, AttachmentIcon } from '@librechat/client';
-import { Database, Bookmark, Settings2, ArrowRightToLine, MessageSquareQuote } from 'lucide-react';
+import { Database, Bookmark, Settings2, ArrowRightToLine, MessageSquareQuote, Activity } from 'lucide-react';
 import {
   Permissions,
   EModelEndpoint,
@@ -19,6 +19,7 @@ import PromptsAccordion from '~/components/Prompts/PromptsAccordion';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import { MemoryPanel } from '~/components/SidePanel/Memories';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
+import { ApiUsagePanel } from '~/components/SidePanel/ApiUsage';
 import { useHasAccess, useMCPServerManager } from '~/hooks';
 
 export default function useSideNavLinks({
@@ -171,6 +172,15 @@ export default function useSideNavLinks({
         Component: MCPBuilderPanel,
       });
     }
+
+    // API Usage Monitor - always visible for authenticated users
+    links.push({
+      title: 'API Usage & Costs',
+      label: '',
+      icon: Activity,
+      id: 'api-usage',
+      Component: ApiUsagePanel,
+    });
 
     links.push({
       title: 'com_sidepanel_hide_panel',

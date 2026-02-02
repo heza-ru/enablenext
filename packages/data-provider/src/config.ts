@@ -1667,6 +1667,10 @@ export enum SettingsTabValues {
    * Tab for Personalization Settings
    */
   PERSONALIZATION = 'personalization',
+  /**
+   * Tab for Onboarding Settings
+   */
+  ONBOARDING = 'onboarding',
 }
 
 export enum STTProviders {

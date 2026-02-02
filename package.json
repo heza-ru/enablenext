@@ -1,7 +1,7 @@
 {
-  "name": "LibreChat",
+  "name": "Enable",
   "version": "v0.8.2",
-  "description": "",
+  "description": "An open source AI chat application with multiple model support",
   "workspaces": [
     "api",
     "client",

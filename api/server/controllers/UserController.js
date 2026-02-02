@@ -406,6 +406,63 @@ const maybeUninstallOAuthMCP = async (userId, pluginKey, appConfig) => {
   await flowManager.deleteFlow(flowId, 'mcp_oauth');
 };
 
+const getOnboardingStatusController = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('onboarding');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    const onboarding = user.onboarding || { completed: false, skipped: false };
+    res.status(200).json({ onboarding });
+  } catch (error) {
+    logger.error('Error fetching onboarding status:', error);
+    res.status(500).json({ message: 'Error fetching onboarding status' });
+  }
+};
+
+const updateOnboardingController = async (req, res) => {
+  try {
+    const { role, useCases, focusAreas, customInstructions } = req.body;
+    const updates = {
+      'onboarding.role': role,
+      'onboarding.useCases': useCases,
+      'onboarding.focusAreas': focusAreas,
+      'onboarding.customInstructions': customInstructions,
+    };
+    const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true }).select(
+      'onboarding',
+    );
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({ onboarding: user.onboarding });
+  } catch (error) {
+    logger.error('Error updating onboarding:', error);
+    res.status(500).json({ message: 'Error updating onboarding' });
+  }
+};
+
+const completeOnboardingController = async (req, res) => {
+  try {
+    const { skipped } = req.body;
+    const updates = {
+      'onboarding.completed': !skipped,
+      'onboarding.skipped': skipped || false,
+      'onboarding.completedAt': new Date(),
+    };
+    const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true }).select(
+      'onboarding',
+    );
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({ onboarding: user.onboarding });
+  } catch (error) {
+    logger.error('Error completing onboarding:', error);
+    res.status(500).json({ message: 'Error completing onboarding' });
+  }
+};
+
 module.exports = {
   getUserController,
   getTermsStatusController,
@@ -414,4 +471,7 @@ module.exports = {
   verifyEmailController,
   updateUserPluginsController,
   resendVerificationController,
+  getOnboardingStatusController,
+  updateOnboardingController,
+  completeOnboardingController,
 };

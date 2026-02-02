@@ -1,7 +1,7 @@
 {
-  "name": "@librechat/backend",
+  "name": "@enable/backend",
   "version": "v0.8.2",
-  "description": "",
+  "description": "Enable - Backend API for AI chat application",
   "scripts": {
     "start": "echo 'please run this from the root directory'",
     "server-dev": "echo 'please run this from the root directory'",

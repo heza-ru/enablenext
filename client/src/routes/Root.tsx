@@ -16,14 +16,16 @@ import {
   SetConvoProvider,
   FileMapContext,
 } from '~/Providers';
-import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
+import { useUserTermsQuery, useGetStartupConfig, useOnboardingStatusQuery } from '~/data-provider';
 import { Nav, MobileNav, NAV_WIDTH } from '~/components/Nav';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
+import OnboardingModal from '~/components/ui/OnboardingModal';
 
 export default function Root() {
   const [showTerms, setShowTerms] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [bannerHeight, setBannerHeight] = useState(0);
   const [navVisible, setNavVisible] = useState(() => {
     const savedNavVisible = localStorage.getItem('navVisible');
@@ -44,6 +46,9 @@ export default function Root() {
   const { data: termsData } = useUserTermsQuery({
     enabled: isAuthenticated && config?.interface?.termsOfService?.modalAcceptance === true,
   });
+  const { data: onboardingData } = useOnboardingStatusQuery({
+    enabled: isAuthenticated,
+  });
 
   useSearchEnabled(isAuthenticated);
 
@@ -52,6 +57,12 @@ export default function Root() {
       setShowTerms(!termsData.termsAccepted);
     }
   }, [termsData]);
+
+  useEffect(() => {
+    if (onboardingData && !onboardingData.onboarding.completed && !onboardingData.onboarding.skipped) {
+      setShowOnboarding(true);
+    }
+  }, [onboardingData]);
 
   const handleAcceptTerms = () => {
     setShowTerms(false);
@@ -106,6 +117,10 @@ export default function Root() {
               modalContent={config.interface.termsOfService.modalContent}
             />
           )}
+          <OnboardingModal
+            open={showOnboarding}
+            onOpenChange={setShowOnboarding}
+          />
         </AssistantsMapContext.Provider>
       </FileMapContext.Provider>
     </SetConvoProvider>

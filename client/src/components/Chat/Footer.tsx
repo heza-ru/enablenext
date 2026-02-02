@@ -27,9 +27,9 @@ export default function Footer({ className }: { className?: string }) {
   const mainContentParts = (
     typeof config?.customFooter === 'string'
       ? config.customFooter
-      : '[LibreChat ' +
+      : '[Enable ' +
         Constants.VERSION +
-        '](https://librechat.ai) - ' +
+        '](https://github.com/heza-ru/enablenext) - ' +
         localize('com_ui_latest_footer')
   ).split('|');
 

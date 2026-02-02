@@ -1050,3 +1050,34 @@ export const useAcceptTermsMutation = (
     onMutate: options?.onMutate,
   });
 };
+
+export const useUpdateOnboardingMutation = (): UseMutationResult<
+  { onboarding: t.IUserOnboarding },
+  unknown,
+  Partial<t.IUserOnboarding>,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    (data: Partial<t.IUserOnboarding>) => dataService.updateOnboarding(data),
+    {
+      onSuccess: (data) => {
+        queryClient.setQueryData([QueryKeys.onboarding], data);
+      },
+    },
+  );
+};
+
+export const useCompleteOnboardingMutation = (): UseMutationResult<
+  { onboarding: t.IUserOnboarding },
+  unknown,
+  boolean,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation((skipped: boolean = false) => dataService.completeOnboarding(skipped), {
+    onSuccess: (data) => {
+      queryClient.setQueryData([QueryKeys.onboarding], data);
+    },
+  });
+};

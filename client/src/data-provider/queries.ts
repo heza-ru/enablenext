@@ -529,3 +529,18 @@ export const useUserTermsQuery = (
     ...config,
   });
 };
+
+export const useOnboardingStatusQuery = (
+  config?: { enabled?: boolean },
+): QueryObserverResult<{ onboarding: t.IUserOnboarding }> => {
+  return useQuery<{ onboarding: t.IUserOnboarding }>(
+    [QueryKeys.onboarding],
+    () => dataService.getOnboardingStatus(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      ...config,
+    },
+  );
+};

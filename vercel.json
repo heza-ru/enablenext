@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/server/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/server/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "client/dist/$1"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "MONGO_URI": "@mongo_uri",
+    "ANTHROPIC_API_KEY": "user_provided",
+    "SESSION_EXPIRY": "900000",
+    "REFRESH_TOKEN_EXPIRY": "604800000"
+  },
+  "functions": {
+    "api/server/index.js": {
+      "maxDuration": 30
+    }
+  }
+}

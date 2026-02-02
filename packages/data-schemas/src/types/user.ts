@@ -34,6 +34,15 @@ export interface IUser extends Document {
   personalization?: {
     memories?: boolean;
   };
+  onboarding?: {
+    completed: boolean;
+    skipped: boolean;
+    completedAt?: Date | null;
+    role?: 'solutions_consultant' | 'sales_engineer' | null;
+    useCases?: string[];
+    focusAreas?: string[];
+    customInstructions?: string;
+  };
   favorites?: Array<{
     agentId?: string;
     model?: string;
@@ -71,6 +80,25 @@ export interface UpdateUserRequest {
   personalization?: {
     memories?: boolean;
   };
+  onboarding?: {
+    completed?: boolean;
+    skipped?: boolean;
+    completedAt?: Date | null;
+    role?: 'solutions_consultant' | 'sales_engineer' | null;
+    useCases?: string[];
+    focusAreas?: string[];
+    customInstructions?: string;
+  };
+}
+
+export interface IUserOnboarding {
+  completed: boolean;
+  skipped: boolean;
+  completedAt?: Date | null;
+  role?: 'solutions_consultant' | 'sales_engineer' | null;
+  useCases?: string[];
+  focusAreas?: string[];
+  customInstructions?: string;
 }
 
 export interface UserDeleteResult {

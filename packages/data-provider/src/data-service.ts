@@ -160,6 +160,111 @@ export const updateUserPlugins = (payload: t.TUpdateUserPlugins) => {
   return request.post(endpoints.userPlugins(), payload);
 };
 
+export const getOnboardingStatus = async (): Promise<{
+  onboarding: {
+    completed: boolean;
+    skipped: boolean;
+    completedAt?: Date | null;
+    role?: 'solutions_consultant' | 'sales_engineer' | null;
+    useCases?: string[];
+    focusAreas?: string[];
+    customInstructions?: string;
+  };
+}> => {
+  return request.get('/api/user/onboarding');
+};
+
+export const updateOnboarding = async (data: {
+  role?: 'solutions_consultant' | 'sales_engineer' | null;
+  useCases?: string[];
+  focusAreas?: string[];
+  customInstructions?: string;
+}): Promise<{
+  onboarding: {
+    completed: boolean;
+    skipped: boolean;
+    completedAt?: Date | null;
+    role?: 'solutions_consultant' | 'sales_engineer' | null;
+    useCases?: string[];
+    focusAreas?: string[];
+    customInstructions?: string;
+  };
+}> => {
+  return request.post('/api/user/onboarding', data);
+};
+
+export const completeOnboarding = async (skipped: boolean = false): Promise<{
+  onboarding: {
+    completed: boolean;
+    skipped: boolean;
+    completedAt?: Date | null;
+    role?: 'solutions_consultant' | 'sales_engineer' | null;
+    useCases?: string[];
+    focusAreas?: string[];
+    customInstructions?: string;
+  };
+}> => {
+  return request.post('/api/user/onboarding/complete', { skipped });
+};
+
+export const getApiUsage = async (conversationId?: string, sessionId?: string): Promise<{
+  currentSession?: {
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number | string;
+    requestCount: number;
+    conversationId?: string;
+  };
+  currentChat?: {
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number | string;
+    messageCount: number;
+  };
+  currentMonth: {
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number | string;
+    requestCount: number;
+  };
+  today: {
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalCost: number | string;
+    requestCount: number;
+  };
+  pricing: {
+    model: string;
+    description: string;
+    inputCostPer1M: number;
+    outputCostPer1M: number;
+    longContextInputCostPer1M?: number;
+    longContextOutputCostPer1M?: number;
+  };
+  availableModels?: Array<{
+    name: string;
+    description: string;
+    inputCostPer1M: number;
+    outputCostPer1M: number;
+  }>;
+  batchProcessingDiscount?: string;
+  lastUpdated?: string;
+}> => {
+  const params = new URLSearchParams();
+  if (conversationId) {
+    params.append('conversationId', conversationId);
+  }
+  if (sessionId) {
+    params.append('sessionId', sessionId);
+  }
+  const query = params.toString();
+  return request.get(`/api/user/usage${query ? `?${query}` : ''}`);
+};
+
 export const reinitializeMCPServer = (serverName: string) => {
   return request.post(endpoints.mcpReinitialize(serverName));
 };

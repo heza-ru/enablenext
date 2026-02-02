@@ -141,6 +141,22 @@ const userSchema = new Schema<IUser>(
       },
       default: {},
     },
+    onboarding: {
+      type: {
+        completed: { type: Boolean, default: false },
+        skipped: { type: Boolean, default: false },
+        completedAt: { type: Date, default: null },
+        role: {
+          type: String,
+          enum: ['solutions_consultant', 'sales_engineer', null],
+          default: null,
+        },
+        useCases: [{ type: String }],
+        focusAreas: [{ type: String }],
+        customInstructions: { type: String, default: '' },
+      },
+      default: { completed: false, skipped: false },
+    },
     favorites: {
       type: [
         {

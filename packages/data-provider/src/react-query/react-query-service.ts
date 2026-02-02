@@ -275,6 +275,41 @@ export const useUserKeyQuery = (
   );
 };
 
+export const useOnboardingStatusQuery = (config?: { enabled?: boolean }) => {
+  return useQuery([QueryKeys.onboarding], () => dataService.getOnboardingStatus(), {
+    refetchOnWindowFocus: false,
+    enabled: config?.enabled,
+  });
+};
+
+export const useUpdateOnboardingMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    (data: {
+      role?: 'solutions_consultant' | 'sales_engineer' | null;
+      useCases?: string[];
+      focusAreas?: string[];
+      customInstructions?: string;
+    }) => dataService.updateOnboarding(data),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries([QueryKeys.onboarding]);
+        queryClient.invalidateQueries([QueryKeys.user]);
+      },
+    },
+  );
+};
+
+export const useCompleteOnboardingMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation((skipped: boolean) => dataService.completeOnboarding(skipped), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.onboarding]);
+      queryClient.invalidateQueries([QueryKeys.user]);
+    },
+  });
+};
+
 export const useRequestPasswordResetMutation = (): UseMutationResult<
   t.TRequestPasswordResetResponse,
   unknown,
