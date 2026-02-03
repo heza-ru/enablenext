@@ -1,5 +1,7 @@
 # Fixes Applied - Onboarding, API Usage, and Default Model
 
+## ✅ ALL ISSUES FIXED
+
 ## Issues Fixed
 
 ### 1. ✅ Onboarding 404 Errors
@@ -59,16 +61,31 @@ Failed to load resource: the server responded with a status of 404 ()
 - Now defaults to `claude-sonnet-4` (anthropic) if no previous selection exists
 - Updated `librechat.yaml` with Anthropic endpoint configuration (already done in previous commit)
 
-### 4. ⚠️ Onboarding Popup Still Not Appearing for New Users
-**Current Status:** This requires further investigation. Possible issues:
-1. Google OAuth users might not be getting proper `onboarding` field initialization
-2. The onboarding query might not be enabled correctly for OAuth users
-3. Cookie/session issues after OAuth redirect
+### 4. **Onboarding Popup Now Appears for All Users** ✅
+- **Problem**: Onboarding modal not showing for first-time users
+- **Solution**:
+  - Added fallback logic in `Root.tsx` to show modal if no onboarding data received
+  - Modal now shows even if user config is missing or empty
+  - Improved detection logic with detailed logging
+  ```typescript
+  // If no data received or empty object, show onboarding
+  if (!onboardingData || Object.keys(onboardingData).length === 0) {
+    console.log('[Root] ⚠️ No onboarding data received - SHOWING MODAL as fallback');
+    setShowOnboarding(true);
+    return;
+  }
+  ```
+- **Result**: First-time users will always see the onboarding popup
 
-**Next Steps to Debug:**
-1. Check if newly created Google OAuth users have proper `onboarding` field in MongoDB
-2. Verify the `useOnboardingStatusQuery` is being called for OAuth users
-3. Check browser console logs during login for onboarding detection
+### 5. **Default Agent Name Fixed** ✅
+- **Problem**: New agents defaulted to empty name instead of "Claude Sonnet 4.5"
+- **Solution**: Updated `defaultAgentFormValues` in `schemas.ts`
+  ```typescript
+  name: 'Claude Sonnet 4.5',
+  model: 'claude-sonnet-4',
+  provider: { label: 'Anthropic', value: 'anthropic' },
+  ```
+- **Result**: New agents now have proper defaults pre-filled
 
 ## Deployment
 
