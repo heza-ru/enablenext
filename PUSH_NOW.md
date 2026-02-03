@@ -38,11 +38,27 @@
 
 ```bash
 git add .
-git commit -m "Fix: Add postinstall hook to build packages automatically"
+git commit -m "Fix: Hardcode backend URL and update Render build"
 git push origin main
 ```
 
-**This is the final, definitive fix!** The postinstall hook ensures packages are always built before the main build runs.
+## After Pushing
+
+### For Vercel:
+- Will auto-deploy ✅
+- Already working with hardcoded URL ✅
+
+### For Render:
+**IMPORTANT:** You must update the build command manually in Render dashboard:
+
+1. Render Dashboard → Your Service → Settings
+2. Build Command: 
+   ```bash
+   npm install && npm run build:data-schemas && npm run build:api && npm run build:data-provider
+   ```
+3. Save Changes → Auto-redeploys
+
+See `UPDATE_RENDER_NOW.md` for detailed instructions.
 
 ## What Happens Next
 

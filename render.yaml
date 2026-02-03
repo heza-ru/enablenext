@@ -4,7 +4,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build:packages
+    buildCommand: npm install && npm run build:data-schemas && npm run build:api && npm run build:data-provider
     startCommand: npm run backend
     envVars:
       - key: NODE_ENV
