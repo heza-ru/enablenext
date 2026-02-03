@@ -71,22 +71,26 @@ export default function Root() {
       return;
     }
     
-    if (onboardingData) {
-      console.log('[Root] Onboarding data received:', JSON.stringify(onboardingData, null, 2));
-      const onboarding = onboardingData.onboarding || {};
-      const completed = onboarding.completed ?? false;
-      const skipped = onboarding.skipped ?? false;
-      
-      console.log('[Root] Onboarding status - completed:', completed, 'skipped:', skipped);
-      
-      if (!completed && !skipped) {
-        console.log('[Root] ✅ SHOWING ONBOARDING MODAL');
-        setShowOnboarding(true);
-      } else {
-        console.log('[Root] ❌ NOT showing onboarding - already completed or skipped');
-      }
+    // If no data received or empty object, show onboarding
+    if (!onboardingData || Object.keys(onboardingData).length === 0) {
+      console.log('[Root] ⚠️ No onboarding data received - SHOWING MODAL as fallback');
+      setShowOnboarding(true);
+      return;
+    }
+    
+    console.log('[Root] Onboarding data received:', JSON.stringify(onboardingData, null, 2));
+    const onboarding = onboardingData.onboarding || {};
+    const completed = onboarding.completed ?? false;
+    const skipped = onboarding.skipped ?? false;
+    
+    console.log('[Root] Onboarding status - completed:', completed, 'skipped:', skipped);
+    
+    if (!completed && !skipped) {
+      console.log('[Root] ✅ SHOWING ONBOARDING MODAL');
+      setShowOnboarding(true);
     } else {
-      console.log('[Root] ⚠️ No onboarding data received');
+      console.log('[Root] ❌ NOT showing onboarding - already completed or skipped');
+      setShowOnboarding(false);
     }
   }, [onboardingData, isAuthenticated, isLoadingOnboarding]);
 
