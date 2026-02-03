@@ -2,25 +2,24 @@ import type { AssistantsEndpoint } from './schemas';
 import * as q from './types/queries';
 import { ResourceType } from './accessPermissions';
 
+// Production backend URL - UPDATE THIS if you change your backend domain
+const PRODUCTION_BACKEND_URL = 'https://enablenext.onrender.com';
+
 let BASE_URL = '';
 
-// Check for environment variable first (for separate backend deployment)
-// Using type assertion to avoid TypeScript errors in non-Vite environments
-if (typeof import.meta !== 'undefined') {
-  const meta = import.meta as { env?: { VITE_API_URL?: string } };
-  if (meta.env?.VITE_API_URL) {
-    BASE_URL = meta.env.VITE_API_URL;
-  }
-}
+// Check if running in production (on Vercel)
+const isProduction = typeof window !== 'undefined' && 
+  (window.location.hostname.includes('vercel.app') || 
+   window.location.hostname.includes('enablenext-client'));
 
-// Fallback to base href if no env var set
-if (!BASE_URL && (
+if (isProduction) {
+  // Production: Use hardcoded Render backend URL
+  BASE_URL = PRODUCTION_BACKEND_URL;
+} else if (
   typeof process === 'undefined' ||
   (process as typeof process & { browser?: boolean }).browser === true
-)) {
-  // process is only available in node context, or process.browser is true in client-side code
-  // This is to ensure that the BASE_URL is set correctly based on the <base>
-  // element in the HTML document, if it exists.
+) {
+  // Development/Local: Use base href or relative URLs
   const baseEl = document.querySelector('base');
   BASE_URL = baseEl?.getAttribute('href') || '/';
 }
