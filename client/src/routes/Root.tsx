@@ -61,7 +61,13 @@ export default function Root() {
   useEffect(() => {
     if (onboardingData) {
       console.log('[Root] Onboarding data:', onboardingData);
-      if (!onboardingData.onboarding.completed && !onboardingData.onboarding.skipped) {
+      const onboarding = onboardingData.onboarding || {};
+      const completed = onboarding.completed ?? false;
+      const skipped = onboarding.skipped ?? false;
+      
+      console.log('[Root] Onboarding status:', { completed, skipped });
+      
+      if (!completed && !skipped) {
         console.log('[Root] Showing onboarding modal');
         setShowOnboarding(true);
       }
