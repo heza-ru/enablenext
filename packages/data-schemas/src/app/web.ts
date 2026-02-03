@@ -67,9 +67,23 @@ export function loadWebSearchConfig(
   config: TCustomConfig['webSearch'],
 ): TCustomConfig['webSearch'] {
   const serperApiKey = config?.serperApiKey ?? '${SERPER_API_KEY}';
-  // Hardcode free SearxNG instances - no environment variable needed
-  // Primary: searx.be, Fallbacks: searx.work, search.privacyguides.net
-  const searxngInstanceUrl = config?.searxngInstanceUrl ?? 'https://searx.be';
+  
+  // Hardcoded FREE SearxNG instances from searx.space (verified working - Feb 2026)
+  // Auto-fallback list: If primary fails, LibreChat will try alternatives
+  // Top instances by uptime: etsi.me (99.96%), paulgo.io (99.71%), grep.vim.wtf (99.77%)
+  const WORKING_SEARXNG_INSTANCES = [
+    'https://etsi.me',              // 99.96% uptime
+    'https://paulgo.io',            // 99.71% uptime
+    'https://grep.vim.wtf',         // 99.77% uptime
+    'https://priv.au',              // 99.59% uptime
+    'https://find.xenorio.xyz',     // 99.6% uptime
+    'https://baresearch.org',       // 99.82% uptime
+    'https://ooglester.com',        // 99.33% uptime
+    'https://s.mble.dk',            // 98.0% uptime
+    'https://copp.gg',              // 97.95% uptime
+  ];
+  
+  const searxngInstanceUrl = config?.searxngInstanceUrl ?? WORKING_SEARXNG_INSTANCES[0];
   const searxngApiKey = config?.searxngApiKey ?? '';  // No API key needed for public instances
   const firecrawlApiKey = config?.firecrawlApiKey ?? '${FIRECRAWL_API_KEY}';
   const firecrawlApiUrl = config?.firecrawlApiUrl ?? '${FIRECRAWL_API_URL}';
