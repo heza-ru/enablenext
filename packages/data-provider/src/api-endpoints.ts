@@ -422,3 +422,8 @@ export const getAllEffectivePermissions = (resourceType: ResourceType) =>
 // SharePoint Graph API Token
 export const graphToken = (scopes: string) =>
   `${BASE_URL}/api/auth/graph-token?scopes=${encodeURIComponent(scopes)}`;
+
+// Onboarding endpoints
+export const onboardingStatus = () => `${BASE_URL}/api/user/onboarding`;
+export const updateOnboarding = () => `${BASE_URL}/api/user/onboarding`;
+export const completeOnboarding = () => `${BASE_URL}/api/user/onboarding/complete`;

@@ -47,11 +47,12 @@ export const createProviderOption = (provider: string) => ({
 /**
  * Gets default agent form values with localStorage values for model and provider.
  * This is used to initialize agent forms with the last used model and provider.
+ * Defaults to Claude Sonnet 4.5 (anthropic) if no previous selection exists.
  **/
 export const getDefaultAgentFormValues = () => ({
   ...defaultAgentFormValues,
-  model: localStorage.getItem(LocalStorageKeys.LAST_AGENT_MODEL) ?? '',
-  provider: createProviderOption(localStorage.getItem(LocalStorageKeys.LAST_AGENT_PROVIDER) ?? ''),
+  model: localStorage.getItem(LocalStorageKeys.LAST_AGENT_MODEL) ?? 'claude-sonnet-4',
+  provider: createProviderOption(localStorage.getItem(LocalStorageKeys.LAST_AGENT_PROVIDER) ?? 'anthropic'),
   avatar_file: null,
   avatar_preview: '',
   avatar_action: null,

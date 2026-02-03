@@ -171,7 +171,7 @@ export const getOnboardingStatus = async (): Promise<{
     customInstructions?: string;
   };
 }> => {
-  return request.get('/api/user/onboarding');
+  return request.get(endpoints.onboardingStatus());
 };
 
 export const updateOnboarding = async (data: {
@@ -190,7 +190,7 @@ export const updateOnboarding = async (data: {
     customInstructions?: string;
   };
 }> => {
-  return request.post('/api/user/onboarding', data);
+  return request.post(endpoints.updateOnboarding(), data);
 };
 
 export const completeOnboarding = async (skipped: boolean = false): Promise<{
@@ -204,7 +204,7 @@ export const completeOnboarding = async (skipped: boolean = false): Promise<{
     customInstructions?: string;
   };
 }> => {
-  return request.post('/api/user/onboarding/complete', { skipped });
+  return request.post(endpoints.completeOnboarding(), { skipped });
 };
 
 export const getApiUsage = async (conversationId?: string, sessionId?: string): Promise<{

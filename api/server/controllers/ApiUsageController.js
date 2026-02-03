@@ -18,46 +18,43 @@ const getApiUsageController = async (req, res) => {
     }
 
     // In production, this would query a usage tracking collection
-    // For now, return mock data that simulates real-time updates
-    const now = Date.now();
-    const baseTokens = Math.floor(now / 1000) % 10000; // Changes over time
-    
+    // For now, return zero values until real usage tracking is implemented
     const usageData = {
       // Current session usage (resets when session ends)
       currentSession: conversationId ? {
-        totalTokens: baseTokens % 1500,
-        inputTokens: Math.floor((baseTokens % 1500) * 0.6),
-        outputTokens: Math.floor((baseTokens % 1500) * 0.4),
-        totalCost: ((baseTokens % 1500) * 0.000012).toFixed(6),
-        requestCount: Math.floor(baseTokens / 300) % 8 + 1,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalCost: '0.000000',
+        requestCount: 0,
         conversationId,
       } : null,
       
       // Current chat/conversation usage
       currentChat: conversationId ? {
-        totalTokens: baseTokens % 3000,
-        inputTokens: Math.floor((baseTokens % 3000) * 0.6),
-        outputTokens: Math.floor((baseTokens % 3000) * 0.4),
-        totalCost: ((baseTokens % 3000) * 0.000012).toFixed(6),
-        messageCount: Math.floor(baseTokens / 200) % 15 + 1,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalCost: '0.000000',
+        messageCount: 0,
       } : null,
       
       // Today's total usage
       today: {
-        totalTokens: 8500 + (baseTokens % 500),
-        inputTokens: 5000 + (baseTokens % 300),
-        outputTokens: 3500 + (baseTokens % 200),
-        totalCost: (0.0675 + (baseTokens % 500) * 0.000012).toFixed(6),
-        requestCount: 5 + Math.floor(baseTokens / 1000) % 3,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalCost: '0.000000',
+        requestCount: 0,
       },
       
       // Monthly total usage
       currentMonth: {
-        totalTokens: 125000 + (baseTokens % 1000),
-        inputTokens: 75000 + (baseTokens % 600),
-        outputTokens: 50000 + (baseTokens % 400),
-        totalCost: (0.975 + (baseTokens % 1000) * 0.000012).toFixed(6),
-        requestCount: 42 + Math.floor(baseTokens / 500) % 5,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalCost: '0.000000',
+        requestCount: 0,
       },
       
       pricing: {
