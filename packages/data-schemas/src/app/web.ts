@@ -12,6 +12,9 @@ export const webSearchAuth = {
       /** Optional (0) */
       searxngApiKey: 0 as const,
     },
+    duckduckgo: {
+      // No required fields - completely FREE!
+    },
   },
   scrapers: {
     firecrawl: {

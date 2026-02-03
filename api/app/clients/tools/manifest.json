@@ -97,6 +97,13 @@
     ]
   },
   {
+    "name": "DuckDuckGo Search",
+    "pluginKey": "duckduckgo_search",
+    "description": "FREE web search using DuckDuckGo - no API key required! Search the web for current information, news, and real-time data.",
+    "icon": "https://duckduckgo.com/favicon.ico",
+    "authConfig": []
+  },
+  {
     "name": "Calculator",
     "pluginKey": "calculator",
     "description": "Perform simple and complex mathematical calculations.",

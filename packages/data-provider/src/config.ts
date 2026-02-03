@@ -808,6 +808,7 @@ export enum SearchCategories {
 export enum SearchProviders {
   SERPER = 'serper',
   SEARXNG = 'searxng',
+  DUCKDUCKGO = 'duckduckgo',
 }
 
 export enum ScraperProviders {
