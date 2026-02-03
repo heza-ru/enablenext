@@ -165,8 +165,9 @@ export const resetPassword = () => `${BASE_URL}/api/auth/resetPassword`;
 export const verifyEmail = () => `${BASE_URL}/api/user/verify`;
 
 // Auth page URLs (for client-side navigation and redirects)
-export const loginPage = () => `${BASE_URL}/login`;
-export const registerPage = () => `${BASE_URL}/register`;
+// These should stay on the frontend domain, not redirect to backend
+export const loginPage = () => `/login`;
+export const registerPage = () => `/register`;
 
 export const resendVerificationEmail = () => `${BASE_URL}/api/user/verify/resend`;
 

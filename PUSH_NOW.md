@@ -38,27 +38,38 @@
 
 ```bash
 git add .
-git commit -m "Fix: Hardcode backend URL and update Render build"
+git commit -m "Fix: Register redirect and logo display"
 git push origin main
 ```
 
+## What's Being Deployed
+
+### Frontend (Vercel):
+- ✅ Fixed register page redirect (stays on frontend)
+- ✅ Fixed logo display (renamed file)
+- ✅ Will auto-deploy in ~2 minutes
+
+### Backend (Render):
+- ✅ Already deployed and working
+- ✅ CORS configured correctly
+- ✅ API endpoints working
+
 ## After Pushing
 
-### For Vercel:
-- Will auto-deploy ✅
-- Already working with hardcoded URL ✅
+**Timeline**: ~3 minutes total
+1. Git push: 30 seconds
+2. Vercel build & deploy: 2-3 minutes
+3. Test and use! 🎉
 
-### For Render:
-**IMPORTANT:** You must update the build command manually in Render dashboard:
+## What Works Now
 
-1. Render Dashboard → Your Service → Settings
-2. Build Command: 
-   ```bash
-   npm install && npm run build:data-schemas && npm run build:api && npm run build:data-provider
-   ```
-3. Save Changes → Auto-redeploys
+- ✅ Email/password registration
+- ✅ Email/password login
+- ✅ Correct logo and branding
+- ✅ Full authentication
+- ✅ Chat functionality
 
-See `UPDATE_RENDER_NOW.md` for detailed instructions.
+**Social logins (Google, etc.) are optional** - see `SETUP_SOCIAL_LOGINS.md` to enable them later.
 
 ## What Happens Next
 
