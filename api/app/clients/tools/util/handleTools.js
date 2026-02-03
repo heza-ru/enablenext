@@ -354,12 +354,31 @@ Anchor pattern: \\ue202turn{N}{type}{index} where N=turn number, type=search|new
 - Image: "See photo\\ue202turn0image0."
 
 **CRITICAL:** Output escape sequences EXACTLY as shown. Do NOT substitute with † or other symbols. Place anchors AFTER punctuation. Cite every non-obvious fact/quote. NEVER use markdown links, [1], footnotes, or HTML tags.`.trim();
-        return createSearchTool({
-          ...result.authResult,
-          onSearchResults,
-          onGetHighlights,
-          logger,
-        });
+        
+        try {
+          logger.info('[loadTools] Creating web search tool with config:', {
+            searchProvider: result.authResult.searchProvider,
+            searxngInstanceUrl: result.authResult.searxngInstanceUrl,
+            hasCallbacks: !!(onSearchResults && onGetHighlights),
+          });
+          
+          const searchTool = createSearchTool({
+            ...result.authResult,
+            onSearchResults,
+            onGetHighlights,
+            logger,
+          });
+          
+          logger.info('[loadTools] Web search tool created successfully:', {
+            name: searchTool.name,
+            description: searchTool.description?.substring(0, 100),
+          });
+          
+          return searchTool;
+        } catch (error) {
+          logger.error('[loadTools] Failed to create web search tool:', error);
+          throw error;
+        }
       };
       continue;
     } else if (tool && mcpToolPattern.test(tool)) {

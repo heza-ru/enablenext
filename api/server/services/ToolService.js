@@ -469,7 +469,9 @@ async function loadAgentTools({
   const agentTools = [];
   for (let i = 0; i < loadedTools.length; i++) {
     const tool = loadedTools[i];
-    if (tool.name && (tool.name === Tools.execute_code || tool.name === Tools.file_search)) {
+    // Core agent capabilities - always include regardless of tools setting
+    if (tool.name && (tool.name === Tools.execute_code || tool.name === Tools.file_search || tool.name === Tools.web_search)) {
+      logger.info(`[loadAgentTools] Adding core tool: ${tool.name}`);
       agentTools.push(tool);
       continue;
     }
