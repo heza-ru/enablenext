@@ -67,7 +67,8 @@ export function loadWebSearchConfig(
   config: TCustomConfig['webSearch'],
 ): TCustomConfig['webSearch'] {
   const serperApiKey = config?.serperApiKey ?? '${SERPER_API_KEY}';
-  const searxngInstanceUrl = config?.searxngInstanceUrl ?? '${SEARXNG_INSTANCE_URL}';
+  // Hardcode free SearxNG instance - no environment variable needed
+  const searxngInstanceUrl = config?.searxngInstanceUrl ?? 'https://searx.be';
   const searxngApiKey = config?.searxngApiKey ?? '${SEARXNG_API_KEY}';
   const firecrawlApiKey = config?.firecrawlApiKey ?? '${FIRECRAWL_API_KEY}';
   const firecrawlApiUrl = config?.firecrawlApiUrl ?? '${FIRECRAWL_API_URL}';
