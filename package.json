@@ -8,8 +8,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build:packages && npm run build:client",
-    "vercel-build": "npm run build:packages && npm run build:client",
+    "postinstall": "npm run build:packages",
+    "build": "npm run build:client",
+    "vercel-build": "npm run build:client",
     "update": "node config/update.js",
     "add-balance": "node config/add-balance.js",
     "set-balance": "node config/set-balance.js",
