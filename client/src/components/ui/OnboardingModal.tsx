@@ -43,6 +43,7 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
   const [apiKeyError, setApiKeyError] = useState('');
+  const [generalError, setGeneralError] = useState('');
   const [isValidatingKey, setIsValidatingKey] = useState(false);
   const [formData, setFormData] = useState<{
     role: 'solutions_consultant' | 'sales_engineer' | '';
@@ -97,7 +98,11 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
     }
 
     try {
+      setGeneralError('');
+      console.log('[Onboarding] Starting completion process');
+      
       if (formData.role) {
+        console.log('[Onboarding] Updating onboarding data');
         await updateMutation.mutateAsync({
           role: formData.role as 'solutions_consultant' | 'sales_engineer',
           useCases: formData.useCases,
@@ -105,10 +110,16 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
           customInstructions: formData.customInstructions,
         });
       }
+      
+      console.log('[Onboarding] Marking as complete');
       await completeMutation.mutateAsync(false);
+      
+      console.log('[Onboarding] Completed successfully, closing modal');
       onOpenChange(false);
-    } catch (error) {
-      console.error('Error completing onboarding:', error);
+    } catch (error: any) {
+      console.error('[Onboarding] Error completing onboarding:', error);
+      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to complete setup. Please try again.';
+      setGeneralError(errorMsg);
     }
   };
 
@@ -176,9 +187,9 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
           {step === 1 && (
             <div className="flex flex-col gap-4">
               <div className="text-center">
-                <h2 className="text-2xl font-semibold mb-2">Welcome to Whatfix AI Assistant</h2>
+                <h2 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-white">Welcome to Whatfix AI Assistant! 🎉</h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Let&apos;s personalize your experience. What&apos;s your role?
+                  Let&apos;s personalize your experience in just 3 quick steps.
                 </p>
               </div>
 
@@ -220,9 +231,9 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
           {step === 2 && (
             <div className="flex flex-col gap-6">
               <div className="text-center">
-                <h2 className="text-2xl font-semibold mb-2">Customize Your Experience</h2>
+                <h2 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-white">Customize Your Experience</h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Select your focus areas (optional)
+                  Tell us what matters most to you (optional but recommended)
                 </p>
               </div>
 
@@ -278,9 +289,9 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
           {step === 3 && (
             <div className="flex flex-col gap-5">
               <div className="text-center">
-                <h2 className="text-2xl font-semibold mb-2">Final Setup</h2>
+                <h2 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-white">Final Setup</h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Add custom instructions and your Claude API key
+                  Almost done! Add your preferences and API key.
                 </p>
               </div>
 
@@ -337,6 +348,7 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
                   onChange={(e) => {
                     setApiKey(e.target.value);
                     setApiKeyError('');
+                    setGeneralError('');
                   }}
                   placeholder="sk-ant-api03-..."
                   className={cn(
@@ -350,6 +362,13 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
                   <span className="text-xs text-red-500">{apiKeyError}</span>
                 )}
               </div>
+              
+              {/* General Error Display */}
+              {generalError && (
+                <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
+                  <p className="text-sm text-red-600 dark:text-red-400">{generalError}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -391,13 +410,15 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
                 <button
                   onClick={handleComplete}
                   disabled={updateMutation.isLoading || completeMutation.isLoading || isValidatingKey}
-                  className="px-5 py-2 rounded-lg text-white font-medium bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  className="px-5 py-2 rounded-lg text-white font-medium bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                 >
                   {isValidatingKey
-                    ? 'Validating...'
-                    : updateMutation.isLoading || completeMutation.isLoading
-                      ? 'Completing...'
-                      : 'Complete Setup'}
+                    ? 'Validating Key...'
+                    : updateMutation.isLoading
+                      ? 'Saving...'
+                      : completeMutation.isLoading
+                        ? 'Finalizing...'
+                        : 'Complete Setup'}
                 </button>
               )}
             </div>

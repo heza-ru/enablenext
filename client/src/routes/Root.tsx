@@ -46,7 +46,7 @@ export default function Root() {
   const { data: termsData } = useUserTermsQuery({
     enabled: isAuthenticated && config?.interface?.termsOfService?.modalAcceptance === true,
   });
-  const { data: onboardingData } = useOnboardingStatusQuery({
+  const { data: onboardingData, isLoading: isLoadingOnboarding } = useOnboardingStatusQuery({
     enabled: isAuthenticated,
   });
 
@@ -59,20 +59,36 @@ export default function Root() {
   }, [termsData]);
 
   useEffect(() => {
+    console.log('[Root] Onboarding check - isAuthenticated:', isAuthenticated, 'isLoading:', isLoadingOnboarding, 'hasData:', !!onboardingData);
+    
+    if (!isAuthenticated) {
+      console.log('[Root] User not authenticated, skipping onboarding');
+      return;
+    }
+    
+    if (isLoadingOnboarding) {
+      console.log('[Root] Still loading onboarding data');
+      return;
+    }
+    
     if (onboardingData) {
-      console.log('[Root] Onboarding data:', onboardingData);
+      console.log('[Root] Onboarding data received:', JSON.stringify(onboardingData, null, 2));
       const onboarding = onboardingData.onboarding || {};
       const completed = onboarding.completed ?? false;
       const skipped = onboarding.skipped ?? false;
       
-      console.log('[Root] Onboarding status:', { completed, skipped });
+      console.log('[Root] Onboarding status - completed:', completed, 'skipped:', skipped);
       
       if (!completed && !skipped) {
-        console.log('[Root] Showing onboarding modal');
+        console.log('[Root] ✅ SHOWING ONBOARDING MODAL');
         setShowOnboarding(true);
+      } else {
+        console.log('[Root] ❌ NOT showing onboarding - already completed or skipped');
       }
+    } else {
+      console.log('[Root] ⚠️ No onboarding data received');
     }
-  }, [onboardingData]);
+  }, [onboardingData, isAuthenticated, isLoadingOnboarding]);
 
   const handleAcceptTerms = () => {
     setShowTerms(false);
