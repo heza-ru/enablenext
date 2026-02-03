@@ -109,7 +109,15 @@ const startServer = async () => {
   });
 
   app.use(mongoSanitize());
-  app.use(cors());
+  
+  // CORS configuration for separate frontend deployment
+  const corsOptions = {
+    origin: process.env.DOMAIN_CLIENT || 'http://localhost:3090',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  };
+  app.use(cors(corsOptions));
   app.use(cookieParser());
 
   if (!isEnabled(DISABLE_COMPRESSION)) {
