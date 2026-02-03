@@ -5,12 +5,19 @@ import { ResourceType } from './accessPermissions';
 let BASE_URL = '';
 
 // Check for environment variable first (for separate backend deployment)
-if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
-  BASE_URL = import.meta.env.VITE_API_URL;
-} else if (
+// Using type assertion to avoid TypeScript errors in non-Vite environments
+if (typeof import.meta !== 'undefined') {
+  const meta = import.meta as { env?: { VITE_API_URL?: string } };
+  if (meta.env?.VITE_API_URL) {
+    BASE_URL = meta.env.VITE_API_URL;
+  }
+}
+
+// Fallback to base href if no env var set
+if (!BASE_URL && (
   typeof process === 'undefined' ||
   (process as typeof process & { browser?: boolean }).browser === true
-) {
+)) {
   // process is only available in node context, or process.browser is true in client-side code
   // This is to ensure that the BASE_URL is set correctly based on the <base>
   // element in the HTML document, if it exists.
