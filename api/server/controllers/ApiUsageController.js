@@ -1,4 +1,6 @@
 const { logger } = require('@librechat/data-schemas');
+const { getTransactions } = require('~/models/Transaction');
+const { Transaction } = require('~/db/models');
 
 /**
  * Get API usage statistics for the authenticated user
@@ -17,44 +19,111 @@ const getApiUsageController = async (req, res) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    // In production, this would query a usage tracking collection
-    // For now, return zero values until real usage tracking is implemented
+    // Query actual transactions for usage tracking
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Aggregate usage by conversation
+    let conversationUsage = null;
+    if (conversationId) {
+      const convoTransactions = await Transaction.aggregate([
+        {
+          $match: {
+            user: userId,
+            conversationId: conversationId,
+          },
+        },
+        {
+          $group: {
+            _id: '$tokenType',
+            total: { $sum: { $abs: '$rawAmount' } },
+            cost: { $sum: { $abs: '$tokenValue' } },
+          },
+        },
+      ]);
+
+      const promptData = convoTransactions.find(t => t._id === 'prompt') || { total: 0, cost: 0 };
+      const completionData = convoTransactions.find(t => t._id === 'completion') || { total: 0, cost: 0 };
+
+      conversationUsage = {
+        totalTokens: promptData.total + completionData.total,
+        inputTokens: promptData.total,
+        outputTokens: completionData.total,
+        totalCost: ((promptData.cost + completionData.cost) / 1000000).toFixed(6),
+        messageCount: await Transaction.countDocuments({ user: userId, conversationId, tokenType: 'completion' }),
+      };
+    }
+
+    // Today's usage
+    const todayTransactions = await Transaction.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: startOfToday },
+        },
+      },
+      {
+        $group: {
+          _id: '$tokenType',
+          total: { $sum: { $abs: '$rawAmount' } },
+          cost: { $sum: { $abs: '$tokenValue' } },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const todayPrompt = todayTransactions.find(t => t._id === 'prompt') || { total: 0, cost: 0, count: 0 };
+    const todayCompletion = todayTransactions.find(t => t._id === 'completion') || { total: 0, cost: 0, count: 0 };
+
+    // Monthly usage
+    const monthTransactions = await Transaction.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: startOfMonth },
+        },
+      },
+      {
+        $group: {
+          _id: '$tokenType',
+          total: { $sum: { $abs: '$rawAmount' } },
+          cost: { $sum: { $abs: '$tokenValue' } },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const monthPrompt = monthTransactions.find(t => t._id === 'prompt') || { total: 0, cost: 0, count: 0 };
+    const monthCompletion = monthTransactions.find(t => t._id === 'completion') || { total: 0, cost: 0, count: 0 };
+
     const usageData = {
-      // Current session usage (resets when session ends)
-      currentSession: conversationId ? {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        totalCost: '0.000000',
-        requestCount: 0,
+      // Current session usage (same as conversation for now)
+      currentSession: conversationUsage ? {
+        ...conversationUsage,
+        requestCount: conversationUsage.messageCount,
         conversationId,
       } : null,
       
       // Current chat/conversation usage
-      currentChat: conversationId ? {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        totalCost: '0.000000',
-        messageCount: 0,
-      } : null,
+      currentChat: conversationUsage,
       
       // Today's total usage
       today: {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        totalCost: '0.000000',
-        requestCount: 0,
+        totalTokens: todayPrompt.total + todayCompletion.total,
+        inputTokens: todayPrompt.total,
+        outputTokens: todayCompletion.total,
+        totalCost: ((todayPrompt.cost + todayCompletion.cost) / 1000000).toFixed(6),
+        requestCount: todayCompletion.count,
       },
       
       // Monthly total usage
       currentMonth: {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        totalCost: '0.000000',
-        requestCount: 0,
+        totalTokens: monthPrompt.total + monthCompletion.total,
+        inputTokens: monthPrompt.total,
+        outputTokens: monthCompletion.total,
+        totalCost: ((monthPrompt.cost + monthCompletion.cost) / 1000000).toFixed(6),
+        requestCount: monthCompletion.count,
       },
       
       pricing: {
