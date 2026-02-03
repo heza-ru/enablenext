@@ -59,8 +59,12 @@ export default function Root() {
   }, [termsData]);
 
   useEffect(() => {
-    if (onboardingData && !onboardingData.onboarding.completed && !onboardingData.onboarding.skipped) {
-      setShowOnboarding(true);
+    if (onboardingData) {
+      console.log('[Root] Onboarding data:', onboardingData);
+      if (!onboardingData.onboarding.completed && !onboardingData.onboarding.skipped) {
+        console.log('[Root] Showing onboarding modal');
+        setShowOnboarding(true);
+      }
     }
   }, [onboardingData]);
 

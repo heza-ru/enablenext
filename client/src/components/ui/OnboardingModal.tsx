@@ -74,10 +74,13 @@ export default function OnboardingModal({ open, onOpenChange }: OnboardingModalP
         name: 'anthropic',
         value: key,
       });
+      console.log('[Onboarding] API key saved successfully');
       setApiKeyError('');
       return true;
     } catch (error: any) {
-      setApiKeyError(error?.message || 'Invalid API key. Please check and try again.');
+      console.error('[Onboarding] Error saving API key:', error);
+      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to save API key. Please try again.';
+      setApiKeyError(errorMsg);
       return false;
     } finally {
       setIsValidatingKey(false);
