@@ -393,13 +393,13 @@ const setAuthTokens = async (userId, res, _session = null) => {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'lax',
     });
     res.cookie('token_provider', 'librechat', {
       expires: new Date(refreshTokenExpires),
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: isProduction ? 'none' : 'lax',
     });
     return token;
   } catch (error) {

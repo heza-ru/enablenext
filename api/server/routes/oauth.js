@@ -32,10 +32,19 @@ const oauthHandler = async (req, res, next) => {
       return;
     }
 
+    if (!req.user) {
+      logger.error('[oauthHandler] No user found in request');
+      return res.redirect(`${domains.client}/login?error=${ErrorTypes.AUTH_FAILED}`);
+    }
+
+    logger.info(`[oauthHandler] Processing OAuth for user: ${req.user.email || req.user._id}`);
+
     await checkBan(req, res);
     if (req.banned) {
+      logger.warn(`[oauthHandler] User is banned: ${req.user.email}`);
       return;
     }
+    
     if (
       req.user &&
       req.user.provider == 'openid' &&
@@ -44,12 +53,16 @@ const oauthHandler = async (req, res, next) => {
       await syncUserEntraGroupMemberships(req.user, req.user.tokenset.access_token);
       setOpenIDAuthTokens(req.user.tokenset, req, res, req.user._id.toString());
     } else {
-      await setAuthTokens(req.user._id, res);
+      const token = await setAuthTokens(req.user._id, res);
+      logger.info(`[oauthHandler] Auth tokens set successfully for user: ${req.user.email || req.user._id}`);
+      logger.debug(`[oauthHandler] Token generated: ${token ? 'Yes' : 'No'}`);
     }
+    
+    logger.info(`[oauthHandler] Redirecting to: ${domains.client}`);
     res.redirect(domains.client);
   } catch (err) {
-    logger.error('Error in setting authentication tokens:', err);
-    next(err);
+    logger.error('[oauthHandler] Error in setting authentication tokens:', err);
+    res.redirect(`${domains.client}/login?error=${ErrorTypes.AUTH_FAILED}`);
   }
 };
 
