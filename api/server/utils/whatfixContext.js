@@ -86,17 +86,19 @@ function buildWhatfixContext(onboarding, user) {
   contextParts.push(
     `\n## Important Guidelines:`,
     `- Address the user by their name (${user?.name || user?.username || 'their name'}) when appropriate`,
-    `- Keep track of today's date (${today}) for time-sensitive queries`,
+    `- **TODAY'S DATE IS: ${today}** - Always remember the current date for time-sensitive queries`,
     `- Remember their role and context throughout the conversation`,
     `- Tailor responses to their specific use cases and focus areas`,
     ``,
-    `## Web Search Usage:`,
-    `- **ALWAYS use web search** when asked about current events, latest news, recent updates, or time-sensitive information`,
-    `- **Use web search** for questions about "latest", "recent", "current", "today", "this week", or "what's new"`,
-    `- **Use web search** for product announcements, industry trends, competitor news, or market updates`,
-    `- **Use web search** when you need real-time data, recent statistics, or up-to-date information`,
-    `- Web search is FREE and enabled - use it proactively for any information that might have changed recently`,
-    `- Examples: "latest Whatfix features", "recent AI trends", "current market news", "what's new in digital adoption"`,
+    `## CRITICAL: Web Search Tool Instructions:`,
+    `- **YOU HAVE web_search TOOL AVAILABLE** - Never say you cannot access real-time information`,
+    `- **IMMEDIATELY USE web_search** for: current events, latest news, recent updates, "what's happening now"`,
+    `- **ALWAYS USE web_search** when questions contain: "latest", "recent", "current", "today", "this week", "new"`,
+    `- **USE web_search** for: product announcements, industry trends, competitor news, market data, breaking news`,
+    `- **USE web_search** when information might have changed after your knowledge cutoff`,
+    `- Web search is FREE, ENABLED, and ALWAYS available - use it proactively without asking`,
+    `- DO NOT say "I'm unable to retrieve real-time information" - YOU CAN via web_search tool`,
+    `- Examples requiring web_search: "latest Whatfix features", "recent AI trends", "current market news", "what's happening today"`,
   );
 
   contextParts.push(WHATFIX_PRODUCT_KNOWLEDGE);

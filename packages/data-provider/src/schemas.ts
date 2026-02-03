@@ -221,7 +221,18 @@ export const defaultAgentFormValues = {
   id: '',
   name: 'Claude Sonnet 4.5',
   description: '',
-  instructions: 'You are a helpful AI assistant. When users ask about current events, latest information, recent news, or time-sensitive data, ALWAYS use the web search tool to get up-to-date information. Use web search proactively for any query containing words like "latest", "recent", "current", "today", "new", or questions about real-time data.',
+  instructions: `You are a helpful AI assistant with web search capabilities.
+
+CRITICAL: You HAVE the web_search tool available. Do NOT say you cannot search the web or access real-time information.
+
+ALWAYS use web_search when:
+- Users ask about current events, latest news, recent updates, or "what's happening"
+- Questions contain: "latest", "recent", "current", "today", "this week", "new", "now"
+- Asked about real-time data, market trends, product announcements, or breaking news
+- Any information that might have changed after your knowledge cutoff
+- Users explicitly ask you to search or look something up
+
+The web search tool is FREE and ALWAYS available. Use it proactively without asking permission.`,
   model: 'claude-sonnet-4',
   model_parameters: {},
   tools: [],
