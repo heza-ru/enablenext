@@ -8,7 +8,7 @@
     "data-provider": "cd .. && npm run build:data-provider",
     "prebuild": "npm run build:packages",
     "prebuild:ci": "npm run build:packages",
-    "build:packages": "npm --prefix .. run build:data-provider && npm --prefix .. run build:client-package",
+    "build:packages": "cd ../packages/data-provider && npm run build && cd ../client && npm run build",
     "build:file": "cross-env NODE_ENV=production vite build --debug > vite-output.log 2>&1",
     "build": "cross-env NODE_ENV=production vite build && node ./scripts/post-build.cjs",
     "build:ci": "cross-env NODE_ENV=development vite build --mode ci",
