@@ -1,10 +1,13 @@
 name: Sync Locize Translations & Create Translation PR
 
+# Disabled - Locize integration not configured
+# Uncomment to enable translation sync when Locize credentials are set up
 on:
-  push:
-    branches: [main]
-  repository_dispatch:
-    types: [locize/versionPublished]
+  workflow_dispatch: # Manual trigger only
+  # push:
+  #   branches: [main]
+  # repository_dispatch:
+  #   types: [locize/versionPublished]
 
 jobs:
   sync-translations:
