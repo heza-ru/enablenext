@@ -324,7 +324,16 @@ const loadTools = async ({
         userId: user,
         loadAuthValues,
         webSearchConfig: webSearch,
+        throwError: false, // Don't throw errors for missing auth - use hardcoded values
       });
+      
+      logger.info('[loadTools] Web search auth result:', {
+        authenticated: result.authenticated,
+        authTypes: result.authTypes,
+        searchProvider: result.authResult.searchProvider,
+        searxngUrl: result.authResult.searxngInstanceUrl,
+      });
+      
       const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
       requestedTools[tool] = async () => {
         toolContextMap[tool] = `# \`${tool}\`:
