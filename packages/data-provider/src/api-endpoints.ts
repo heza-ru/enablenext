@@ -58,6 +58,18 @@ export const userPlugins = () => `${BASE_URL}/api/user/plugins`;
 
 export const deleteUser = () => `${BASE_URL}/api/user/delete`;
 
+export const userUsage = (conversationId?: string, sessionId?: string) => {
+  const params = new URLSearchParams();
+  if (conversationId) {
+    params.append('conversationId', conversationId);
+  }
+  if (sessionId) {
+    params.append('sessionId', sessionId);
+  }
+  const query = params.toString();
+  return `${BASE_URL}/api/user/usage${query ? `?${query}` : ''}`;
+};
+
 const messagesRoot = `${BASE_URL}/api/messages`;
 
 export const messages = (params: q.MessagesListParams) => {

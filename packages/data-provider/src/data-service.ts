@@ -254,15 +254,7 @@ export const getApiUsage = async (conversationId?: string, sessionId?: string): 
   batchProcessingDiscount?: string;
   lastUpdated?: string;
 }> => {
-  const params = new URLSearchParams();
-  if (conversationId) {
-    params.append('conversationId', conversationId);
-  }
-  if (sessionId) {
-    params.append('sessionId', sessionId);
-  }
-  const query = params.toString();
-  return request.get(`/api/user/usage${query ? `?${query}` : ''}`);
+  return request.get(endpoints.userUsage(conversationId, sessionId));
 };
 
 export const reinitializeMCPServer = (serverName: string) => {
