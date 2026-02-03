@@ -89,6 +89,14 @@ function buildWhatfixContext(onboarding, user) {
     `- Keep track of today's date (${today}) for time-sensitive queries`,
     `- Remember their role and context throughout the conversation`,
     `- Tailor responses to their specific use cases and focus areas`,
+    ``,
+    `## Web Search Usage:`,
+    `- **ALWAYS use web search** when asked about current events, latest news, recent updates, or time-sensitive information`,
+    `- **Use web search** for questions about "latest", "recent", "current", "today", "this week", or "what's new"`,
+    `- **Use web search** for product announcements, industry trends, competitor news, or market updates`,
+    `- **Use web search** when you need real-time data, recent statistics, or up-to-date information`,
+    `- Web search is FREE and enabled - use it proactively for any information that might have changed recently`,
+    `- Examples: "latest Whatfix features", "recent AI trends", "current market news", "what's new in digital adoption"`,
   );
 
   contextParts.push(WHATFIX_PRODUCT_KNOWLEDGE);

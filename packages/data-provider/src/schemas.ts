@@ -221,7 +221,7 @@ export const defaultAgentFormValues = {
   id: '',
   name: 'Claude Sonnet 4.5',
   description: '',
-  instructions: '',
+  instructions: 'You are a helpful AI assistant. When users ask about current events, latest information, recent news, or time-sensitive data, ALWAYS use the web search tool to get up-to-date information. Use web search proactively for any query containing words like "latest", "recent", "current", "today", "new", or questions about real-time data.',
   model: 'claude-sonnet-4',
   model_parameters: {},
   tools: [],
@@ -234,7 +234,7 @@ export const defaultAgentFormValues = {
   recursion_limit: undefined,
   [Tools.execute_code]: false,
   [Tools.file_search]: false,
-  [Tools.web_search]: false,
+  [Tools.web_search]: true,  // ✅ Enable web search by default
   category: 'general',
   support_contact: {
     name: '',
