@@ -46,11 +46,8 @@ services:
         value: 900000
       - key: REFRESH_TOKEN_EXPIRY
         value: 604800000
-      # Web Search Configuration (FREE - No API keys needed)
-      # DuckDuckGo - Primary (no API key, completely free)
-      # SearxNG - Fallback (no API key, uses public instance)
-      - key: SEARXNG_INSTANCE_URL
-        value: https://searx.be
+      # Web Search - hardcoded in librechat.yaml, no env vars needed
+      # Anthropic API Key
       - key: ANTHROPIC_API_KEY
         value: user_provided
       # Google OAuth
