@@ -26,9 +26,6 @@ export const webSearchAuth = {
     serper: {
       serperApiKey: 1 as const,
     },
-    none: {
-      // No required fields - scraping disabled but search works!
-    },
   },
   rerankers: {
     jina: {
@@ -37,9 +34,6 @@ export const webSearchAuth = {
       jinaApiUrl: 0 as const,
     },
     cohere: { cohereApiKey: 1 as const },
-    none: {
-      // No required fields - reranking disabled but search works!
-    },
   },
 };
 

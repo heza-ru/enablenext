@@ -814,13 +814,11 @@ export enum SearchProviders {
 export enum ScraperProviders {
   FIRECRAWL = 'firecrawl',
   SERPER = 'serper',
-  NONE = 'none',
 }
 
 export enum RerankerTypes {
   JINA = 'jina',
   COHERE = 'cohere',
-  NONE = 'none',
 }
 
 export enum SafeSearchTypes {

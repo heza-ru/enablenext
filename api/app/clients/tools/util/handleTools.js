@@ -327,12 +327,21 @@ const loadTools = async ({
         throwError: false, // Don't throw errors for missing auth - use hardcoded values
       });
       
+      // Even if not fully authenticated, if we have a search provider, we can proceed
+      const hasSearchProvider = result.authResult?.searchProvider && result.authResult?.searxngInstanceUrl;
+      
       logger.info('[loadTools] Web search auth result:', {
         authenticated: result.authenticated,
+        hasSearchProvider,
         authTypes: result.authTypes,
-        searchProvider: result.authResult.searchProvider,
-        searxngUrl: result.authResult.searxngInstanceUrl,
+        searchProvider: result.authResult?.searchProvider,
+        searxngUrl: result.authResult?.searxngInstanceUrl,
       });
+      
+      if (!hasSearchProvider) {
+        logger.warn('[loadTools] No search provider configured, skipping web search');
+        continue;
+      }
       
       const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
       requestedTools[tool] = async () => {

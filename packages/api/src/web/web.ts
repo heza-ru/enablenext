@@ -120,7 +120,17 @@ export async function loadWebSearchAuth({
         }
       }
 
-      if (requiredKeys.length === 0) continue;
+      // If no required keys, service is available without auth (like duckduckgo)
+      if (requiredKeys.length === 0) {
+        if (category === SearchCategories.PROVIDERS) {
+          authResult.searchProvider = service as SearchProviders;
+        } else if (category === SearchCategories.SCRAPERS) {
+          authResult.scraperProvider = service as ScraperProviders;
+        } else if (category === SearchCategories.RERANKERS) {
+          authResult.rerankerType = service as RerankerTypes;
+        }
+        return [true, false];
+      }
 
       const requiredAuthFields = extractWebSearchEnvVars({
         keys: requiredKeys,
