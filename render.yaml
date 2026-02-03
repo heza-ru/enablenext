@@ -19,6 +19,14 @@ services:
         value: true
       - key: DEBUG_LOGGING
         value: false
+      # Disable Redis (use in-memory cache for free tier)
+      - key: USE_REDIS
+        value: false
+      # Disable telemetry to avoid OpenTelemetry errors
+      - key: TELEMETRY_ENABLED
+        value: false
+      - key: LANGFUSE_ENABLED
+        value: false
       # These will need to be set in Render dashboard
       - key: MONGO_URI
         sync: false
