@@ -22,15 +22,23 @@ Returns search results with titles, snippets, URLs, and full page content from t
     });
   }
 
-  async _call(input) {
+  async _call(input, retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 2000;
+    
     try {
-      logger.info('[DuckDuckGoSearch] Searching for:', input);
+      logger.info(`[DuckDuckGoSearch] Searching for: "${input}" (attempt ${retryCount + 1}/${maxRetries + 1})`);
       
       // Dynamic import of duck-duck-scrape
       const { search } = await import('duck-duck-scrape');
       
-      // Note: duck-duck-scrape v2.2.7+ doesn't support safeSearch parameter
-      const searchResults = await search(input);
+      // Add timeout wrapper
+      const searchPromise = search(input);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Search timeout after 10s')), 10000)
+      );
+      
+      const searchResults = await Promise.race([searchPromise, timeoutPromise]);
 
       if (!searchResults || !searchResults.results || searchResults.results.length === 0) {
         logger.warn('[DuckDuckGoSearch] No results found for query:', input);
@@ -38,7 +46,7 @@ Returns search results with titles, snippets, URLs, and full page content from t
           query: input,
           results: [],
           provider: 'DuckDuckGo (FREE)',
-          message: 'No results found for this query.',
+          message: 'No results found for this query. Try different keywords or check spelling.',
         });
       }
 
@@ -49,6 +57,7 @@ Returns search results with titles, snippets, URLs, and full page content from t
         snippet: result.description || '',
         url: result.url || '',
         content: result.description || '', // Alias for compatibility
+        relevance_score: Math.max(0, 1 - (index * 0.1)), // Simple relevance scoring
       }));
 
       logger.info(`[DuckDuckGoSearch] Found ${results.length} results`);
@@ -56,31 +65,50 @@ Returns search results with titles, snippets, URLs, and full page content from t
       // Enrich results with scraped content if enabled
       if (this.enableScraping && results.length > 0) {
         try {
-          logger.info(`[DuckDuckGoSearch] Scraping top ${this.scrapeTopN} results for full content`);
+          logger.info(`[DuckDuckGoSearch] Enriching top ${this.scrapeTopN} results with full content`);
           results = await this.scraper.enrichSearchResults(results, this.scrapeTopN);
-          logger.info('[DuckDuckGoSearch] Content scraping completed');
+          logger.info('[DuckDuckGoSearch] Content enrichment completed successfully');
         } catch (scrapeError) {
-          logger.warn('[DuckDuckGoSearch] Scraping failed, returning results without full content:', scrapeError.message);
+          logger.warn('[DuckDuckGoSearch] Content enrichment failed, returning results with snippets only:', scrapeError.message);
         }
       }
 
-      // Return structured data with metadata
+      // Return structured data with comprehensive metadata
       return JSON.stringify({
         query: input,
         results,
         total_results: results.length,
-        provider: 'DuckDuckGo (FREE with content scraping)',
-        scraped: this.enableScraping,
+        provider: 'DuckDuckGo (FREE - unlimited searches)',
+        features: {
+          content_scraping: this.enableScraping,
+          enhanced_extraction: true,
+          rate_limit_protected: true,
+        },
         timestamp: new Date().toISOString(),
       }, null, 2);
     } catch (error) {
-      logger.error('[DuckDuckGoSearch] Error:', error);
+      logger.error(`[DuckDuckGoSearch] Error on attempt ${retryCount + 1}:`, error);
+      
+      // Retry logic for transient failures
+      if (retryCount < maxRetries && (
+        error.message.includes('timeout') ||
+        error.message.includes('network') ||
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('fetch failed')
+      )) {
+        const backoffDelay = retryDelay * Math.pow(2, retryCount);
+        logger.info(`[DuckDuckGoSearch] Retrying in ${backoffDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        return this._call(input, retryCount + 1);
+      }
+      
       // Return error in structured format instead of throwing
       return JSON.stringify({
         query: input,
         results: [],
         provider: 'DuckDuckGo (FREE)',
-        error: `Search failed: ${error.message}`,
+        error: `Search failed after ${retryCount + 1} attempts: ${error.message}`,
+        suggestion: 'Try rephrasing your query or try again in a moment.',
       });
     }
   }

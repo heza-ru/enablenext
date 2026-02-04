@@ -327,22 +327,57 @@ const loadTools = async ({
         throwError: false, // Don't throw errors for missing auth - use hardcoded values
       });
       
-      // Even if not fully authenticated, if we have a search provider, we can proceed
-      const hasSearchProvider = result.authResult?.searchProvider && result.authResult?.searxngInstanceUrl;
+      // Check if we have a valid search provider
+      // DuckDuckGo doesn't need searxngInstanceUrl, SearxNG does
+      const searchProvider = result.authResult?.searchProvider;
+      const isDuckDuckGo = searchProvider === 'duckduckgo';
+      const isSearxNG = searchProvider === 'searxng' && result.authResult?.searxngInstanceUrl;
+      const hasSearchProvider = isDuckDuckGo || isSearxNG;
       
       logger.info('[loadTools] Web search auth result:', {
         authenticated: result.authenticated,
         hasSearchProvider,
+        isDuckDuckGo,
+        isSearxNG,
         authTypes: result.authTypes,
         searchProvider: result.authResult?.searchProvider,
         searxngUrl: result.authResult?.searxngInstanceUrl,
       });
       
       if (!hasSearchProvider) {
-        logger.warn('[loadTools] No search provider configured, skipping web search');
+        logger.warn('[loadTools] No valid search provider configured, skipping web search');
         continue;
       }
       
+      // If using DuckDuckGo, use the custom DuckDuckGoSearch tool directly
+      // because @librechat/agents createSearchTool doesn't support DuckDuckGo
+      if (isDuckDuckGo) {
+        logger.info('[loadTools] Using DuckDuckGoSearch tool (FREE, unlimited)');
+        requestedTools[tool] = async () => {
+          toolContextMap[tool] = `# \`${tool}\` - DuckDuckGo Web Search (FREE)
+Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
+
+When using web search, follow these guidelines:
+1. Execute search immediately without explaining what you're going to do
+2. Provide clear, comprehensive answers with proper source attribution
+3. Structure your response with Markdown formatting (headers, lists, tables)
+4. Cite sources naturally in your response
+5. Tailor tone and detail level to the query type
+
+IMPORTANT: Focus on providing accurate, well-sourced information. Extract and summarize key points from search results.`.trim();
+          
+          // Use DuckDuckGoSearch with enhanced scraping
+          return new DuckDuckGoSearch({
+            maxResults: 5,
+            enableScraping: true,
+            scrapeTopN: 3,
+            scraperTimeout: result.authResult?.scraperTimeout || 15000,
+          });
+        };
+        continue;
+      }
+      
+      // For SearxNG, use createSearchTool from @librechat/agents
       const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
       requestedTools[tool] = async () => {
         toolContextMap[tool] = `# \`${tool}\` - Web Search Tool
@@ -358,7 +393,7 @@ When using web search, follow these guidelines:
 IMPORTANT: Focus on providing accurate, well-sourced information. Extract and summarize key points from search results.`.trim();
         
         try {
-          logger.info('[loadTools] Creating web search tool with config:', {
+          logger.info('[loadTools] Creating SearxNG search tool with config:', {
             searchProvider: result.authResult.searchProvider,
             searxngInstanceUrl: result.authResult.searxngInstanceUrl,
             hasCallbacks: !!(onSearchResults && onGetHighlights),
@@ -371,14 +406,14 @@ IMPORTANT: Focus on providing accurate, well-sourced information. Extract and su
             logger,
           });
           
-          logger.info('[loadTools] Web search tool created successfully:', {
+          logger.info('[loadTools] SearxNG search tool created successfully:', {
             name: searchTool.name,
             description: searchTool.description?.substring(0, 100),
           });
           
           return searchTool;
         } catch (error) {
-          logger.error('[loadTools] Failed to create web search tool:', error);
+          logger.error('[loadTools] Failed to create SearxNG search tool:', error);
           throw error;
         }
       };
