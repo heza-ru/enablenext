@@ -11,9 +11,9 @@ const USE_CASES = [
 ];
 
 const FOCUS_AREAS = [
-  'Digital Adoption Platform core',
-  'Analytics and Insights',
-  'Automation and ActionBot',
+  'Digital Adoption Platform (DAP)',
+  'Product Analytics',
+  'Mirror (Training & AI Roleplay)',
   'Integrations and enterprise security',
 ];
 
