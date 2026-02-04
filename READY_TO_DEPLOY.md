@@ -1,19 +1,20 @@
-# ✅ Web Search Fix - READY TO DEPLOY
+# ✅ Web Search Fix - READY TO DEPLOY (UPDATED: SearxNG Primary)
 
 ## Summary
-Fixed web search by switching from rate-limited SearxNG to FREE unlimited DuckDuckGo with enhanced retry logic and content scraping.
+Configured web search to use SearxNG as PRIMARY provider (FREE, unlimited, privacy-focused) instead of rate-limited DuckDuckGo. SearxNG eliminates the "anomaly detected" rate-limiting issues.
 
 ---
 
 ## 🔧 Changes Made
 
 ### 1. Configuration (`librechat.yaml`)
-✅ **Already committed** - switched to `searchProvider: duckduckgo`
+✅ Configured with `searchProvider: searxng` and `searxngInstanceUrl: https://etsi.me`
 
-### 2. Code Changes (Need to commit)
-- ✅ `api/app/clients/tools/structured/DuckDuckGoSearch.js` - Added retry logic
+### 2. Code Changes
+- ✅ `api/app/clients/tools/structured/DuckDuckGoSearch.js` - Fallback with retry logic
 - ✅ `api/app/clients/tools/util/webScraper.js` - Enhanced scraping with rate limiting
-- ✅ `api/app/clients/tools/util/handleTools.js` - **CRITICAL**: Routes DuckDuckGo to custom tool
+- ✅ `api/app/clients/tools/util/handleTools.js` - **CRITICAL**: Routes to SearxNG or DuckDuckGo correctly
+- ✅ `.env` - Updated `SEARXNG_INSTANCE_URL=https://etsi.me`
 
 ### 3. Documentation Created
 - ✅ `WEB_SEARCH_IMPROVEMENTS.md` - Technical details

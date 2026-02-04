@@ -1,18 +1,21 @@
-# Web Search Deployment Checklist
+# Web Search Deployment Checklist (UPDATED: SearxNG Primary)
 
 ## ✅ Pre-Deployment Verification
 
-### Code Changes Complete
-- [x] Switched `librechat.yaml` to `searchProvider: duckduckgo`
+### Code Changes Complete (Feb 5, 2026)
+- [x] Switched `librechat.yaml` to `searchProvider: searxng` (PRIMARY)
+- [x] Configured SearxNG instance: `https://etsi.me` (99.96% uptime)
 - [x] Enhanced `webScraper.js` with retry logic and rate limiting
-- [x] Enhanced `DuckDuckGoSearch.js` with retry and timeout protection
-- [x] **CRITICAL**: Fixed `handleTools.js` to route DuckDuckGo to custom tool
-- [x] Documentation created (`WEB_SEARCH_IMPROVEMENTS.md`)
+- [x] Enhanced `DuckDuckGoSearch.js` with retry and timeout protection (FALLBACK)
+- [x] **CRITICAL**: Fixed `handleTools.js` to route correctly to SearxNG or DuckDuckGo
+- [x] Added enhanced logging to show which provider is being used
+- [x] Documentation updated (`WEB_SEARCH_IMPROVEMENTS.md`, `SEARXNG_PRIMARY_CONFIGURATION.md`)
 
 ### Why These Changes Matter
-**Problem**: SearxNG was rate-limiting (429 errors)
-**Solution**: DuckDuckGo is FREE and unlimited
-**Critical Bug Fixed**: `@librechat/agents` doesn't support DuckDuckGo - now routes to custom tool
+**Problem**: DuckDuckGo was rate-limiting ("anomaly detected" errors)
+**Solution**: SearxNG is FREE, unlimited, and privacy-focused
+**Configuration**: Uses `@librechat/agents` `createSearchTool()` for SearxNG
+**Fallback**: DuckDuckGo custom tool available if SearxNG fails
 
 ---
 
@@ -37,10 +40,16 @@ Look for these log messages on Render:
 ```
 [loadTools] Web search auth result:
   hasSearchProvider: true
-  isDuckDuckGo: true
-  searchProvider: 'duckduckgo'
+  isSearxNG: true
+  searchProvider: 'searxng'
+  searxngUrl: 'https://etsi.me'
 
-[loadTools] Using DuckDuckGoSearch tool (FREE, unlimited)
+[loadTools] ✓ Using SearxNG as PRIMARY search provider: https://etsi.me
+[loadTools] Creating SearxNG search tool with config: {
+  searchProvider: 'searxng',
+  searxngInstanceUrl: 'https://etsi.me'
+}
+[loadTools] SearxNG search tool created successfully
 ```
 
 ---

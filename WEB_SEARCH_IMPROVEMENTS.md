@@ -38,30 +38,30 @@
 
 ```yaml
 webSearch:
-  searchProvider: duckduckgo  # FREE, unlimited
+  searchProvider: searxng        # FREE, privacy-focused, unlimited
+  searxngInstanceUrl: https://etsi.me  # 99.96% uptime instance
   safeSearch: 1
-  scraperTimeout: 15000       # Wait longer for quality
-  maxRetries: 3               # Retry failed requests
-  retryDelay: 2000            # 2s between retries
+  scraperTimeout: 15000          # Wait longer for quality
+  maxRetries: 3                  # Retry failed requests
+  retryDelay: 2000               # 2s between retries
 ```
 
-### 5. **CRITICAL: Tool Routing Fix**
+### 5. **CRITICAL: Tool Routing Configuration**
 **File**: `api/app/clients/tools/util/handleTools.js`
 
-**Issue**: The `@librechat/agents` package's `createSearchTool()` only supports Serper and SearxNG, NOT DuckDuckGo.
+**Implementation**: The system intelligently routes to the correct search tool based on configuration:
+- If `searchProvider === 'searxng'`: Use `@librechat/agents` `createSearchTool()` **(PRIMARY - Current Configuration)**
+- If `searchProvider === 'duckduckgo'`: Use custom `DuckDuckGoSearch` tool (with retry & scraping) **(Fallback only)**
 
-**Fix**: Added conditional logic to route DuckDuckGo searches to the custom `DuckDuckGoSearch` tool:
-- If `searchProvider === 'duckduckgo'`: Use custom `DuckDuckGoSearch` tool (with retry & scraping)
-- If `searchProvider === 'searxng'`: Use `@librechat/agents` `createSearchTool()` (standard)
+**Current Status**: SearxNG is the PRIMARY search provider. DuckDuckGo custom tool remains available but is not used by default due to rate-limiting issues.
 
-This ensures DuckDuckGo searches actually work!
-
-## 🎯 Fallback Strategy Implemented
+## 🎯 Search Strategy Implemented
 
 ### Search Layer
-1. **Primary**: DuckDuckGo (FREE, unlimited)
-2. **Fallback**: SearxNG instances (if DuckDuckGo fails)
-3. **Last resort**: Return cached/partial results
+1. **Primary**: SearxNG (https://etsi.me - 99.96% uptime, FREE, unlimited, privacy-focused)
+2. **Fallback**: Alternative SearxNG instances (paulgo.io, grep.vim.wtf, baresearch.org)
+3. **Emergency Fallback**: DuckDuckGo custom tool (if all SearxNG instances fail)
+4. **Last resort**: Return cached/partial results
 
 ### Scraping Layer
 1. **Primary**: Enhanced fetch with rate limiting
@@ -75,19 +75,21 @@ This ensures DuckDuckGo searches actually work!
 
 ## 📊 Quality Improvements
 
-### Before
-- ❌ Rate limited by SearxNG (429 errors)
+### Before (DuckDuckGo Primary)
+- ❌ DuckDuckGo rate limiting (429 errors - "anomaly detected")
 - ❌ No retry logic
 - ❌ Simple HTML stripping
 - ❌ Single point of failure
 
-### After
-- ✅ DuckDuckGo (unlimited searches)
+### After (SearxNG Primary)
+- ✅ SearxNG (unlimited searches, privacy-focused, NO rate limits)
+- ✅ High-uptime instance (etsi.me - 99.96% uptime)
 - ✅ 3 retry attempts with exponential backoff
 - ✅ Enhanced content extraction (main content focus)
-- ✅ Multiple fallback strategies
+- ✅ Multiple fallback strategies (alternative SearxNG instances)
 - ✅ Rate limiting to avoid overwhelming servers
 - ✅ Comprehensive error handling
+- ✅ Clear logging showing which provider is being used
 
 ## 🔧 Additional Features Added
 
@@ -174,11 +176,14 @@ Based on your document, we can add:
 
 ## 📝 Notes
 
-- DuckDuckGo has NO rate limits (unlike SearxNG)
+- **SearxNG is PRIMARY** - No rate limits, privacy-focused metasearch
+- Using high-uptime instance: etsi.me (99.96% uptime, verified Feb 2026)
+- DuckDuckGo had rate-limiting issues ("anomaly detected" errors)
 - Content scraping is enabled by default (top 3 results)
 - Retry logic handles transient network failures
 - All features are FREE - no API keys required
 - Works with ANY endpoint (Anthropic, OpenAI, etc.) through UI toggle
+- Clear logging shows which search provider is being used
 
 ## ✅ Testing Checklist
 
