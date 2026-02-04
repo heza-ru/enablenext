@@ -14,12 +14,13 @@ const {
 const { getConvoTitle, getConvo, saveConvo, deleteConvos } = require('./Conversation');
 const { getPreset, getPresets, savePreset, deletePresets } = require('./Preset');
 const { File } = require('~/db/models');
-const { seedDefaultAgent } = require('./seedDefaultAgent');
 
 const seedDatabase = async () => {
   await methods.initializeRoles();
   await methods.seedDefaultRoles();
   await methods.ensureDefaultCategories();
+  // Require seedDefaultAgent only when needed to avoid circular dependency
+  const { seedDefaultAgent } = require('./seedDefaultAgent');
   await seedDefaultAgent();
 };
 
