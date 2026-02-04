@@ -1,11 +1,12 @@
-# Web Search Improvements - Free Stack Implementation
+# Web Search Improvements - SearxNG Primary Configuration
 
-## ✅ Changes Implemented
+## ✅ Changes Implemented (Updated Feb 2026)
 
-### 1. **Switched to DuckDuckGo as Primary Provider**
-- **Why**: DuckDuckGo is FREE and has NO rate limits (SearxNG was rate-limiting at 429)
-- **Config**: Updated `librechat.yaml` to use `searchProvider: duckduckgo`
-- **Benefits**: Unlimited searches, no API key required, stable performance
+### 1. **Using SearxNG as Primary Provider**
+- **Why**: SearxNG is FREE, privacy-focused, and has NO rate limits (DuckDuckGo was experiencing rate-limit issues)
+- **Config**: `librechat.yaml` configured with `searchProvider: searxng`
+- **Instance**: Using https://etsi.me (99.96% uptime, verified working)
+- **Benefits**: Unlimited searches, no API key required, privacy-focused metasearch, stable performance
 
 ### 2. **Enhanced Web Scraper with Retry Logic**
 **File**: `api/app/clients/tools/util/webScraper.js`

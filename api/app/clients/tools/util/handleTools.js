@@ -349,6 +349,13 @@ const loadTools = async ({
         continue;
       }
       
+      // Log which provider is being used for clarity
+      if (isSearxNG) {
+        logger.info(`[loadTools] ✓ Using SearxNG as PRIMARY search provider: ${result.authResult?.searxngInstanceUrl}`);
+      } else if (isDuckDuckGo) {
+        logger.warn('[loadTools] ⚠ Using DuckDuckGo (may experience rate limits)');
+      }
+      
       // If using DuckDuckGo, use the custom DuckDuckGoSearch tool directly
       // because @librechat/agents createSearchTool doesn't support DuckDuckGo
       if (isDuckDuckGo) {
@@ -380,8 +387,9 @@ IMPORTANT: Focus on providing accurate, well-sourced information. Extract and su
       // For SearxNG, use createSearchTool from @librechat/agents
       const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
       requestedTools[tool] = async () => {
-        toolContextMap[tool] = `# \`${tool}\` - Web Search Tool
+        toolContextMap[tool] = `# \`${tool}\` - SearxNG Web Search (FREE, Privacy-Focused)
 Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
+Search Provider: SearxNG (${result.authResult?.searxngInstanceUrl})
 
 When using web search, follow these guidelines:
 1. Execute search immediately without explaining what you're going to do
