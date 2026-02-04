@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
-const { Tools } = require('librechat-data-provider');
+const { Tools, PrincipalType, ResourceType, AccessRoleIds } = require('librechat-data-provider');
 const { createAgent, getAgent } = require('./Agent');
 const { User } = require('~/db/models');
+const { grantPermission } = require('~/server/services/PermissionService');
 
 /**
  * Seeds a default agent with Claude 4.5 and web search enabled
@@ -72,6 +73,22 @@ const seedDefaultAgent = async () => {
       tools: defaultAgent.tools,
       author: authorId.toString(),
     });
+
+    // Grant public access so anyone can use this agent
+    try {
+      await grantPermission({
+        principalType: PrincipalType.PUBLIC,
+        principalId: null,
+        resourceType: ResourceType.AGENT,
+        resourceId: defaultAgent._id,
+        accessRoleId: AccessRoleIds.AGENT_VIEWER,
+        grantedBy: authorId,
+      });
+      logger.info('[seedDefaultAgent] ✅ Public access granted for default agent');
+    } catch (permError) {
+      logger.error('[seedDefaultAgent] Failed to grant public permission:', permError);
+      // Don't throw - agent is created, just permission failed
+    }
 
     return defaultAgent;
   } catch (error) {

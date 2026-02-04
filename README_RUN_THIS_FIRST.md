@@ -80,6 +80,20 @@ Expected: Real web search results, no XML tags!
 2. `api/models/seedDefaultAgent.js` - Created default agent (fixed author ObjectId)
 3. `api/models/index.js` - Added seedDefaultAgent to seedDatabase()
 
+## ⚠️ Permission Error Fix
+
+**If you get "Insufficient permissions to access this agent"**, the agent was created without public access. Run this fix:
+
+```powershell
+# In your project root
+node fix-agent-permissions.js
+```
+
+This will:
+1. Delete the broken agent
+2. Recreate it with proper public access
+3. Grant viewer permissions to everyone
+
 ## ⚠️ Important Notes
 
 - **Always use "Agents" endpoint for web search** - "Anthropic" endpoint doesn't support custom tools
