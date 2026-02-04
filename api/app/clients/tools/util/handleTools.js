@@ -345,24 +345,17 @@ const loadTools = async ({
       
       const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
       requestedTools[tool] = async () => {
-        toolContextMap[tool] = `# \`${tool}\`:
+        toolContextMap[tool] = `# \`${tool}\` - Web Search Tool
 Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
 
-**Execute immediately without preface.** After search, provide a brief summary addressing the query directly, then structure your response with clear Markdown formatting (## headers, lists, tables). Cite sources properly, tailor tone to query type, and provide comprehensive details.
+When using web search, follow these guidelines:
+1. Execute search immediately without explaining what you're going to do
+2. Provide clear, comprehensive answers with proper source attribution
+3. Structure your response with Markdown formatting (headers, lists, tables)
+4. Cite sources naturally in your response
+5. Tailor tone and detail level to the query type
 
-**CITATION FORMAT - UNICODE ESCAPE SEQUENCES ONLY:**
-Use these EXACT escape sequences (copy verbatim): \\ue202 (before each anchor), \\ue200 (group start), \\ue201 (group end), \\ue203 (highlight start), \\ue204 (highlight end)
-
-Anchor pattern: \\ue202turn{N}{type}{index} where N=turn number, type=search|news|image|ref, index=0,1,2...
-
-**Examples (copy these exactly):**
-- Single: "Statement.\\ue202turn0search0"
-- Multiple: "Statement.\\ue202turn0search0\\ue202turn0news1"
-- Group: "Statement. \\ue200\\ue202turn0search0\\ue202turn0news1\\ue201"
-- Highlight: "\\ue203Cited text.\\ue204\\ue202turn0search0"
-- Image: "See photo\\ue202turn0image0."
-
-**CRITICAL:** Output escape sequences EXACTLY as shown. Do NOT substitute with † or other symbols. Place anchors AFTER punctuation. Cite every non-obvious fact/quote. NEVER use markdown links, [1], footnotes, or HTML tags.`.trim();
+IMPORTANT: Focus on providing accurate, well-sourced information. Extract and summarize key points from search results.`.trim();
         
         try {
           logger.info('[loadTools] Creating web search tool with config:', {
