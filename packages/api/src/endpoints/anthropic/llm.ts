@@ -233,25 +233,27 @@ function getLLMConfig(
     });
   }
 
-  const tools = [];
-
-  if (enableWebSearch) {
-    tools.push({
-      type: 'web_search_20250305',
-      name: 'web_search',
-    });
-
-    if (isAnthropicVertexCredentials(creds)) {
-      if (!requestOptions.clientOptions) {
-        requestOptions.clientOptions = {};
-      }
-
-      requestOptions.clientOptions.defaultHeaders = {
-        ...requestOptions.clientOptions.defaultHeaders,
-        'anthropic-beta': 'web-search-2025-03-05',
-      };
-    }
-  }
+  // DISABLED: Don't use Anthropic's native web search (XML format)
+  // We use custom search tools with function calling instead
+  const tools: Array<{ type: string; name: string }> = [];
+  
+  // if (enableWebSearch) {
+  //   tools.push({
+  //     type: 'web_search_20250305',
+  //     name: 'web_search',
+  //   });
+  //
+  //   if (isAnthropicVertexCredentials(creds)) {
+  //     if (!requestOptions.clientOptions) {
+  //       requestOptions.clientOptions = {};
+  //     }
+  //
+  //     requestOptions.clientOptions.defaultHeaders = {
+  //       ...requestOptions.clientOptions.defaultHeaders,
+  //       'anthropic-beta': 'web-search-2025-03-05',
+  //     };
+  //   }
+  // }
 
   return {
     tools,
