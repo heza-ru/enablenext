@@ -1,6 +1,8 @@
+const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
 const { Tools } = require('librechat-data-provider');
 const { createAgent, getAgent } = require('./Agent');
+const { User } = require('~/db/models');
 
 /**
  * Seeds a default agent with Claude 4.5 and web search enabled
@@ -20,6 +22,27 @@ const seedDefaultAgent = async () => {
 
     logger.info('[seedDefaultAgent] Creating default Claude 4.5 + Web Search agent...');
 
+    // Find an admin user or any existing user to be the author
+    let authorId;
+    const adminUser = await User.findOne({ role: 'ADMIN' }).lean();
+    
+    if (adminUser) {
+      authorId = adminUser._id;
+      logger.info('[seedDefaultAgent] Using admin user as author:', authorId.toString());
+    } else {
+      // No admin found, use the first user in the database
+      const anyUser = await User.findOne().lean();
+      if (anyUser) {
+        authorId = anyUser._id;
+        logger.info('[seedDefaultAgent] Using first available user as author:', authorId.toString());
+      } else {
+        // No users exist yet - this means database is being initialized
+        // Create a temporary system ObjectId that can be updated later
+        authorId = new mongoose.Types.ObjectId();
+        logger.warn('[seedDefaultAgent] No users found, using temporary ObjectId:', authorId.toString());
+      }
+    }
+
     // Create default agent with Claude 4.5 and web search
     const defaultAgent = await createAgent({
       id: defaultAgentId,
@@ -31,13 +54,11 @@ const seedDefaultAgent = async () => {
       tools: [Tools.web_search],
       tool_resources: {},
       actions: [],
-      capabilities: [Tools.web_search],
       model_parameters: {
         temperature: 0.7,
         max_tokens: 4096,
       },
-      author: 'system',
-      isPublic: true,
+      author: authorId,
       category: 'general',
       avatar: {
         source: 'default',
@@ -49,6 +70,7 @@ const seedDefaultAgent = async () => {
       id: defaultAgent.id,
       name: defaultAgent.name,
       tools: defaultAgent.tools,
+      author: authorId.toString(),
     });
 
     return defaultAgent;
