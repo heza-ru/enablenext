@@ -1,0 +1,23 @@
+# RENDER ENVIRONMENT VARIABLES - Add these to your Render service
+
+# Web Search Configuration - SearxNG Primary
+SEARXNG_INSTANCE_URL=https://etsi.me
+
+# These tell the app to use SearxNG
+# Note: The app reads from librechat.yaml OR env vars
+# Since librechat.yaml is gitignored, Render needs these env vars
+
+# Instructions:
+# 1. Go to https://dashboard.render.com
+# 2. Select your backend service
+# 3. Go to "Environment" tab
+# 4. Add this variable:
+#    Name: SEARXNG_INSTANCE_URL
+#    Value: https://etsi.me
+# 5. Click "Save Changes"
+# 6. Render will auto-redeploy
+
+# Alternative high-uptime instances (if etsi.me fails):
+# SEARXNG_INSTANCE_URL=https://paulgo.io
+# SEARXNG_INSTANCE_URL=https://grep.vim.wtf
+# SEARXNG_INSTANCE_URL=https://baresearch.org

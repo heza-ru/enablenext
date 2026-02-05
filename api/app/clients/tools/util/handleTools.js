@@ -36,6 +36,7 @@ const {
   StructuredWolfram,
   TavilySearchResults,
   DuckDuckGoSearch,
+  SearxNGSearch,
   createGeminiImageTool,
   createOpenAIImageTools,
 } = require('../');
@@ -384,12 +385,11 @@ IMPORTANT: Focus on providing accurate, well-sourced information. Extract and su
         continue;
       }
       
-      // For SearxNG, use createSearchTool from @librechat/agents
-      const { onSearchResults, onGetHighlights } = options?.[Tools.web_search] ?? {};
+      // For SearxNG, use custom SearxNGSearch tool (same structure as DuckDuckGo)
+      logger.info('[loadTools] Using SearxNGSearch tool (FREE, unlimited, privacy-focused)');
       requestedTools[tool] = async () => {
         toolContextMap[tool] = `# \`${tool}\` - SearxNG Web Search (FREE, Privacy-Focused)
 Current Date & Time: ${replaceSpecialVars({ text: '{{iso_datetime}}' })}
-Search Provider: SearxNG (${result.authResult?.searxngInstanceUrl})
 
 When using web search, follow these guidelines:
 1. Execute search immediately without explaining what you're going to do
@@ -400,30 +400,14 @@ When using web search, follow these guidelines:
 
 IMPORTANT: Focus on providing accurate, well-sourced information. Extract and summarize key points from search results.`.trim();
         
-        try {
-          logger.info('[loadTools] Creating SearxNG search tool with config:', {
-            searchProvider: result.authResult.searchProvider,
-            searxngInstanceUrl: result.authResult.searxngInstanceUrl,
-            hasCallbacks: !!(onSearchResults && onGetHighlights),
-          });
-          
-          const searchTool = createSearchTool({
-            ...result.authResult,
-            onSearchResults,
-            onGetHighlights,
-            logger,
-          });
-          
-          logger.info('[loadTools] SearxNG search tool created successfully:', {
-            name: searchTool.name,
-            description: searchTool.description?.substring(0, 100),
-          });
-          
-          return searchTool;
-        } catch (error) {
-          logger.error('[loadTools] Failed to create SearxNG search tool:', error);
-          throw error;
-        }
+        // Use SearxNGSearch with enhanced scraping (same structure as DuckDuckGo)
+        return new SearxNGSearch({
+          searxngUrl: result.authResult?.searxngInstanceUrl || 'https://etsi.me',
+          maxResults: 5,
+          enableScraping: true,
+          scrapeTopN: 3,
+          scraperTimeout: result.authResult?.scraperTimeout || 15000,
+        });
       };
       continue;
     } else if (tool && mcpToolPattern.test(tool)) {

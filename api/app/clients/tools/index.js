@@ -12,6 +12,7 @@ const TraversaalSearch = require('./structured/TraversaalSearch');
 const createOpenAIImageTools = require('./structured/OpenAIImageTools');
 const TavilySearchResults = require('./structured/TavilySearchResults');
 const DuckDuckGoSearch = require('./structured/DuckDuckGoSearch');
+const SearxNGSearch = require('./structured/SearxNGSearch');
 const createGeminiImageTool = require('./structured/GeminiImageGen');
 
 module.exports = {
@@ -27,6 +28,7 @@ module.exports = {
   StructuredWolfram,
   TavilySearchResults,
   DuckDuckGoSearch,
+  SearxNGSearch,
   createOpenAIImageTools,
   createGeminiImageTool,
 };

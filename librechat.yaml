@@ -23,10 +23,10 @@ interface:
     share: false
     public: false
 
-# Web Search Configuration
-# Using DuckDuckGo (works with agents, some rate limits possible)
+# Web Search Configuration - SearXNG (FREE, NO rate limits!)
 webSearch:
-  searchProvider: duckduckgo
+  searchProvider: searxng
+  searxngInstanceUrl: https://etsi.me
   safeSearch: 1
   
   # Advanced options for optimal results
