@@ -23,16 +23,8 @@ interface:
     share: false
     public: false
 
-# Web Search Configuration - SearXNG (FREE, NO rate limits!)
-webSearch:
-  searchProvider: searxng
-  searxngInstanceUrl: https://etsi.me
-  safeSearch: 1
-  
-  # Advanced options for optimal results
-  scraperTimeout: 15000  # 15s timeout for content extraction
-  maxRetries: 3          # Retry failed requests
-  retryDelay: 2000       # 2s between retries
+# Web Search Configuration (now using Tavily via MCP)
+# No config needed - handled by MCP integration
 
 # Agents Configuration - All tools enabled
 endpoints:
@@ -53,14 +45,23 @@ endpoints:
     assistant:
       append_current_datetime: true
   
-  # Anthropic Configuration - Claude Sonnet 4.5 as default
+  # Anthropic Configuration - Full model selection
   anthropic:
     streamRate: 20
     titleModel: claude-sonnet-4
     models:
+      # Claude 4 family (latest)
       - claude-sonnet-4
       - claude-opus-4
-      - claude-haiku-3.5
+      - claude-haiku-4
+      # Claude 3.5 family
+      - claude-3-5-sonnet-20241022
+      - claude-3-5-sonnet-20240620
+      - claude-3-5-haiku-20241022
+      # Claude 3 family
+      - claude-3-opus-20240229
+      - claude-3-sonnet-20240229
+      - claude-3-haiku-20240307
     # Append current date/time to system prompt for accurate date awareness
     assistant:
       append_current_datetime: true

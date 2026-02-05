@@ -44,15 +44,15 @@ const seedDefaultAgent = async () => {
       }
     }
 
-    // Create default agent with Claude 4.5 and web search
+    // Create default agent - simple assistant without tools
     const defaultAgent = await createAgent({
       id: defaultAgentId,
-      name: 'Claude 4.5 with Web Search',
-      description: 'Claude Sonnet 4.5 with web search capability for real-time information',
-      instructions: 'You are a helpful AI assistant with access to web search. Use web search when you need current information, recent events, or to verify facts. Always provide accurate, well-researched responses.',
+      name: 'Claude Assistant',
+      description: 'Claude Sonnet 4.5 general purpose AI assistant',
+      instructions: 'You are a helpful AI assistant. Provide clear, accurate, and thoughtful responses.',
       model: 'claude-sonnet-4',
       provider: 'anthropic',
-      tools: [Tools.web_search],
+      tools: [], // No default tools - users can add as needed
       tool_resources: {},
       actions: [],
       model_parameters: {

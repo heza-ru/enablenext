@@ -1,0 +1,26 @@
+# IMMEDIATE FIX FOR RENDER
+
+## Add this environment variable to Render:
+
+Name:  WEB_SEARCH_PROVIDER
+Value: tavily
+
+## OR if you want free (but might have issues):
+
+Name:  WEB_SEARCH_PROVIDER  
+Value: searxng
+
+Name:  SEARXNG_INSTANCE_URL
+Value: https://etsi.me
+
+## Steps:
+1. Go to Render dashboard
+2. Select backend service
+3. Environment tab
+4. Add variable above
+5. Save (auto-redeploys in 3 min)
+
+## Why this works:
+- librechat.yaml might not be read properly on Render
+- Environment variables always work
+- This forces the search provider
