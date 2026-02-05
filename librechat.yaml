@@ -23,14 +23,10 @@ interface:
     share: false
     public: false
 
-# Web Search Configuration - FREE SearxNG Primary
-# Primary: SearxNG (FREE, privacy-focused metasearch - NO rate limits!)
-# Instance: etsi.me (99.96% uptime, verified working Feb 2026)
-# Note: DuckDuckGo was causing rate-limit issues (429 errors)
+# Web Search Configuration
+# Using DuckDuckGo (works with agents, some rate limits possible)
 webSearch:
-  # Search Provider - SearxNG is the PRIMARY search (no rate limits!)
-  searchProvider: searxng
-  searxngInstanceUrl: https://etsi.me  # Must match .env for consistency
+  searchProvider: duckduckgo
   safeSearch: 1
   
   # Advanced options for optimal results
