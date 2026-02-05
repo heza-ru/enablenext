@@ -1,4 +1,5 @@
 export { default } from './MCPBuilderPanel';
+export { default as MCPMarketplace } from './MCPMarketplace';
 export { default as MCPBuilderPanel } from './MCPBuilderPanel';
 export { default as MCPServerList } from './MCPServerList';
 export { default as MCPServerDialog } from './MCPServerDialog';
