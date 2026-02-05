@@ -62,18 +62,18 @@ export type MCPCategory =
   | 'api'
   | 'other';
 
-export const mcpCategories: Array<{ id: MCPCategory; label: string; icon: string }> = [
-  { id: 'search', label: 'Web Search', icon: '🔍' },
-  { id: 'productivity', label: 'Productivity', icon: '📋' },
-  { id: 'development', label: 'Development', icon: '💻' },
-  { id: 'data', label: 'Data & Analytics', icon: '📊' },
-  { id: 'automation', label: 'Automation', icon: '⚡' },
-  { id: 'ai', label: 'AI & ML', icon: '🤖' },
-  { id: 'communication', label: 'Communication', icon: '💬' },
-  { id: 'file-management', label: 'File Management', icon: '📁' },
-  { id: 'database', label: 'Database', icon: '🗄️' },
-  { id: 'api', label: 'API Integration', icon: '🔌' },
-  { id: 'other', label: 'Other', icon: '📦' },
+export const mcpCategories: Array<{ id: MCPCategory; label: string; iconName: string }> = [
+  { id: 'search', label: 'Web Search', iconName: 'Search' },
+  { id: 'productivity', label: 'Productivity', iconName: 'Briefcase' },
+  { id: 'development', label: 'Development', iconName: 'Code2' },
+  { id: 'data', label: 'Data & Analytics', iconName: 'BarChart3' },
+  { id: 'automation', label: 'Automation', iconName: 'Zap' },
+  { id: 'ai', label: 'AI & ML', iconName: 'Bot' },
+  { id: 'communication', label: 'Communication', iconName: 'MessageSquare' },
+  { id: 'file-management', label: 'File Management', iconName: 'FolderOpen' },
+  { id: 'database', label: 'Database', iconName: 'Database' },
+  { id: 'api', label: 'API Integration', iconName: 'Plug' },
+  { id: 'other', label: 'Other', iconName: 'Package' },
 ];
 
 /**

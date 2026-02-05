@@ -1,5 +1,24 @@
 import { useState, useMemo } from 'react';
-import { Search, Star, TrendingUp, X, ExternalLink, Check, Download, ChevronLeft } from 'lucide-react';
+import {
+  Search,
+  Star,
+  TrendingUp,
+  X,
+  ExternalLink,
+  Check,
+  Download,
+  ChevronLeft,
+  Code2,
+  Briefcase,
+  BarChart3,
+  Zap,
+  Bot,
+  MessageSquare,
+  FolderOpen,
+  Database,
+  Plug,
+  Package,
+} from 'lucide-react';
 import { Button, Input, Badge, Dialog, DialogContent, DialogTitle } from '@librechat/client';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -11,6 +30,21 @@ import {
   type MCPMarketplaceItem,
   type MCPCategory,
 } from '~/data/mcpMarketplace';
+
+// Icon mapping for categories
+const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  Search: Search,
+  Briefcase: Briefcase,
+  Code2: Code2,
+  BarChart3: BarChart3,
+  Zap: Zap,
+  Bot: Bot,
+  MessageSquare: MessageSquare,
+  FolderOpen: FolderOpen,
+  Database: Database,
+  Plug: Plug,
+  Package: Package,
+};
 
 interface MCPMarketplaceDialogProps {
   open: boolean;
@@ -120,31 +154,36 @@ export default function MCPMarketplaceDialog({ open, onOpenChange }: MCPMarketpl
                   All
                 </Button>
                 <div className="w-px bg-border-medium mx-2" />
-                {mcpCategories.map((cat) => (
-                  <Button
-                    key={cat.id}
-                    size="sm"
-                    variant={selectedCategory === cat.id ? 'default' : 'outline'}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className="gap-2"
-                  >
-                    <span className="text-base">{cat.icon}</span>
-                    {cat.label}
-                  </Button>
-                ))}
+                {mcpCategories.map((cat) => {
+                  const IconComponent = categoryIcons[cat.iconName];
+                  return (
+                    <Button
+                      key={cat.id}
+                      size="sm"
+                      variant={selectedCategory === cat.id ? 'default' : 'outline'}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className="gap-2"
+                    >
+                      {IconComponent && <IconComponent className="size-4" />}
+                      {cat.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
 
             {/* MCP Grid */}
-            <div className="flex-1 overflow-y-auto p-6 bg-surface-secondary/30">
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900/50">
               {filteredMCPs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary">
-                  <Search className="size-16 mb-4 opacity-50" />
-                  <p className="text-xl font-medium mb-2">No MCPs found</p>
-                  <p className="text-sm">Try adjusting your search or filters</p>
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-6 mb-4">
+                    <Search className="size-16 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <p className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">No MCPs found</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Try adjusting your search or filters</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {filteredMCPs.map((mcp) => (
                     <MCPCard
                       key={mcp.id}
@@ -179,14 +218,17 @@ interface MCPCardProps {
 }
 
 function MCPCard({ mcp, onClick, isSelected }: MCPCardProps) {
+  const categoryInfo = mcpCategories.find(c => c.id === mcp.category);
+  const CategoryIcon = categoryInfo ? categoryIcons[categoryInfo.iconName] : Package;
+
   const getPricingBadge = () => {
     switch (mcp.pricing) {
       case 'free':
-        return <Badge variant="success" className="text-xs font-medium">Free</Badge>;
+        return <Badge variant="success" className="text-xs font-semibold px-2">FREE</Badge>;
       case 'paid':
-        return <Badge variant="default" className="text-xs font-medium">Paid</Badge>;
+        return <Badge variant="default" className="text-xs font-semibold px-2 bg-blue-600 text-white">PAID</Badge>;
       case 'freemium':
-        return <Badge variant="info" className="text-xs font-medium">Freemium</Badge>;
+        return <Badge variant="info" className="text-xs font-semibold px-2 bg-purple-600 text-white">FREEMIUM</Badge>;
     }
   };
 
@@ -194,62 +236,87 @@ function MCPCard({ mcp, onClick, isSelected }: MCPCardProps) {
     <button
       onClick={onClick}
       className={cn(
-        'group relative flex flex-col p-5 rounded-lg border transition-all text-left',
-        'hover:shadow-lg',
+        'group relative flex flex-col p-5 rounded-xl border-2 transition-all text-left',
+        'hover:shadow-xl hover:scale-[1.02]',
         isSelected
-          ? 'border-blue-500 shadow-md bg-surface-primary ring-2 ring-blue-500/20'
-          : 'border-border-medium hover:border-border-heavy bg-surface-primary'
+          ? 'border-blue-500 shadow-lg bg-white dark:bg-gray-800 ring-2 ring-blue-500/30'
+          : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 bg-white dark:bg-gray-800'
       )}
     >
       {/* Header */}
-      <div className="flex items-start gap-3 mb-4">
+      <div className="flex items-start gap-4 mb-4">
         {mcp.icon ? (
-          <img src={mcp.icon} alt="" className="size-12 rounded flex-shrink-0" />
+          <div className="size-14 rounded-lg bg-white dark:bg-gray-700 p-2 flex items-center justify-center border border-gray-200 dark:border-gray-600 flex-shrink-0 shadow-sm">
+            <img 
+              src={mcp.icon} 
+              alt={mcp.displayName} 
+              className="size-full object-contain"
+              loading="lazy"
+              onError={(e) => {
+                // Fallback to icon if image fails to load
+                e.currentTarget.style.display = 'none';
+                const parent = e.currentTarget.parentElement;
+                if (parent && CategoryIcon) {
+                  parent.innerHTML = '';
+                  parent.className = 'size-14 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 p-3 flex items-center justify-center flex-shrink-0 shadow-sm';
+                }
+              }}
+            />
+          </div>
         ) : (
-          <div className="size-12 rounded bg-surface-secondary flex items-center justify-center text-2xl flex-shrink-0">
-            {mcpCategories.find(c => c.id === mcp.category)?.icon || '📦'}
+          <div className="size-14 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 p-3 flex items-center justify-center flex-shrink-0 shadow-sm">
+            {CategoryIcon && <CategoryIcon className="size-full text-white" />}
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <h3 className="font-semibold text-base truncate">{mcp.displayName}</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 truncate">
+              {mcp.displayName}
+            </h3>
             {mcp.verified && (
-              <Check className="size-4 text-green-500 shrink-0" />
+              <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-0.5">
+                <Check className="size-4 text-green-600 dark:text-green-400 shrink-0" />
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {getPricingBadge()}
             {mcp.featured && (
-              <Star className="size-3.5 text-yellow-500 fill-yellow-500" />
+              <div className="flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/30 px-2 py-0.5 rounded">
+                <Star className="size-3 text-yellow-600 dark:text-yellow-400 fill-current" />
+                <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300">Featured</span>
+              </div>
             )}
           </div>
         </div>
       </div>
 
       {/* Description */}
-      <p className="text-sm text-text-secondary mb-4 line-clamp-3 flex-1 leading-relaxed">
+      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-3 flex-1 leading-relaxed">
         {mcp.description}
       </p>
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-xs text-text-secondary pt-3 border-t border-border-light">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between text-xs pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-4 text-gray-600 dark:text-gray-400">
           {mcp.toolCount && (
-            <span className="font-medium">{mcp.toolCount} tools</span>
+            <span className="font-semibold">{mcp.toolCount} tools</span>
           )}
           {mcp.rating && (
-            <span className="flex items-center gap-1">
-              <Star className="size-3 text-yellow-500 fill-yellow-500" />
-              <span className="font-medium">{mcp.rating}</span>
+            <span className="flex items-center gap-1.5">
+              <Star className="size-3.5 text-yellow-500 fill-yellow-500" />
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{mcp.rating}</span>
             </span>
           )}
         </div>
-        <span className="text-xs text-text-tertiary truncate max-w-[120px]">{mcp.author}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px] font-medium">
+          {mcp.author}
+        </span>
       </div>
 
       {/* Hover indicator */}
       <div className={cn(
-        "absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-b-lg transition-opacity",
+        "absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-b-xl transition-opacity",
         isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
       )} />
     </button>
@@ -264,6 +331,8 @@ interface MCPDetailPanelProps {
 
 function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
   const [installing, setInstalling] = useState(false);
+  const categoryInfo = mcpCategories.find(c => c.id === mcp.category);
+  const CategoryIcon = categoryInfo ? categoryIcons[categoryInfo.iconName] : Package;
 
   const handleInstall = async () => {
     setInstalling(true);
@@ -276,11 +345,16 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
   };
 
   return (
-    <div className="w-[480px] border-l border-border-medium bg-surface-primary overflow-y-auto flex-shrink-0">
+    <div className="w-[480px] border-l-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto flex-shrink-0">
       {/* Sticky Header */}
-      <div className="sticky top-0 bg-surface-primary border-b border-border-medium p-6 z-10 space-y-4">
+      <div className="sticky top-0 bg-white dark:bg-gray-800 border-b-2 border-gray-200 dark:border-gray-700 p-6 z-10 space-y-4 shadow-sm">
         {/* Back button */}
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-2 -ml-2">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onBack} 
+          className="gap-2 -ml-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+        >
           <ChevronLeft className="size-4" />
           Back to list
         </Button>
@@ -288,20 +362,37 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         {/* MCP Header */}
         <div className="flex items-start gap-4">
           {mcp.icon ? (
-            <img src={mcp.icon} alt="" className="size-16 rounded" />
+            <div className="size-20 rounded-xl bg-white dark:bg-gray-700 p-3 flex items-center justify-center border-2 border-gray-200 dark:border-gray-600 flex-shrink-0 shadow-md">
+              <img 
+                src={mcp.icon} 
+                alt={mcp.displayName} 
+                className="size-full object-contain"
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const parent = e.currentTarget.parentElement;
+                  if (parent && CategoryIcon) {
+                    parent.innerHTML = '';
+                    parent.className = 'size-20 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-4 flex items-center justify-center flex-shrink-0 shadow-md';
+                  }
+                }}
+              />
+            </div>
           ) : (
-            <div className="size-16 rounded bg-surface-secondary flex items-center justify-center text-3xl">
-              {mcpCategories.find(c => c.id === mcp.category)?.icon || '📦'}
+            <div className="size-20 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-4 flex items-center justify-center flex-shrink-0 shadow-md">
+              {CategoryIcon && <CategoryIcon className="size-full text-white" />}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <h2 className="font-semibold text-xl">{mcp.displayName}</h2>
+              <h2 className="font-bold text-xl text-gray-900 dark:text-gray-100">{mcp.displayName}</h2>
               {mcp.verified && (
-                <Check className="size-5 text-green-500" />
+                <div className="bg-green-100 dark:bg-green-900/40 rounded-full p-1">
+                  <Check className="size-5 text-green-600 dark:text-green-400" />
+                </div>
               )}
             </div>
-            <p className="text-sm text-text-secondary">{mcp.author}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">{mcp.author}</p>
           </div>
         </div>
 
@@ -309,33 +400,36 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         <Button
           onClick={handleInstall}
           disabled={installing}
-          className="w-full gap-2 h-11"
+          className="w-full gap-2 h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md"
           size="lg"
         >
-          <Download className="size-4" />
+          <Download className="size-5" />
           {installing ? 'Installing...' : 'Install MCP'}
         </Button>
       </div>
 
       {/* Content */}
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 bg-white dark:bg-gray-800">
         {/* Pricing */}
         <div>
-          <h3 className="font-semibold text-base mb-3">Pricing</h3>
-          <div className="flex items-center gap-3">
-            <Badge variant={mcp.pricing === 'free' ? 'success' : mcp.pricing === 'paid' ? 'default' : 'info'} className="text-sm">
+          <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Pricing</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Badge 
+              variant={mcp.pricing === 'free' ? 'success' : mcp.pricing === 'paid' ? 'default' : 'info'} 
+              className="text-sm font-bold px-3 py-1"
+            >
               {mcp.pricing.toUpperCase()}
             </Badge>
             {mcp.priceDetails && (
-              <span className="text-sm text-text-secondary">{mcp.priceDetails}</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">{mcp.priceDetails}</span>
             )}
           </div>
         </div>
 
         {/* Description */}
         <div>
-          <h3 className="font-semibold text-base mb-3">About</h3>
-          <p className="text-sm text-text-secondary leading-relaxed">
+          <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">About</h3>
+          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             {mcp.longDescription || mcp.description}
           </p>
         </div>
@@ -343,19 +437,23 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         {/* Stats */}
         {(mcp.rating || mcp.toolCount || mcp.reviews) && (
           <div>
-            <h3 className="font-semibold text-base mb-3">Stats</h3>
+            <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Stats</h3>
             <div className="flex flex-wrap gap-4 text-sm">
               {mcp.rating && (
-                <div className="flex items-center gap-2 text-text-secondary">
-                  <Star className="size-4 text-yellow-500 fill-yellow-500" />
-                  <span className="font-medium">{mcp.rating} / 5.0</span>
+                <div className="flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/30 px-3 py-2 rounded-lg">
+                  <Star className="size-5 text-yellow-500 fill-yellow-500" />
+                  <span className="font-bold text-gray-900 dark:text-gray-100">{mcp.rating} / 5.0</span>
                 </div>
               )}
               {mcp.reviews && (
-                <span className="text-text-secondary">{mcp.reviews} reviews</span>
+                <div className="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-lg">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{mcp.reviews} reviews</span>
+                </div>
               )}
               {mcp.toolCount && (
-                <span className="text-text-secondary font-medium">{mcp.toolCount} tools</span>
+                <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{mcp.toolCount} tools</span>
+                </div>
               )}
             </div>
           </div>
@@ -364,10 +462,14 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         {/* Tools */}
         {mcp.tools && mcp.tools.length > 0 && (
           <div>
-            <h3 className="font-semibold text-base mb-3">Available Tools</h3>
+            <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Available Tools</h3>
             <div className="flex flex-wrap gap-2">
               {mcp.tools.map((tool) => (
-                <Badge key={tool} variant="outline" className="text-xs font-mono">
+                <Badge 
+                  key={tool} 
+                  variant="outline" 
+                  className="text-xs font-mono font-semibold px-2.5 py-1 border-2 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                >
                   {tool}
                 </Badge>
               ))}
@@ -378,17 +480,17 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         {/* Environment Variables */}
         {mcp.envVarsRequired && mcp.envVarsRequired.length > 0 && (
           <div>
-            <h3 className="font-semibold text-base mb-3">Required Configuration</h3>
+            <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Required Configuration</h3>
             <div className="space-y-3">
               {mcp.envVarsRequired.map((env) => (
-                <div key={env.name} className="p-3 bg-surface-secondary rounded-lg text-sm">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <code className="font-mono font-semibold text-sm">{env.name}</code>
+                <div key={env.name} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border-2 border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <code className="font-mono font-bold text-sm text-blue-600 dark:text-blue-400">{env.name}</code>
                     {env.required && (
-                      <Badge variant="destructive" className="text-xs">Required</Badge>
+                      <Badge variant="destructive" className="text-xs font-bold">Required</Badge>
                     )}
                   </div>
-                  <p className="text-text-secondary text-xs leading-relaxed">{env.description}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">{env.description}</p>
                 </div>
               ))}
             </div>
@@ -398,9 +500,9 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         {/* Installation */}
         {mcp.quickInstall && (
           <div>
-            <h3 className="font-semibold text-base mb-3">Quick Install</h3>
-            <div className="p-4 bg-surface-tertiary rounded-lg border border-border-medium">
-              <code className="text-sm font-mono break-all">
+            <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Quick Install</h3>
+            <div className="p-4 bg-gray-900 dark:bg-gray-950 rounded-lg border-2 border-gray-700">
+              <code className="text-sm font-mono break-all text-green-400">
                 {mcp.quickInstall.command} {mcp.quickInstall.args?.join(' ')}
               </code>
             </div>
@@ -409,14 +511,14 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
 
         {/* Links */}
         <div>
-          <h3 className="font-semibold text-base mb-3">Links</h3>
-          <div className="space-y-2">
+          <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Links</h3>
+          <div className="space-y-3">
             {mcp.homepage && (
               <a
                 href={mcp.homepage}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-text-link hover:underline"
+                className="flex items-center gap-3 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
               >
                 <ExternalLink className="size-4" />
                 Homepage
@@ -427,7 +529,7 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
                 href={mcp.documentation}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-text-link hover:underline"
+                className="flex items-center gap-3 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
               >
                 <ExternalLink className="size-4" />
                 Documentation
@@ -438,7 +540,7 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
                 href={mcp.githubRepo}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-text-link hover:underline"
+                className="flex items-center gap-3 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
               >
                 <ExternalLink className="size-4" />
                 GitHub Repository
@@ -450,10 +552,14 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         {/* Tags */}
         {mcp.tags && mcp.tags.length > 0 && (
           <div>
-            <h3 className="font-semibold text-base mb-3">Tags</h3>
+            <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Tags</h3>
             <div className="flex flex-wrap gap-2">
               {mcp.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs">
+                <Badge 
+                  key={tag} 
+                  variant="secondary" 
+                  className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2.5 py-1"
+                >
                   #{tag}
                 </Badge>
               ))}
