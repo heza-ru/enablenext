@@ -40,17 +40,20 @@ export default function MCPBuilderPanel() {
   return (
     <div className="flex h-full w-full flex-col overflow-visible">
       <div role="region" aria-label={localize('com_ui_mcp_servers')} className="mt-2 space-y-2">
-        {/* Toolbar: Browse Marketplace + Search + Add Button */}
-        <div className="flex items-center gap-2">
+        {/* Browse Marketplace Button - Prominent at top */}
+        <div className="px-2">
           <Button
             variant="default"
-            size="sm"
             onClick={() => setShowMarketplace(true)}
-            className="gap-2 shrink-0"
+            className="w-full gap-2 h-10 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold"
           >
             <Store className="size-4" />
-            Browse Marketplace
+            Browse MCP Marketplace
           </Button>
+        </div>
+
+        {/* Toolbar: Search + Add Button */}
+        <div className="flex items-center gap-2">
           <FilterInput
             inputId="mcp-filter"
             label={localize('com_ui_filter_mcp_servers')}

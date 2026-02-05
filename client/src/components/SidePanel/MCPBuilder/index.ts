@@ -1,9 +1,8 @@
 export { default } from './MCPBuilderPanel';
-export { default as MCPMarketplace } from './MCPMarketplace';
+export { default as MCPMarketplaceDialog } from './MCPMarketplaceDialog';
 export { default as MCPBuilderPanel } from './MCPBuilderPanel';
 export { default as MCPServerList } from './MCPServerList';
 export { default as MCPServerDialog } from './MCPServerDialog';
 export { default as MCPServerCard } from './MCPServerCard';
 export { default as MCPStatusBadge, getStatusDotColor } from './MCPStatusBadge';
 export { default as MCPCardActions } from './MCPCardActions';
-export { default as MCPAuth } from './MCPAuth';

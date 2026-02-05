@@ -18,8 +18,9 @@ import {
   Database,
   Plug,
   Package,
+  Store,
 } from 'lucide-react';
-import { Button, Input, Badge, Dialog, DialogContent, DialogTitle } from '@librechat/client';
+import { Button, Input, Dialog, DialogContent, DialogTitle } from '@librechat/client';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 import {
@@ -86,30 +87,30 @@ export default function MCPMarketplaceDialog({ open, onOpenChange }: MCPMarketpl
 
   const handleClose = () => {
     setSelectedMCP(null);
+    setSearchQuery('');
+    setSelectedCategory('featured');
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
         className="max-w-7xl h-[90vh] p-0 overflow-hidden"
-        showCloseButton={false}
+        showCloseButton={true}
       >
         <div className="flex h-full">
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-border-medium bg-surface-primary">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <DialogTitle className="text-2xl font-semibold">MCP Marketplace</DialogTitle>
-                  <Badge variant="success" className="text-sm">
-                    {mcpMarketplace.length} MCPs
-                  </Badge>
-                </div>
-                <Button variant="ghost" size="icon" onClick={handleClose}>
-                  <X className="size-5" />
-                </Button>
+            <div className="px-6 py-5 border-b-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <div className="flex items-center gap-3 mb-4">
+                <Store className="size-7 text-blue-600 dark:text-blue-400" />
+                <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  MCP Marketplace
+                </DialogTitle>
+                <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/40 px-3 py-1 text-sm font-bold text-green-700 dark:text-green-300">
+                  {mcpMarketplace.length} MCPs
+                </span>
               </div>
               
               {/* Search */}
@@ -183,7 +184,12 @@ export default function MCPMarketplaceDialog({ open, onOpenChange }: MCPMarketpl
                   <p className="text-sm text-gray-600 dark:text-gray-400">Try adjusting your search or filters</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className={cn(
+                  'grid gap-5',
+                  selectedMCP 
+                    ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3' 
+                    : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                )}>
                   {filteredMCPs.map((mcp) => (
                     <MCPCard
                       key={mcp.id}
@@ -224,11 +230,11 @@ function MCPCard({ mcp, onClick, isSelected }: MCPCardProps) {
   const getPricingBadge = () => {
     switch (mcp.pricing) {
       case 'free':
-        return <Badge variant="success" className="text-xs font-semibold px-2">FREE</Badge>;
+        return <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-300">FREE</span>;
       case 'paid':
-        return <Badge variant="default" className="text-xs font-semibold px-2 bg-blue-600 text-white">PAID</Badge>;
+        return <span className="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">PAID</span>;
       case 'freemium':
-        return <Badge variant="info" className="text-xs font-semibold px-2 bg-purple-600 text-white">FREEMIUM</Badge>;
+        return <span className="inline-flex items-center rounded-full bg-purple-600 px-2 py-0.5 text-xs font-semibold text-white">FREEMIUM</span>;
     }
   };
 
@@ -414,12 +420,18 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         <div>
           <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Pricing</h3>
           <div className="flex items-center gap-3 flex-wrap">
-            <Badge 
-              variant={mcp.pricing === 'free' ? 'success' : mcp.pricing === 'paid' ? 'default' : 'info'} 
-              className="text-sm font-bold px-3 py-1"
+            <span 
+              className={cn(
+                "inline-flex items-center rounded-full px-3 py-1 text-sm font-bold",
+                mcp.pricing === 'free' 
+                  ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' 
+                  : mcp.pricing === 'paid' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-purple-600 text-white'
+              )}
             >
               {mcp.pricing.toUpperCase()}
-            </Badge>
+            </span>
             {mcp.priceDetails && (
               <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">{mcp.priceDetails}</span>
             )}
@@ -465,13 +477,12 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
             <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Available Tools</h3>
             <div className="flex flex-wrap gap-2">
               {mcp.tools.map((tool) => (
-                <Badge 
+                <span 
                   key={tool} 
-                  variant="outline" 
-                  className="text-xs font-mono font-semibold px-2.5 py-1 border-2 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                  className="inline-flex items-center rounded-md border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-2.5 py-1 text-xs font-mono font-semibold text-gray-800 dark:text-gray-200"
                 >
                   {tool}
-                </Badge>
+                </span>
               ))}
             </div>
           </div>
@@ -487,7 +498,7 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
                   <div className="flex items-center gap-2 mb-2">
                     <code className="font-mono font-bold text-sm text-blue-600 dark:text-blue-400">{env.name}</code>
                     {env.required && (
-                      <Badge variant="destructive" className="text-xs font-bold">Required</Badge>
+                      <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-bold text-red-700 dark:text-red-300">Required</span>
                     )}
                   </div>
                   <p className="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">{env.description}</p>
@@ -555,13 +566,12 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
             <h3 className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">Tags</h3>
             <div className="flex flex-wrap gap-2">
               {mcp.tags.map((tag) => (
-                <Badge 
+                <span 
                   key={tag} 
-                  variant="secondary" 
-                  className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2.5 py-1"
+                  className="inline-flex items-center rounded-md bg-gray-100 dark:bg-gray-700 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:text-gray-300"
                 >
                   #{tag}
-                </Badge>
+                </span>
               ))}
             </div>
           </div>
