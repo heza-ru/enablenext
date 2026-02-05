@@ -95,12 +95,12 @@ export default function MCPMarketplaceDialog({ open, onOpenChange }: MCPMarketpl
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="max-w-7xl h-[90vh] p-0 overflow-hidden"
+        className="max-w-7xl h-[90vh] p-0 overflow-hidden flex"
         showCloseButton={true}
       >
-        <div className="flex h-full">
+        <div className="flex h-full w-full">
           {/* Main Content */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
             {/* Header */}
             <div className="px-6 py-5 border-b-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
               <div className="flex items-center gap-3 mb-4">
@@ -264,14 +264,14 @@ function MCPCard({ mcp, onClick, isSelected }: MCPCardProps) {
                 const parent = e.currentTarget.parentElement;
                 if (parent && CategoryIcon) {
                   parent.innerHTML = '';
-                  parent.className = 'size-14 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 p-3 flex items-center justify-center flex-shrink-0 shadow-sm';
+                  parent.className = 'size-14 rounded-lg bg-surface-tertiary dark:bg-gray-700 p-3 flex items-center justify-center flex-shrink-0 shadow-sm';
                 }
               }}
             />
           </div>
         ) : (
-          <div className="size-14 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 p-3 flex items-center justify-center flex-shrink-0 shadow-sm">
-            {CategoryIcon && <CategoryIcon className="size-full text-white" />}
+          <div className="size-14 rounded-lg bg-surface-tertiary dark:bg-gray-700 p-3 flex items-center justify-center flex-shrink-0 shadow-sm">
+            {CategoryIcon && <CategoryIcon className="size-full text-text-secondary" />}
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -322,7 +322,7 @@ function MCPCard({ mcp, onClick, isSelected }: MCPCardProps) {
 
       {/* Hover indicator */}
       <div className={cn(
-        "absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-b-xl transition-opacity",
+        "absolute inset-x-0 bottom-0 h-1 bg-blue-500 dark:bg-blue-400 rounded-b-xl transition-opacity",
         isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
       )} />
     </button>
@@ -379,14 +379,14 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
                   const parent = e.currentTarget.parentElement;
                   if (parent && CategoryIcon) {
                     parent.innerHTML = '';
-                    parent.className = 'size-20 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-4 flex items-center justify-center flex-shrink-0 shadow-md';
+                    parent.className = 'size-20 rounded-xl bg-surface-tertiary dark:bg-gray-700 p-4 flex items-center justify-center flex-shrink-0 shadow-md';
                   }
                 }}
               />
             </div>
           ) : (
-            <div className="size-20 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-4 flex items-center justify-center flex-shrink-0 shadow-md">
-              {CategoryIcon && <CategoryIcon className="size-full text-white" />}
+            <div className="size-20 rounded-xl bg-surface-tertiary dark:bg-gray-700 p-4 flex items-center justify-center flex-shrink-0 shadow-md">
+              {CategoryIcon && <CategoryIcon className="size-full text-text-secondary" />}
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -406,7 +406,7 @@ function MCPDetailPanel({ mcp, onClose, onBack }: MCPDetailPanelProps) {
         <Button
           onClick={handleInstall}
           disabled={installing}
-          className="w-full gap-2 h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md"
+          className="w-full gap-2 h-12 text-base font-semibold shadow-md"
           size="lg"
         >
           <Download className="size-5" />
