@@ -341,7 +341,7 @@ export async function fetchAnthropicModels(
  * @returns Promise resolving to array of model IDs
  */
 export async function getAnthropicModels(
-  opts: { user?: string; vertexModels?: string[] } = {},
+  opts: { user?: string; vertexModels?: string[]; yamlModels?: string[] } = {},
 ): Promise<string[]> {
   const models = defaultModels[EModelEndpoint.anthropic];
 
@@ -352,6 +352,11 @@ export async function getAnthropicModels(
 
   if (process.env.ANTHROPIC_MODELS) {
     return splitAndTrim(process.env.ANTHROPIC_MODELS);
+  }
+
+  // YAML anthropic.models list takes priority over hardcoded defaults
+  if (opts.yamlModels && opts.yamlModels.length > 0) {
+    return opts.yamlModels;
   }
 
   if (isUserProvided(process.env.ANTHROPIC_API_KEY)) {
