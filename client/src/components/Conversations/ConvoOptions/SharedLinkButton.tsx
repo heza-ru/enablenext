@@ -21,6 +21,7 @@ import {
 } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { buildShareLinkUrl } from '~/utils';
+import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 
 export default function SharedLinkButton({
@@ -44,6 +45,7 @@ export default function SharedLinkButton({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const shareId = share?.shareId ?? '';
+  const { data: startupConfig } = useGetStartupConfig();
 
   const { mutateAsync: mutate, isLoading: isCreateLoading } = useCreateSharedLinkMutation({
     onError: () => {
@@ -86,7 +88,8 @@ export default function SharedLinkButton({
     },
   });
 
-  const generateShareLink = (shareId: string) => buildShareLinkUrl(shareId);
+  const generateShareLink = (shareId: string) =>
+    buildShareLinkUrl(shareId, startupConfig?.clientDomain);
 
   const updateSharedLink = async () => {
     if (!shareId) {

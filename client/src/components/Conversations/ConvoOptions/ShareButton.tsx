@@ -5,6 +5,7 @@ import { Copy, CopyCheck } from 'lucide-react';
 import { useGetSharedLinkQuery } from 'librechat-data-provider/react-query';
 import { OGDialogTemplate, Button, Spinner, OGDialog } from '@librechat/client';
 import { useLocalize, useCopyToClipboard } from '~/hooks';
+import { useGetStartupConfig } from '~/data-provider';
 import SharedLinkButton from './SharedLinkButton';
 import { buildShareLinkUrl, cn } from '~/utils';
 import store from '~/store';
@@ -37,12 +38,13 @@ export default function ShareButton({
   };
   const latestMessage = useRecoilValue(store.latestMessageFamily(0));
   const { data: share, isLoading } = useGetSharedLinkQuery(conversationId);
+  const { data: startupConfig } = useGetStartupConfig();
 
   useEffect(() => {
     if (share?.shareId !== undefined) {
-      setSharedLink(buildShareLinkUrl(share.shareId));
+      setSharedLink(buildShareLinkUrl(share.shareId, startupConfig?.clientDomain));
     }
-  }, [share]);
+  }, [share, startupConfig?.clientDomain]);
 
   const button =
     isLoading === true ? null : (
