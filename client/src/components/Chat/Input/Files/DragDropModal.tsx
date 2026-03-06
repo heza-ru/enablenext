@@ -69,28 +69,40 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
     const isAzureWithResponsesApi =
       currentProvider === EModelEndpoint.azureOpenAI && useResponsesApi;
 
+    const isAllDocType = (type: string | undefined) => {
+      if (!type) {
+        return false;
+      }
+      return (
+        type.startsWith('image/') ||
+        type.startsWith('text/') ||
+        type.startsWith('video/') ||
+        type.startsWith('audio/') ||
+        type === 'application/pdf' ||
+        type.startsWith('application/vnd.openxmlformats-officedocument') ||
+        type.startsWith('application/vnd.ms-') ||
+        [
+          'application/json',
+          'application/xml',
+          'application/zip',
+          'application/typescript',
+          'application/sql',
+          'application/yaml',
+          'application/csv',
+          'application/x-sh',
+          'application/x-tar',
+          'application/msword',
+        ].includes(type)
+      );
+    };
+
     // Check if provider supports document upload
     if (
       isDocumentSupportedProvider(endpointType) ||
       isDocumentSupportedProvider(currentProvider) ||
       isAzureWithResponsesApi
     ) {
-      const supportsImageDocVideoAudio =
-        currentProvider === EModelEndpoint.google || currentProvider === Providers.OPENROUTER;
-      const validFileTypes = supportsImageDocVideoAudio
-        ? files.every((file) => {
-            const type = getFileType(file);
-            return (
-              type?.startsWith('image/') ||
-              type?.startsWith('video/') ||
-              type?.startsWith('audio/') ||
-              type === 'application/pdf'
-            );
-          })
-        : files.every((file) => {
-            const type = getFileType(file);
-            return type?.startsWith('image/') || type === 'application/pdf';
-          });
+      const validFileTypes = files.every((file) => isAllDocType(getFileType(file)));
 
       _options.push({
         label: localize('com_ui_upload_provider'),

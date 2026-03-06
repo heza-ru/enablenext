@@ -93,14 +93,27 @@ const AttachFileMenu = ({
       return;
     }
     inputRef.current.value = '';
+    const allDocTypes = [
+      'application/pdf,.pdf',
+      'text/*,.txt,.md,.csv,.html,.css,.js,.ts,.py,.rb,.php,.java,.c,.cpp,.sh,.sql,.yaml,.yml,.json,.xml,.vtt',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx',
+      'application/msword,.doc',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx',
+      'application/vnd.ms-excel,.xls',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx',
+      'application/json,application/xml,application/zip,.zip',
+      'application/typescript,application/sql,application/yaml,application/csv',
+      'application/x-sh,application/x-tar,.tar',
+    ].join(',');
+
     if (fileType === 'image') {
       inputRef.current.accept = 'image/*,.heif,.heic';
     } else if (fileType === 'document') {
       inputRef.current.accept = '.pdf,application/pdf';
     } else if (fileType === 'image_document') {
-      inputRef.current.accept = 'image/*,.heif,.heic,.pdf,application/pdf';
+      inputRef.current.accept = `image/*,.heif,.heic,${allDocTypes}`;
     } else if (fileType === 'image_document_video_audio') {
-      inputRef.current.accept = 'image/*,.heif,.heic,.pdf,application/pdf,video/*,audio/*';
+      inputRef.current.accept = `image/*,.heif,.heic,${allDocTypes},video/*,audio/*`;
     } else {
       inputRef.current.accept = '';
     }
