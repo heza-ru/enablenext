@@ -92,8 +92,9 @@ const extractOfficeDocumentText = async ({ req, file, file_id }) => {
 
   // Native fallback: officeparser handles docx/xlsx/pptx without external services
   try {
-    const officeParser = require('officeparser');
-    const text = await officeParser.parseOfficeAsync(file.path);
+    const { OfficeParser } = require('officeparser');
+    const ast = await OfficeParser.parseOffice(file.path);
+    const text = ast.toText();
     const bytes = Buffer.byteLength(text, 'utf8');
     return { text, bytes };
   } catch (parseError) {
