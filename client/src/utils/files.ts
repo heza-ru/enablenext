@@ -283,7 +283,15 @@ export const validateFiles = ({
 
     if (!checkType(originalFile.type, mimeTypesToCheck)) {
       console.log(originalFile);
-      setError('Currently, unsupported file type: ' + originalFile.type);
+      
+      // Provide helpful error message for Office document files
+      const isOfficeFile = /^application\/(vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation|spreadsheetml\.sheet)|vnd\.ms-(word|powerpoint|excel)|msword)$/.test(originalFile.type);
+      
+      if (isOfficeFile && toolResource !== EToolResources.context) {
+        setError('com_ui_attach_error_office_files');
+      } else {
+        setError('Currently, unsupported file type: ' + originalFile.type);
+      }
       return false;
     }
 

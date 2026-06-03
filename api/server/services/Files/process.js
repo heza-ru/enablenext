@@ -37,6 +37,74 @@ const { getStrategyFunctions } = require('./strategies');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 
+const officeDocumentMimeTypes =
+  /^application\/(vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation|spreadsheetml\.sheet)|vnd\.ms-(word|powerpoint|excel)|msword)$/;
+
+/**
+ * Tries to extract text from an Office document (docx, xlsx, pptx, etc.).
+ * Uses OCR if configured, otherwise falls back to parseText.
+ * Returns null if extraction fails or the file is not an Office document.
+ *
+ * @param {object} params
+ * @param {ServerRequest} params.req
+ * @param {Express.Multer.File} params.file
+ * @param {string} params.file_id
+ * @returns {Promise<{text: string, bytes: number} | null>}
+ */
+const extractOfficeDocumentText = async ({ req, file, file_id }) => {
+  if (!officeDocumentMimeTypes.test(file.mimetype)) {
+    return null;
+  }
+
+  const appConfig = req.config;
+  const fileConfig = mergeFileConfig(appConfig?.fileConfig);
+  const shouldUseOCR =
+    appConfig?.ocr != null &&
+    fileConfig.checkType(file.mimetype, fileConfig.ocr?.supportedMimeTypes || []);
+
+  if (shouldUseOCR) {
+    try {
+      const { handleFileUpload: uploadOCR } = getStrategyFunctions(
+        appConfig?.ocr?.strategy ?? FileSources.mistral_ocr,
+      );
+      const { text, bytes } = await uploadOCR({ req, file, loadAuthValues });
+      return { text, bytes };
+    } catch (ocrError) {
+      logger.warn(
+        `[extractOfficeDocumentText] OCR failed for "${file.originalname}", falling back to parseText:`,
+        ocrError,
+      );
+    }
+  }
+
+  // If RAG API is available, use parseText (which calls RAG API for proper parsing)
+  if (process.env.RAG_API_URL) {
+    try {
+      const { text, bytes } = await parseText({ req, file, file_id });
+      return { text, bytes };
+    } catch (parseError) {
+      logger.warn(
+        `[extractOfficeDocumentText] RAG API text extraction failed for "${file.originalname}", falling back to officeparser:`,
+        parseError,
+      );
+    }
+  }
+
+  // Native fallback: officeparser handles docx/xlsx/pptx without external services
+  try {
+    const officeParser = require('officeparser');
+    const text = await officeParser.parseOfficeAsync(file.path);
+    const bytes = Buffer.byteLength(text, 'utf8');
+    return { text, bytes };
+  } catch (parseError) {
+    logger.warn(
+      `[extractOfficeDocumentText] Native text extraction failed for "${file.originalname}":`,
+      parseError,
+    );
+    return null;
+  }
+};
+
 /**
  * Creates a modular file upload wrapper that ensures filename sanitization
  * across all storage strategies. This prevents storage-specific implementations
@@ -393,6 +461,29 @@ const processFileUpload = async ({ req, res, metadata }) => {
   }
 
   const { file } = req;
+
+  if (!isAssistantUpload && officeDocumentMimeTypes.test(file.mimetype)) {
+    const extracted = await extractOfficeDocumentText({ req, file, file_id });
+    if (extracted) {
+      const result = await createFile(
+        removeNullishValues({
+          user: req.user.id,
+          file_id,
+          temp_file_id,
+          bytes: extracted.bytes,
+          filepath: file.path,
+          filename: sanitizeFilename(file.originalname),
+          context: FileContext.message_attachment,
+          type: file.mimetype,
+          text: extracted.text,
+          source: FileSources.text,
+        }),
+        true,
+      );
+      return res.status(200).json({ message: 'File uploaded and processed successfully', ...result });
+    }
+  }
+
   const sanitizedUploadFn = createSanitizedUploadWrapper(handleFileUpload);
   const {
     id,
@@ -600,6 +691,29 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
 
     const { text, bytes } = await parseText({ req, file, file_id });
     return await createTextFile({ text, bytes, type: file.mimetype });
+  }
+
+  // Auto-route Office document message attachments through text extraction
+  if (messageAttachment && !tool_resource && officeDocumentMimeTypes.test(file.mimetype)) {
+    const extracted = await extractOfficeDocumentText({ req, file, file_id });
+    if (extracted) {
+      const fileInfo = removeNullishValues({
+        text: extracted.text,
+        bytes: extracted.bytes,
+        file_id,
+        temp_file_id,
+        user: req.user.id,
+        type: file.mimetype,
+        filepath: file.path,
+        source: FileSources.text,
+        filename: file.originalname,
+        context: FileContext.message_attachment,
+      });
+      const result = await createFile(fileInfo, true);
+      return res
+        .status(200)
+        .json({ message: 'Agent file uploaded and processed successfully', ...result });
+    }
   }
 
   // Dual storage pattern for RAG files: Storage + Vector DB

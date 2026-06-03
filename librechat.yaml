@@ -36,6 +36,8 @@ endpoints:
       - web_search
       - actions
       - tools
+      - ocr  # Enable OCR for document processing (docx, xlsx, pptx, pdf)
+      - context  # Enable context extraction from documents
     # Recursion settings
     recursionLimit: 50
     maxRecursionLimit: 100
@@ -71,3 +73,69 @@ endpoints:
     # Append current date/time to system prompt for accurate date awareness
     assistant:
       append_current_datetime: true
+
+# File Upload Configuration
+# Enable comprehensive document support including Office files
+fileConfig:
+  # Server-side file size limit (in MB)
+  serverFileSizeLimit: 100
+  
+  # OCR Configuration for document processing
+  ocr:
+    # Supported MIME types for OCR processing
+    supportedMimeTypes:
+      - "^image/(jpeg|gif|png|webp|heic|heif)$"
+      - "^application/pdf$"
+      - "^application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|presentationml\\.presentation|spreadsheetml\\.sheet)$"
+      - "^application/vnd\\.ms-(word|powerpoint|excel)$"
+      - "^application/epub\\+zip$"
+  
+  # Text extraction configuration
+  text:
+    # Accept all standard document formats for text extraction
+    supportedMimeTypes:
+      - "^[\\w.-]+/[\\w.-]+$"
+  
+  # Endpoint-specific configurations
+  endpoints:
+    # Default configuration for all endpoints
+    default:
+      fileLimit: 10
+      fileSizeLimit: 20  # MB per file
+      totalSizeLimit: 100  # MB total
+      # Comprehensive MIME type support
+      supportedMimeTypes:
+        # Images
+        - "^image/(jpeg|gif|png|webp|heic|heif|svg|svg\\+xml)$"
+        # Documents - Office formats
+        - "^application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|presentationml\\.presentation|spreadsheetml\\.sheet)$"
+        - "^application/vnd\\.ms-(excel|word|powerpoint)$"
+        - "^application/(msexcel|x-msexcel|x-ms-excel|x-excel|x-dos_ms_excel|xls|x-xls)$"
+        - "^application/msword$"
+        # Documents - PDFs and text
+        - "^application/pdf$"
+        - "^text/(plain|markdown|html|css|javascript|csv|xml|vtt)$"
+        - "^text/(x-c|x-c\\+\\+|x-java|x-php|x-python|x-script\\.python|x-ruby|x-tex)$"
+        # Programming and data formats
+        - "^application/(json|typescript|sql|yaml|xml|zip|x-tar|x-sh|csv|vnd\\.coffeescript|epub\\+zip)$"
+        # Audio (for STT)
+        - "^audio/(mp3|mpeg|mpeg3|wav|wave|x-wav|ogg|vorbis|mp4|m4a|x-m4a|flac|x-flac|webm|aac|wma|opus)$"
+        # Video
+        - "^video/(mp4|avi|mov|wmv|flv|webm|mkv|m4v|3gp|ogv)$"
+    
+    # Agents endpoint - enable all file types with OCR support
+    agents:
+      fileLimit: 20
+      fileSizeLimit: 50  # MB per file
+      totalSizeLimit: 200  # MB total
+      supportedMimeTypes:
+        - "^image/(jpeg|gif|png|webp|heic|heif|svg|svg\\+xml)$"
+        - "^application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|presentationml\\.presentation|spreadsheetml\\.sheet)$"
+        - "^application/vnd\\.ms-(excel|word|powerpoint)$"
+        - "^application/(msexcel|x-msexcel|x-ms-excel|x-excel|x-dos_ms_excel|xls|x-xls)$"
+        - "^application/msword$"
+        - "^application/pdf$"
+        - "^text/.*$"
+        - "^application/(json|typescript|sql|yaml|xml|zip|x-tar|x-sh|csv|vnd\\.coffeescript|epub\\+zip)$"
+        - "^audio/(mp3|mpeg|mpeg3|wav|wave|x-wav|ogg|vorbis|mp4|m4a|x-m4a|flac|x-flac|webm|aac|wma|opus)$"
+        - "^video/(mp4|avi|mov|wmv|flv|webm|mkv|m4v|3gp|ogv)$"

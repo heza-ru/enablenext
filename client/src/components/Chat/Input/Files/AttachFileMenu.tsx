@@ -101,9 +101,11 @@ const AttachFileMenu = ({
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx',
       'application/vnd.ms-excel,.xls',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx',
+      'application/vnd.ms-powerpoint,.ppt',
       'application/json,application/xml,application/zip,.zip',
       'application/typescript,application/sql,application/yaml,application/csv',
       'application/x-sh,application/x-tar,.tar',
+      'application/epub+zip,.epub',
     ].join(',');
 
     if (fileType === 'image') {

@@ -313,6 +313,20 @@ const useFileHandling = (params?: UseFileHandling) => {
           });
         }
 
+        // Check if Office file and show informative toast
+        const isOfficeFile =
+          /^application\/(vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation|spreadsheetml\.sheet)|vnd\.ms-(word|powerpoint|excel)|msword)$/.test(
+            originalFile.type,
+          );
+
+        if (isOfficeFile && _toolResource === EToolResources.context) {
+          showToast({
+            message: localize('com_ui_attach_success_office'),
+            status: 'success',
+            duration: 3000,
+          });
+        }
+
         // Process file for HEIC conversion if needed
         const heicProcessedFile = await processFileForUpload(
           originalFile,
