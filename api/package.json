@@ -44,7 +44,7 @@
     "@azure/storage-blob": "^12.27.0",
     "@google/genai": "^1.19.0",
     "@keyv/redis": "^4.3.3",
-    "@langchain/community": "^1.1.10",
+    "@langchain/community": "^0.3.59",
     "@langchain/core": "^0.3.80",
     "@librechat/agents": "^3.0.776",
     "@librechat/api": "*",
