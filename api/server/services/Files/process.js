@@ -90,11 +90,9 @@ const extractOfficeDocumentText = async ({ req, file, file_id }) => {
     }
   }
 
-  // Native fallback: officeparser handles docx/xlsx/pptx without external services
+  // Native fallback: format-specific pure-JS parsers
   try {
-    const { OfficeParser } = require('officeparser');
-    const ast = await OfficeParser.parseOffice(file.path);
-    const text = ast.toText();
+    const text = await extractOfficeNative(file);
     const bytes = Buffer.byteLength(text, 'utf8');
     return { text, bytes };
   } catch (parseError) {
@@ -104,6 +102,71 @@ const extractOfficeDocumentText = async ({ req, file, file_id }) => {
     );
     return null;
   }
+};
+
+/**
+ * Pure-JS Office text extraction — no external services required.
+ * docx  → mammoth  (clean paragraph text)
+ * xlsx/xls → xlsx/SheetJS (sheets as TSV)
+ * pptx  → jszip + XML tag stripping (slide text nodes)
+ *
+ * @param {Express.Multer.File} file
+ * @returns {Promise<string>}
+ */
+const extractOfficeNative = async (file) => {
+  const mime = file.mimetype;
+
+  // DOCX
+  if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mime === 'application/msword') {
+    const mammoth = require('mammoth');
+    const result = await mammoth.extractRawText({ path: file.path });
+    return result.value;
+  }
+
+  // XLSX / XLS
+  if (mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      mime === 'application/vnd.ms-excel' ||
+      mime === 'application/msexcel' ||
+      mime === 'application/x-msexcel' ||
+      mime === 'application/x-ms-excel' ||
+      mime === 'application/x-excel' ||
+      mime === 'application/x-dos_ms_excel' ||
+      mime === 'application/xls' ||
+      mime === 'application/x-xls') {
+    const XLSX = require('xlsx');
+    const workbook = XLSX.readFile(file.path);
+    return workbook.SheetNames
+      .map((name) => {
+        const sheet = workbook.Sheets[name];
+        return `Sheet: ${name}\n${XLSX.utils.sheet_to_csv(sheet)}`;
+      })
+      .join('\n\n');
+  }
+
+  // PPTX / PPT — extract text from slide XML via jszip
+  if (mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      mime === 'application/vnd.ms-powerpoint') {
+    const JSZip = require('jszip');
+    const data = fs.readFileSync(file.path);
+    const zip = await JSZip.loadAsync(data);
+    const slideFiles = Object.keys(zip.files)
+      .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+      .sort();
+    const texts = await Promise.all(
+      slideFiles.map(async (name) => {
+        const xml = await zip.files[name].async('string');
+        // Extract all <a:t> text nodes (DrawingML text runs)
+        return xml.match(/<a:t[^>]*>([^<]*)<\/a:t>/g)
+          ?.map((t) => t.replace(/<[^>]+>/g, ''))
+          .filter(Boolean)
+          .join(' ') ?? '';
+      }),
+    );
+    return texts.filter(Boolean).join('\n');
+  }
+
+  throw new Error(`No native parser available for MIME type: ${mime}`);
 };
 
 /**
