@@ -11,11 +11,26 @@ Generate a single self-contained HTML artifact that:
 1. **Renders a styled document preview** with Whatfix brand typography
 2. **Includes a "Download Word" button** that generates a real `.docx` file using docx.js (runs in the browser, no server needed)
 
+## Output Format — MANDATORY
+
+ALWAYS deliver the HTML inside an artifact block. NEVER output it as a plain code block.
+
+```
+:::artifact{identifier="whatfix-document" type="text/html" title="DOCUMENT TITLE"}
+```
+<!DOCTYPE html>
+...full HTML...
+```
+:::
+```
+
+Use a descriptive kebab-case identifier (e.g. `whatfix-q3-report`). Reuse the same identifier when updating.
+
 ## CRITICAL Rules
 
 - **NO code execution** — everything runs client-side in the HTML artifact
 - **All colors from Whatfix palette only**
-- Google Fonts `@import` is allowed. docx.js is served locally at `/libs/docx.iife.js` — use that path, never a CDN URL
+- Google Fonts `@import` is allowed. Load docx.js from cdnjs only: `<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>` — never use a local `/libs/` path
 - Sentence case for all headings — never title-case every word
 - No emojis
 
@@ -40,7 +55,7 @@ Generate a single self-contained HTML artifact that:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DOCUMENT_TITLE</title>
-<script src="/libs/docx.iife.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 

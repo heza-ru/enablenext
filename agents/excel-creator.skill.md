@@ -11,11 +11,26 @@ Generate a single self-contained HTML artifact that:
 1. **Renders a styled table preview** of the spreadsheet data
 2. **Includes a "Download Excel" button** that generates a real `.xlsx` file using SheetJS (runs in the browser, no server needed)
 
+## Output Format — MANDATORY
+
+ALWAYS deliver the HTML inside an artifact block. NEVER output it as a plain code block.
+
+```
+:::artifact{identifier="whatfix-spreadsheet" type="text/html" title="SPREADSHEET TITLE"}
+```
+<!DOCTYPE html>
+...full HTML...
+```
+:::
+```
+
+Use a descriptive kebab-case identifier (e.g. `whatfix-pipeline-tracker`). Reuse the same identifier when updating.
+
 ## CRITICAL Rules
 
 - **NO code execution** — everything runs client-side in the HTML artifact
 - **All colors from Whatfix palette only**
-- SheetJS is served locally at `/libs/xlsx.full.min.js` — use that path, never a CDN URL
+- Load SheetJS from cdnjs only: `<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>` — never use a local `/libs/` path
 - The preview table must be styled with Whatfix brand colors
 - The downloaded `.xlsx` must also have Whatfix brand colors applied to headers
 
@@ -40,7 +55,7 @@ Generate a single self-contained HTML artifact that:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SPREADSHEET_TITLE</title>
-<script src="/libs/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
 

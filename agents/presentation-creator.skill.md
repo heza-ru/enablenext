@@ -11,12 +11,27 @@ Generate a single complete self-contained HTML artifact that:
 1. **Renders as interactive professional slides** in the side panel
 2. **Includes a "Download PPTX" button** that generates a real `.pptx` file client-side using PptxGenJS
 
+## Output Format — MANDATORY
+
+ALWAYS deliver the HTML inside an artifact block. NEVER output it as a plain code block.
+
+```
+:::artifact{identifier="whatfix-presentation" type="text/html" title="PRESENTATION TITLE"}
+```
+<!DOCTYPE html>
+...full HTML...
+```
+:::
+```
+
+Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the same identifier when updating an existing presentation.
+
 ## CRITICAL Rules
 
 - **NO EMOJIS** — ever. Use inline SVG icons or Unicode symbols (→ ● ◆ ▸) only
 - **ALL colors from Whatfix palette only** — zero invented hex values
 - **Layout must look like PowerPoint slides** — fixed 16:9 viewport, `position:absolute` full-bleed, not a scrolling webpage
-- **Load PptxGenJS from CDN**: `<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>` — never use a local `/libs/` path
+- **Load PptxGenJS from cdnjs only**: `<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>` — this is the only permitted CDN; never use jsdelivr, unpkg, or a local `/libs/` path
 - **PptxGenJS hex colors NEVER use `#` prefix** — `'FF6B18'` not `'#FF6B18'` (causes file corruption)
 - **Never encode opacity in hex** — use the `opacity` property instead of 8-char hex strings
 - **Never reuse option objects** across PptxGenJS calls — it mutates them in-place
@@ -92,7 +107,7 @@ Replace ALL_CAPS placeholders. The `data-*` attributes on each `<section>` drive
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PRESENTATION_TITLE</title>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
 
