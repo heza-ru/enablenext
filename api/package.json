@@ -45,7 +45,7 @@
     "@google/genai": "^1.19.0",
     "@keyv/redis": "^4.3.3",
     "@langchain/community": "^1.1.29",
-    "@langchain/core": "^0.3.80",
+    "@langchain/core": "^1.1.48",
     "@librechat/agents": "^3.2.33",
     "@librechat/api": "*",
     "@librechat/data-schemas": "*",
