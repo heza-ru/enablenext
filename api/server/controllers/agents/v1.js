@@ -80,12 +80,13 @@ const WHATFIX_AGENT_DEFS = [
 const ensureWhatfixAgentsForUser = async (userId) => {
   for (const def of WHATFIX_AGENT_DEFS) {
     try {
+      const instructions = readFileSync(path.join(AGENTS_ROOT, def.skillFile), 'utf8');
       const existing = await getAgents({ name: def.name, author: userId });
+
       if (existing.length > 0) {
+        await updateAgent({ id: existing[0].id }, { instructions });
         continue;
       }
-
-      const instructions = readFileSync(path.join(AGENTS_ROOT, def.skillFile), 'utf8');
 
       const agent = await createAgent({
         id: `agent_${nanoid()}`,

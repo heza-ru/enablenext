@@ -322,14 +322,14 @@ async function downloadDocx() {
     sections: [{ children }],
   });
 
-  const blob = await Packer.toBlob(doc);
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), {
-    href: url,
-    download: (DOC.title || 'document').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '.docx'
-  });
-  a.click();
-  URL.revokeObjectURL(url);
+  const base64 = await Packer.toBase64String(doc);
+  const slug = (DOC.title || 'document').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  window.parent.postMessage({
+    type: 'artifact-download',
+    filename: slug + '.docx',
+    data: base64,
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  }, '*');
 }
 </script>
 </body>

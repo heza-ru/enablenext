@@ -595,7 +595,13 @@ function downloadPptx() {
   });
 
   const slug = (document.title || 'presentation').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  pptx.writeFile({ fileName: slug + '.pptx' });
+  const base64 = await pptx.write({ outputType: 'base64' });
+  window.parent.postMessage({
+    type: 'artifact-download',
+    filename: slug + '.pptx',
+    data: base64,
+    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  }, '*');
 }
 </script>
 </body>

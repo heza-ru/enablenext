@@ -60,6 +60,33 @@ export default function Artifacts() {
   }, [isMobile]);
 
   useEffect(() => {
+    const handleArtifactDownload = (e: MessageEvent) => {
+      if (e.data?.type !== 'artifact-download') {
+        return;
+      }
+      const { filename, data, mimeType } = e.data as {
+        filename: string;
+        data: string;
+        mimeType: string;
+      };
+      const bytes = atob(data);
+      const array = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        array[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([array], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    window.addEventListener('message', handleArtifactDownload);
+    return () => window.removeEventListener('message', handleArtifactDownload);
+  }, []);
+
+  useEffect(() => {
     if (!isMobile) {
       setBlurAmount(0);
       return;

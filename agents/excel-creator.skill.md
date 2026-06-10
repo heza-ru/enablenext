@@ -277,7 +277,13 @@ function downloadExcel() {
   });
 
   const slug = document.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  XLSX.writeFile(wb, slug + '.xlsx', { bookType: 'xlsx', cellStyles: true });
+  const base64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64', cellStyles: true });
+  window.parent.postMessage({
+    type: 'artifact-download',
+    filename: slug + '.xlsx',
+    data: base64,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }, '*');
 }
 
 // Init
