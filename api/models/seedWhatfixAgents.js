@@ -3,6 +3,7 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
 const { PrincipalType, ResourceType, AccessRoleIds } = require('librechat-data-provider');
+const { Agent } = require('~/db/models');
 const { createAgent, getAgent, updateAgent } = require('./Agent');
 const { User } = require('~/db/models');
 const { grantPermission } = require('~/server/services/PermissionService');
@@ -89,6 +90,22 @@ const seedWhatfixAgents = async () => {
           },
         );
         logger.info(`[seedWhatfixAgents] Updated "${def.name}"`);
+        // Also patch any stale duplicates created under a different ID (e.g. via API seeder)
+        await Agent.updateMany(
+          { name: def.name, id: { $ne: def.id } },
+          { $set: { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
+        );
+        continue;
+      }
+
+      // No canonical ID found — check if an agent with this name exists under a random ID
+      const byName = await Agent.findOne({ name: def.name }).lean();
+      if (byName) {
+        await Agent.updateOne(
+          { _id: byName._id },
+          { $set: { id: def.id, model: 'claude-sonnet-4-6', provider: 'anthropic', instructions, tools: def.tools, artifacts: def.artifacts, description: def.description } },
+        );
+        logger.info(`[seedWhatfixAgents] Migrated "${def.name}" (${byName.id} → ${def.id})`);
         continue;
       }
 
