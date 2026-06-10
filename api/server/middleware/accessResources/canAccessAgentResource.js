@@ -1,44 +1,22 @@
-const { ResourceType } = require('librechat-data-provider');
+const { ResourceType, PermissionBits } = require('librechat-data-provider');
 const { canAccessResource } = require('./canAccessResource');
 const { getAgent } = require('~/models/Agent');
 
 /**
- * Agent ID resolver function
- * Resolves custom agent ID (e.g., "agent_abc123") to MongoDB ObjectId
- *
- * @param {string} agentCustomId - Custom agent ID from route parameter
- * @returns {Promise<Object|null>} Agent document with _id field, or null if not found
+ * Canonical IDs of Whatfix-branded agents that every authenticated user can view/use.
+ * These bypass the ACL system for VIEW permission only.
+ * EDIT/DELETE still require ADMIN role (handled by canAccessResource's ADMIN bypass).
  */
+const GLOBAL_AGENT_IDS = new Set([
+  'whatfix-presentation-creator',
+  'whatfix-excel-creator',
+  'whatfix-doc-creator',
+]);
+
 const resolveAgentId = async (agentCustomId) => {
   return await getAgent({ id: agentCustomId });
 };
 
-/**
- * Agent-specific middleware factory that creates middleware to check agent access permissions.
- * This middleware extends the generic canAccessResource to handle agent custom ID resolution.
- *
- * @param {Object} options - Configuration options
- * @param {number} options.requiredPermission - The permission bit required (1=view, 2=edit, 4=delete, 8=share)
- * @param {string} [options.resourceIdParam='id'] - The name of the route parameter containing the agent custom ID
- * @returns {Function} Express middleware function
- *
- * @example
- * // Basic usage for viewing agents
- * router.get('/agents/:id',
- *   canAccessAgentResource({ requiredPermission: 1 }),
- *   getAgent
- * );
- *
- * @example
- * // Custom resource ID parameter and edit permission
- * router.patch('/agents/:agent_id',
- *   canAccessAgentResource({
- *     requiredPermission: 2,
- *     resourceIdParam: 'agent_id'
- *   }),
- *   updateAgent
- * );
- */
 const canAccessAgentResource = (options) => {
   const { requiredPermission, resourceIdParam = 'id' } = options;
 
@@ -46,14 +24,42 @@ const canAccessAgentResource = (options) => {
     throw new Error('canAccessAgentResource: requiredPermission is required and must be a number');
   }
 
-  return canAccessResource({
+  const baseMiddleware = canAccessResource({
     resourceType: ResourceType.AGENT,
     requiredPermission,
     resourceIdParam,
     idResolver: resolveAgentId,
   });
+
+  // For VIEW-only requests on global agents, bypass ACL entirely.
+  // EDIT/DELETE fall through to the normal middleware which grants access to ADMIN only.
+  if (requiredPermission !== PermissionBits.VIEW) {
+    return baseMiddleware;
+  }
+
+  return async (req, res, next) => {
+    const rawId = req.params[resourceIdParam];
+
+    if (rawId && GLOBAL_AGENT_IDS.has(rawId)) {
+      const agent = await resolveAgentId(rawId).catch(() => null);
+      if (!agent) {
+        return res.status(404).json({ error: 'Not Found', message: 'agent not found' });
+      }
+      req.resourceAccess = {
+        resourceType: ResourceType.AGENT,
+        resourceId: agent._id,
+        customResourceId: rawId,
+        permission: requiredPermission,
+        userId: req.user?.id,
+      };
+      return next();
+    }
+
+    return baseMiddleware(req, res, next);
+  };
 };
 
 module.exports = {
   canAccessAgentResource,
+  GLOBAL_AGENT_IDS,
 };

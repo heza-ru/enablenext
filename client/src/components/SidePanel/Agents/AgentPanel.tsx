@@ -225,7 +225,9 @@ export default function AgentPanel() {
     basicAgentQuery.data?._id || '',
   );
 
-  const canEdit = hasPermission(PermissionBits.EDIT);
+  // ADMIN users bypass ACL on the server side, so treat them as having EDIT permission
+  // in the frontend too — this enables the expanded agent query which loads instructions.
+  const canEdit = user?.role === SystemRoles.ADMIN || hasPermission(PermissionBits.EDIT);
 
   const expandedAgentQuery = useGetExpandedAgentByIdQuery(current_agent_id ?? '', {
     enabled: !isEphemeralAgent(current_agent_id) && canEdit && !permissionsLoading,

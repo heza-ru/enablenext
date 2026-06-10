@@ -31,8 +31,12 @@ const {
   createAgent,
   updateAgent,
   deleteAgent,
+  getAgents,
   getAgent,
 } = require('~/models/Agent');
+const {
+  GLOBAL_AGENT_IDS,
+} = require('~/server/middleware/accessResources/canAccessAgentResource');
 const {
   findPubliclyAccessibleResources,
   findAccessibleResources,
@@ -544,23 +548,28 @@ const getListAgentsHandler = async (req, res) => {
     });
 
     const agents = data?.data ?? [];
-    if (!agents.length) {
-      return res.json(data);
-    }
 
     const publicSet = new Set(publiclyAccessibleIds.map((oid) => oid.toString()));
 
-    data.data = agents.map((agent) => {
-      try {
-        if (agent?._id && publicSet.has(agent._id.toString())) {
-          agent.isPublic = true;
+    // Always include global Whatfix agents for every authenticated user,
+    // regardless of ACL. Prepend them so they always appear at the top.
+    const globalAgentDocs = await getAgents({ id: { $in: Array.from(GLOBAL_AGENT_IDS) } });
+    const existingIds = new Set(agents.map((a) => a.id));
+    const toInject = globalAgentDocs.filter((a) => !existingIds.has(a.id));
+
+    data.data = [
+      ...toInject,
+      ...agents.map((agent) => {
+        try {
+          if (agent?._id && publicSet.has(agent._id.toString())) {
+            agent.isPublic = true;
+          }
+        } catch (e) {
+          void e;
         }
-      } catch (e) {
-        // Silently ignore mapping errors
-        void e;
-      }
-      return agent;
-    });
+        return agent;
+      }),
+    ];
 
     return res.json(data);
   } catch (error) {
