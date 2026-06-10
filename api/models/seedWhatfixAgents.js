@@ -2,11 +2,10 @@ const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
-const { PrincipalType, ResourceType, AccessRoleIds } = require('librechat-data-provider');
-const { Agent } = require('~/db/models');
-const { createAgent, getAgent, updateAgent } = require('./Agent');
+const { PrincipalType, ResourceType } = require('librechat-data-provider');
+const { Agent, AclEntry } = require('~/db/models');
+const { createAgent } = require('./Agent');
 const { User } = require('~/db/models');
-const { grantPermission } = require('~/server/services/PermissionService');
 
 const ROOT = path.resolve(__dirname, '../..');
 
@@ -18,8 +17,7 @@ const WHATFIX_AGENTS = [
   {
     id: 'whatfix-presentation-creator',
     name: 'Presentation Creator',
-    description:
-      'Creates Whatfix-branded slide decks and playbooks. Supports dark pitch decks and POC/demo/sales playbooks with white table slides and Crimson/Orange split panels. Ask for any presentation or playbook topic.',
+    description: 'Create polished Whatfix-branded presentations and playbooks for any topic.',
     skillFile: 'presentation-creator.skill.md',
     tools: ['file_search'],
     artifacts: 'default',
@@ -27,7 +25,7 @@ const WHATFIX_AGENTS = [
   {
     id: 'whatfix-excel-creator',
     name: 'Excel Creator',
-    description: 'Generates Whatfix-branded .xlsx spreadsheets, trackers, dashboards and reports.',
+    description: 'Create Whatfix-branded spreadsheets, trackers, and dashboards.',
     skillFile: 'excel-creator.skill.md',
     tools: [],
     artifacts: 'default',
@@ -35,8 +33,7 @@ const WHATFIX_AGENTS = [
   {
     id: 'whatfix-doc-creator',
     name: 'Document Creator',
-    description:
-      'Writes and exports Whatfix-branded .docx reports, proposals, briefs and one-pagers.',
+    description: 'Create Whatfix-branded documents, reports, and proposals.',
     skillFile: 'doc-creator.skill.md',
     tools: [],
     artifacts: 'default',
@@ -44,9 +41,30 @@ const WHATFIX_AGENTS = [
 ];
 
 /**
+ * Ensures a PUBLIC viewer ACL entry exists for the given agent _id.
+ * Uses a raw upsert so it's safe to call on every boot.
+ */
+async function ensurePublicAccess(agentMongoId, grantedBy) {
+  await AclEntry.findOneAndUpdate(
+    { principalType: PrincipalType.PUBLIC, resourceType: ResourceType.AGENT, resourceId: agentMongoId },
+    {
+      $set: {
+        principalType: PrincipalType.PUBLIC,
+        resourceType: ResourceType.AGENT,
+        resourceId: agentMongoId,
+        permBits: 1, // VIEW
+        grantedBy,
+        grantedAt: new Date(),
+      },
+    },
+    { upsert: true, new: true },
+  );
+}
+
+/**
  * Seeds the three Whatfix-branded agents at server startup.
- * Creates each agent if it doesn't exist; updates instructions if it does.
- * Grants PUBLIC viewer access so all users on the instance can use them.
+ * Finds agents by canonical ID or name, fixes provider/model, and ensures
+ * PUBLIC viewer access so all users on the instance can use them.
  */
 const seedWhatfixAgents = async () => {
   let authorId;
@@ -74,67 +92,49 @@ const seedWhatfixAgents = async () => {
         continue;
       }
 
-      const existing = await getAgent({ id: def.id });
-
-      if (existing) {
-        await updateAgent(
-          { id: def.id },
-          {
-            name: def.name,
-            description: def.description,
-            instructions,
-            model: 'claude-sonnet-4-6',
-            provider: 'anthropic',
-            tools: def.tools,
-            artifacts: def.artifacts,
-          },
-        );
-        logger.info(`[seedWhatfixAgents] Updated "${def.name}"`);
-        // Also patch any stale duplicates created under a different ID (e.g. via API seeder)
-        await Agent.updateMany(
-          { name: def.name, id: { $ne: def.id } },
-          { $set: { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
-        );
-        continue;
-      }
-
-      // No canonical ID found — check if an agent with this name exists under a random ID
-      const byName = await Agent.findOne({ name: def.name }).lean();
-      if (byName) {
-        await Agent.updateOne(
-          { _id: byName._id },
-          { $set: { id: def.id, model: 'claude-sonnet-4-6', provider: 'anthropic', instructions, tools: def.tools, artifacts: def.artifacts, description: def.description } },
-        );
-        logger.info(`[seedWhatfixAgents] Migrated "${def.name}" (${byName.id} → ${def.id})`);
-        continue;
-      }
-
-      const agent = await createAgent({
-        id: def.id,
+      const patch = {
         name: def.name,
         description: def.description,
         instructions,
         model: 'claude-sonnet-4-6',
         provider: 'anthropic',
         tools: def.tools,
+        artifacts: def.artifacts,
+      };
+
+      // Find by canonical ID first, then fall back to name
+      let agentDoc = await Agent.findOne({ id: def.id }).lean();
+
+      if (!agentDoc) {
+        agentDoc = await Agent.findOne({ name: def.name }).lean();
+      }
+
+      if (agentDoc) {
+        // Patch in place — use raw $set to bypass versioning complexity
+        await Agent.updateOne(
+          { _id: agentDoc._id },
+          { $set: { ...patch, id: def.id } },
+        );
+        logger.info(`[seedWhatfixAgents] Patched "${def.name}" (${agentDoc.id} → ${def.id})`);
+
+        await ensurePublicAccess(agentDoc._id, authorId);
+        logger.info(`[seedWhatfixAgents] Public access ensured for "${def.name}"`);
+        continue;
+      }
+
+      // Create from scratch
+      const created = await createAgent({
+        id: def.id,
+        ...patch,
         tool_resources: {},
         actions: [],
-        artifacts: def.artifacts,
         model_parameters: { max_tokens: 8192 },
         author: authorId,
       });
 
-      logger.info(`[seedWhatfixAgents] Created "${def.name}" → ${agent.id}`);
+      logger.info(`[seedWhatfixAgents] Created "${def.name}" → ${created.id}`);
 
-      await grantPermission({
-        principalType: PrincipalType.PUBLIC,
-        principalId: null,
-        resourceType: ResourceType.AGENT,
-        resourceId: agent._id,
-        accessRoleId: AccessRoleIds.AGENT_VIEWER,
-        grantedBy: authorId,
-      });
-
+      await ensurePublicAccess(created._id, authorId);
       logger.info(`[seedWhatfixAgents] Public access granted for "${def.name}"`);
     } catch (err) {
       logger.error(`[seedWhatfixAgents] Failed on "${def.name}":`, err.message);
