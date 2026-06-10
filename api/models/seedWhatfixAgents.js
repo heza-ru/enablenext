@@ -2,16 +2,13 @@ const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
-const { PrincipalType, ResourceType } = require('librechat-data-provider');
-const { Agent, AclEntry } = require('~/db/models');
-const { createAgent } = require('./Agent');
+const { PrincipalType, ResourceType, AccessRoleIds } = require('librechat-data-provider');
+const { Agent } = require('~/db/models');
+const { createAgent, getAgent } = require('./Agent');
 const { User } = require('~/db/models');
+const { grantPermission } = require('~/server/services/PermissionService');
 
 const ROOT = path.resolve(__dirname, '../..');
-
-function readSkill(filename) {
-  return fs.readFileSync(path.join(ROOT, 'agents', filename), 'utf8');
-}
 
 const WHATFIX_AGENTS = [
   {
@@ -35,68 +32,18 @@ const WHATFIX_AGENTS = [
 ];
 
 /**
- * Upserts a PUBLIC viewer ACL entry (permBits=1) for the given agent _id.
- * Safe to call on every boot.
- */
-async function ensurePublicView(agentMongoId, grantedBy) {
-  await AclEntry.findOneAndUpdate(
-    {
-      principalType: PrincipalType.PUBLIC,
-      resourceType: ResourceType.AGENT,
-      resourceId: agentMongoId,
-    },
-    {
-      $set: {
-        principalType: PrincipalType.PUBLIC,
-        resourceType: ResourceType.AGENT,
-        resourceId: agentMongoId,
-        permBits: 1, // VIEW
-        grantedBy,
-        grantedAt: new Date(),
-      },
-    },
-    { upsert: true, new: true },
-  );
-}
-
-/**
- * Upserts an OWNER ACL entry (permBits=7 = VIEW+EDIT+DELETE) for the admin user.
- * This allows the admin to see the full edit form (expanded agent query).
- */
-async function ensureAdminOwnership(agentMongoId, adminId) {
-  await AclEntry.findOneAndUpdate(
-    {
-      principalType: PrincipalType.USER,
-      principalId: adminId,
-      resourceType: ResourceType.AGENT,
-      resourceId: agentMongoId,
-    },
-    {
-      $set: {
-        principalType: PrincipalType.USER,
-        principalModel: 'User',
-        principalId: adminId,
-        resourceType: ResourceType.AGENT,
-        resourceId: agentMongoId,
-        permBits: 7, // VIEW + EDIT + DELETE
-        grantedBy: adminId,
-        grantedAt: new Date(),
-      },
-    },
-    { upsert: true, new: true },
-  );
-}
-
-/**
- * Seeds the three Whatfix-branded agents at server startup.
- * - Finds each agent by canonical ID then by name (preserves existing agent IDs so
- *   conversations don't break).
- * - Patches provider, model, description, and instructions.
- * - Grants PUBLIC view access so all users can use the agents in chat.
- * - Grants admin OWNER access so the admin can open and edit them in the builder.
+ * Seeds (or patches) the three Whatfix-branded agents at server startup.
+ *
+ * For existing agents:   patches name/description/instructions/model/provider only.
+ *                        The agent `id` is NEVER changed — conversations reference it.
+ * For new agents:        creates with the canonical id and sets the admin as author.
+ *
+ * Permissions (idempotent via PermissionService.grantPermission):
+ *   - PUBLIC  → AGENT_VIEWER  (all users can use the agent in chat)
+ *   - admin   → AGENT_OWNER   (admin can open the full edit form in the builder)
  */
 const seedWhatfixAgents = async () => {
-  let adminId;
+  let adminId = null;
 
   try {
     const adminUser = await User.findOne({ role: 'ADMIN' }).lean();
@@ -104,31 +51,31 @@ const seedWhatfixAgents = async () => {
       adminId = adminUser._id;
     } else {
       const anyUser = await User.findOne().lean();
-      adminId = anyUser ? anyUser._id : null;
+      if (anyUser) {
+        adminId = anyUser._id;
+      }
     }
   } catch (err) {
     logger.warn('[seedWhatfixAgents] Could not resolve admin user:', err.message);
-    adminId = null;
   }
 
   for (const def of WHATFIX_AGENTS) {
     try {
-      let instructions;
-      try {
-        instructions = readSkill(def.skillFile);
-      } catch (err) {
-        logger.error(`[seedWhatfixAgents] Cannot read ${def.skillFile}:`, err.message);
-        continue;
-      }
+      const instructions = fs.readFileSync(
+        path.join(ROOT, 'agents', def.skillFile),
+        'utf8',
+      );
 
-      // Find by canonical ID first, then fall back to name.
-      // NEVER change the id field of an existing agent — conversations reference it.
-      let agentDoc = await Agent.findOne({ id: def.id }).lean();
+      // --- find existing agent (by canonical id, then by name) ---
+      let agentDoc = await getAgent({ id: def.id });
       if (!agentDoc) {
         agentDoc = await Agent.findOne({ name: def.name }).lean();
       }
 
+      let agentMongoId;
+
       if (agentDoc) {
+        // Patch fields — intentionally skip `id` so existing conversation refs stay valid
         await Agent.updateOne(
           { _id: agentDoc._id },
           {
@@ -141,7 +88,8 @@ const seedWhatfixAgents = async () => {
             },
           },
         );
-        logger.info(`[seedWhatfixAgents] Patched "${def.name}" (id: ${agentDoc.id})`);
+        agentMongoId = agentDoc._id;
+        logger.info(`[seedWhatfixAgents] Patched "${def.name}" (agent id: ${agentDoc.id})`);
       } else {
         const created = await createAgent({
           id: def.id,
@@ -156,17 +104,35 @@ const seedWhatfixAgents = async () => {
           model_parameters: { max_tokens: 8192 },
           author: adminId ?? new mongoose.Types.ObjectId(),
         });
-        agentDoc = { _id: created._id, id: created.id };
+        agentMongoId = created._id;
         logger.info(`[seedWhatfixAgents] Created "${def.name}" → ${created.id}`);
       }
 
-      await ensurePublicView(agentDoc._id, adminId);
+      // --- grant PUBLIC viewer access (same pattern as seedDefaultAgent) ---
+      await grantPermission({
+        principalType: PrincipalType.PUBLIC,
+        principalId: null,
+        resourceType: ResourceType.AGENT,
+        resourceId: agentMongoId,
+        accessRoleId: AccessRoleIds.AGENT_VIEWER,
+        grantedBy: adminId ?? agentMongoId,
+      });
+
+      // --- grant admin full ownership so the edit form loads properly ---
       if (adminId) {
-        await ensureAdminOwnership(agentDoc._id, adminId);
+        await grantPermission({
+          principalType: PrincipalType.USER,
+          principalId: adminId,
+          resourceType: ResourceType.AGENT,
+          resourceId: agentMongoId,
+          accessRoleId: AccessRoleIds.AGENT_OWNER,
+          grantedBy: adminId,
+        });
       }
-      logger.info(`[seedWhatfixAgents] ACL set for "${def.name}"`);
+
+      logger.info(`[seedWhatfixAgents] Permissions set for "${def.name}"`);
     } catch (err) {
-      logger.error(`[seedWhatfixAgents] Failed on "${def.name}":`, err.message, err.stack);
+      logger.error(`[seedWhatfixAgents] Failed on "${def.name}": ${err.message}`, err.stack);
     }
   }
 };
