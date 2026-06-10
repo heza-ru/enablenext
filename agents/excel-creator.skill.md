@@ -1,82 +1,289 @@
 ---
 name: excel-creator
-description: Use when the user asks to create a spreadsheet, Excel file, CSV, table, data tracker, dashboard, report template, or any structured data output. Generates a downloadable file via code execution.
+description: Use when the user asks to create a spreadsheet, Excel file, CSV, table, data tracker, report template, dashboard, or any structured data output. Generates an interactive HTML preview with a one-click .xlsx download using SheetJS — no code execution or API keys required.
 user-invocable: true
-allowed-tools: ["execute_code"]
+allowed-tools: ["artifacts"]
 ---
 
 # Excel Creator Skill
 
-When triggered, use code execution to generate a `.xlsx` file using Python's `openpyxl` library.
+Generate a single self-contained HTML artifact that:
+1. **Renders a styled table preview** of the spreadsheet data
+2. **Includes a "Download Excel" button** that generates a real `.xlsx` file using SheetJS (runs in the browser, no server needed)
 
-## Output Rules
+## CRITICAL Rules
 
-- Always produce a real `.xlsx` file via code execution — not a markdown table
-- Use `openpyxl` for full formatting control; fall back to `pandas` + `xlsxwriter` for data-heavy sheets
-- Apply Whatfix brand colors to headers and key rows
-- Include column auto-sizing, frozen header row, and filter dropdowns by default
-- For dashboards: use multiple sheets (Summary + Data tabs)
+- **NO code execution** — everything runs client-side in the HTML artifact
+- **All colors from Whatfix palette only**
+- SheetJS is served locally at `/libs/xlsx.full.min.js` — use that path, never a CDN URL
+- The preview table must be styled with Whatfix brand colors
+- The downloaded `.xlsx` must also have Whatfix brand colors applied to headers
 
-## Brand Styling
+## Brand Colors
 
-```python
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-
-# Whatfix brand colors
-ORANGE     = "FF6B18"   # header fill
-INK_700    = "25223B"   # header text (white on orange) → use FFFFFF
-INK        = "35324A"   # subheader fill
-WHITE      = "FFFFFF"
-GRAY_100   = "F9F9F2"   # alternating row fill
-GRAY_300   = "E5E3DC"   # border color
-CRIMSON    = "872345"   # alert/negative values
-
-# Header style
-header_fill = PatternFill(start_color=ORANGE, end_color=ORANGE, fill_type="solid")
-header_font = Font(name="Calibri", bold=True, color=WHITE, size=11)
-header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-# Subheader style  
-sub_fill = PatternFill(start_color=INK, end_color=INK, fill_type="solid")
-sub_font = Font(name="Calibri", bold=True, color=WHITE, size=10)
-
-# Alternating row fill
-alt_fill = PatternFill(start_color=GRAY_100, end_color=GRAY_100, fill_type="solid")
-
-# Border
-thin = Side(style="thin", color=GRAY_300)
-border = Border(left=thin, right=thin, top=thin, bottom=thin)
+```
+#25223B  Ink 700  — page background
+#35324A  Ink      — table row alternating
+#FF6B18  Orange   — header background, accents
+#8A8A9C  Ink 300  — muted text
+#FFFFFF  White    — header text, main text on dark
+#F9F9F2  Gray 100 — light row alternating
+#E5E3DC  Gray 300 — borders
 ```
 
-## Standard Sheet Structure
+## HTML Template
 
-```python
-import openpyxl
-from openpyxl import Workbook
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPREADSHEET_TITLE</title>
+<script src="/libs/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
 
-wb = Workbook()
-ws = wb.active
-ws.title = "Sheet Name"
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #25223B;
+  color: #FFFFFF;
+  min-height: 100vh;
+  padding: 2rem;
+}
 
-# Freeze header row
-ws.freeze_panes = "A2"
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.header h1 { font-size: 1.4rem; font-weight: 600; color: #FFFFFF; }
+.header .sub { font-size: .8rem; color: #8A8A9C; margin-top: .2rem; }
 
-# Auto-filter
-ws.auto_filter.ref = ws.dimensions
+.dl-btn {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .5rem 1.25rem; background: rgba(255,107,24,.12);
+  border: 1px solid rgba(255,107,24,.4); border-radius: 6px;
+  color: #FF6B18; font-size: .8rem; font-weight: 500;
+  font-family: 'DM Sans', sans-serif; cursor: pointer;
+  transition: background .2s;
+}
+.dl-btn:hover { background: rgba(255,107,24,.22); }
+.dl-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 
-# Auto-size columns
-for col in ws.columns:
-    max_len = max(len(str(cell.value or "")) for cell in col)
-    ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 50)
+/* Tab bar for multi-sheet */
+.tabs { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.tab-btn {
+  padding: .35rem .9rem; border-radius: 5px; font-size: .78rem; font-weight: 500;
+  border: 1px solid rgba(255,255,255,.1); background: transparent; color: #8A8A9C;
+  font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .15s;
+}
+.tab-btn.active { background: #FF6B18; border-color: #FF6B18; color: #fff; }
 
-wb.save("output.xlsx")
-print("Saved: output.xlsx")
+/* Table */
+.sheet-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,.08); }
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+
+thead tr { background: #FF6B18; }
+thead th {
+  padding: .65rem 1rem; text-align: left; font-weight: 600;
+  color: #FFFFFF; white-space: nowrap; letter-spacing: .02em;
+  border-right: 1px solid rgba(255,255,255,.15);
+}
+thead th:last-child { border-right: none; }
+
+tbody tr:nth-child(even) { background: #35324A; }
+tbody tr:nth-child(odd)  { background: #2d2a40; }
+tbody tr:hover           { background: rgba(255,107,24,.08); }
+
+tbody td {
+  padding: .55rem 1rem; color: rgba(255,255,255,.85);
+  border-right: 1px solid rgba(255,255,255,.05);
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+tbody td:last-child { border-right: none; }
+
+/* Numeric cells right-aligned */
+tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Summary row */
+tfoot tr { background: rgba(255,107,24,.1); border-top: 2px solid rgba(255,107,24,.3); }
+tfoot td { padding: .6rem 1rem; font-weight: 600; color: #FF6B18; }
+
+.row-count { margin-top: .75rem; font-size: .72rem; color: #8A8A9C; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>SPREADSHEET TITLE</h1>
+    <p class="sub">DESCRIPTION · DATE</p>
+  </div>
+  <button class="dl-btn" onclick="downloadExcel()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M8 2v8M5 7l3 3 3-3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/>
+    </svg>
+    Download Excel
+  </button>
+</div>
+
+<!-- Tab buttons (one per sheet — remove if single sheet) -->
+<div class="tabs" id="tabs"></div>
+
+<!-- Table container -->
+<div class="sheet-wrap" id="sheet-wrap">
+  <table id="preview-table">
+    <!-- Rendered by JS from SHEETS data below -->
+  </table>
+</div>
+<p class="row-count" id="row-count"></p>
+
+<script>
+// ══════════════════════════════════════════════════════
+// SHEET DATA — edit this to define the spreadsheet
+// Each sheet: { name, headers, rows, summaryRow (optional) }
+// rows: array of arrays matching headers order
+// summaryRow: array of footer values (use null for blank cells)
+// ══════════════════════════════════════════════════════
+const SHEETS = [
+  {
+    name: "Sheet 1",
+    headers: ["Column A", "Column B", "Column C", "Column D"],
+    numericCols: [2, 3],   // 0-based indices of numeric columns
+    rows: [
+      ["Row 1A", "Row 1B", 100, 200],
+      ["Row 2A", "Row 2B", 150, 300],
+      ["Row 3A", "Row 3B", 200, 400],
+    ],
+    summaryRow: ["Total", "", 450, 900],
+  },
+  // Add more sheet objects here for multi-sheet workbooks
+];
+
+// ── Render preview ────────────────────────────────────
+let activeSheet = 0;
+
+function renderSheet(idx) {
+  activeSheet = idx;
+  const sh = SHEETS[idx];
+  const table = document.getElementById('preview-table');
+  const numeric = new Set(sh.numericCols || []);
+
+  let html = '<thead><tr>' +
+    sh.headers.map(h => `<th>${h}</th>`).join('') +
+    '</tr></thead><tbody>';
+
+  sh.rows.forEach(row => {
+    html += '<tr>' + row.map((cell, ci) =>
+      `<td class="${numeric.has(ci) ? 'num' : ''}">${cell ?? ''}</td>`
+    ).join('') + '</tr>';
+  });
+  html += '</tbody>';
+
+  if (sh.summaryRow) {
+    html += '<tfoot><tr>' + sh.summaryRow.map((cell, ci) =>
+      `<td class="${numeric.has(ci) ? 'num' : ''}">${cell ?? ''}</td>`
+    ).join('') + '</tr></tfoot>';
+  }
+
+  table.innerHTML = html;
+  document.getElementById('row-count').textContent =
+    `${sh.rows.length} rows · ${sh.headers.length} columns`;
+
+  document.querySelectorAll('.tab-btn').forEach((btn, i) =>
+    btn.classList.toggle('active', i === idx));
+}
+
+function buildTabs() {
+  if (SHEETS.length < 2) return;
+  const tabs = document.getElementById('tabs');
+  SHEETS.forEach((sh, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = sh.name;
+    btn.onclick = () => renderSheet(i);
+    tabs.appendChild(btn);
+  });
+}
+
+// ── Excel export ──────────────────────────────────────
+function downloadExcel() {
+  const wb = XLSX.utils.book_new();
+
+  SHEETS.forEach(sh => {
+    const wsData = [sh.headers, ...sh.rows];
+    if (sh.summaryRow) wsData.push(sh.summaryRow);
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Column widths
+    ws['!cols'] = sh.headers.map((h, i) => {
+      const maxLen = Math.max(
+        h.length,
+        ...sh.rows.map(r => String(r[i] ?? '').length),
+        sh.summaryRow ? String(sh.summaryRow[i] ?? '').length : 0
+      );
+      return { wch: Math.min(maxLen + 4, 40) };
+    });
+
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    // Header cell styles (orange fill, white bold text)
+    sh.headers.forEach((_, ci) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: ci });
+      if (!ws[cellRef]) return;
+      ws[cellRef].s = {
+        fill: { fgColor: { rgb: 'FF6B18' } },
+        font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Calibri', sz: 11 },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: {
+          bottom: { style: 'thin', color: { rgb: 'FFFFFF' } },
+          right:  { style: 'thin', color: { rgb: 'FFFFFF' } },
+        }
+      };
+    });
+
+    // Summary row style (orange text, subtle fill)
+    if (sh.summaryRow) {
+      const lastRow = sh.rows.length + 1;
+      sh.summaryRow.forEach((_, ci) => {
+        const cellRef = XLSX.utils.encode_cell({ r: lastRow, c: ci });
+        if (!ws[cellRef]) return;
+        ws[cellRef].s = {
+          fill: { fgColor: { rgb: 'FFE9DC' } },
+          font: { bold: true, color: { rgb: 'FF6B18' }, name: 'Calibri', sz: 11 },
+          border: { top: { style: 'medium', color: { rgb: 'FF6B18' } } }
+        };
+      });
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, sh.name);
+  });
+
+  const slug = document.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  XLSX.writeFile(wb, slug + '.xlsx', { bookType: 'xlsx', cellStyles: true });
+}
+
+// Init
+buildTabs();
+renderSheet(0);
+</script>
+</body>
+</html>
 ```
+
+## Rules for Populating SHEETS
+
+- `headers`: array of column name strings
+- `rows`: array of arrays — each inner array must have same length as `headers`
+- `numericCols`: 0-based indices of columns with numbers — right-aligns them in preview
+- `summaryRow`: optional footer row (totals, averages etc) — use `null` for blank cells
+- For multi-sheet workbooks add more objects to the `SHEETS` array
+- Filename is auto-derived from `document.title` — set it to the spreadsheet topic
 
 ## After Generating
 
-Ask:
-1. Add more columns or sheets?
-2. Include formulas or calculated fields?
-3. Export as CSV instead?
+1. Add more columns, rows, or sheets?
+2. Add formulas or calculated columns?
+3. Change the column layout or grouping?

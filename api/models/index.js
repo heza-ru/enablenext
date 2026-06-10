@@ -19,9 +19,11 @@ const seedDatabase = async () => {
   await methods.initializeRoles();
   await methods.seedDefaultRoles();
   await methods.ensureDefaultCategories();
-  // Require seedDefaultAgent only when needed to avoid circular dependency
+  // Require only when needed to avoid circular dependency
   const { seedDefaultAgent } = require('./seedDefaultAgent');
   await seedDefaultAgent();
+  const { seedWhatfixAgents } = require('./seedWhatfixAgents');
+  await seedWhatfixAgents();
 };
 
 module.exports = {
