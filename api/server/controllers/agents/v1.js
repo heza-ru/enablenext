@@ -35,7 +35,7 @@ const {
   getAgent,
 } = require('~/models/Agent');
 const {
-  GLOBAL_AGENT_IDS,
+  GLOBAL_AGENT_NAMES,
 } = require('~/server/middleware/accessResources/canAccessAgentResource');
 const {
   findPubliclyAccessibleResources,
@@ -552,8 +552,8 @@ const getListAgentsHandler = async (req, res) => {
     const publicSet = new Set(publiclyAccessibleIds.map((oid) => oid.toString()));
 
     // Always include global Whatfix agents for every authenticated user,
-    // regardless of ACL. Prepend them so they always appear at the top.
-    const globalAgentDocs = await getAgents({ id: { $in: Array.from(GLOBAL_AGENT_IDS) } });
+    // regardless of ACL. Query by name so this works no matter what id MongoDB assigned.
+    const globalAgentDocs = await getAgents({ name: { $in: Array.from(GLOBAL_AGENT_NAMES) } });
     const existingIds = new Set(agents.map((a) => a.id));
     const toInject = globalAgentDocs.filter((a) => !existingIds.has(a.id));
 

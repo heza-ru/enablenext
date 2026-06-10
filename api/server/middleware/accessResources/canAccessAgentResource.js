@@ -3,14 +3,14 @@ const { canAccessResource } = require('./canAccessResource');
 const { getAgent } = require('~/models/Agent');
 
 /**
- * Canonical IDs of Whatfix-branded agents that every authenticated user can view/use.
- * These bypass the ACL system for VIEW permission only.
+ * Names of Whatfix-branded agents that every authenticated user can view/use.
+ * Matched by name (not by id) so this works regardless of what id MongoDB assigned.
  * EDIT/DELETE still require ADMIN role (handled by canAccessResource's ADMIN bypass).
  */
-const GLOBAL_AGENT_IDS = new Set([
-  'whatfix-presentation-creator',
-  'whatfix-excel-creator',
-  'whatfix-doc-creator',
+const GLOBAL_AGENT_NAMES = new Set([
+  'Presentation Creator',
+  'Excel Creator',
+  'Document Creator',
 ]);
 
 const resolveAgentId = async (agentCustomId) => {
@@ -40,19 +40,18 @@ const canAccessAgentResource = (options) => {
   return async (req, res, next) => {
     const rawId = req.params[resourceIdParam];
 
-    if (rawId && GLOBAL_AGENT_IDS.has(rawId)) {
+    if (rawId) {
       const agent = await resolveAgentId(rawId).catch(() => null);
-      if (!agent) {
-        return res.status(404).json({ error: 'Not Found', message: 'agent not found' });
+      if (agent && GLOBAL_AGENT_NAMES.has(agent.name)) {
+        req.resourceAccess = {
+          resourceType: ResourceType.AGENT,
+          resourceId: agent._id,
+          customResourceId: rawId,
+          permission: requiredPermission,
+          userId: req.user?.id,
+        };
+        return next();
       }
-      req.resourceAccess = {
-        resourceType: ResourceType.AGENT,
-        resourceId: agent._id,
-        customResourceId: rawId,
-        permission: requiredPermission,
-        userId: req.user?.id,
-      };
-      return next();
     }
 
     return baseMiddleware(req, res, next);
@@ -61,5 +60,5 @@ const canAccessAgentResource = (options) => {
 
 module.exports = {
   canAccessAgentResource,
-  GLOBAL_AGENT_IDS,
+  GLOBAL_AGENT_NAMES,
 };
