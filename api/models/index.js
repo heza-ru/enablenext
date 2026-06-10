@@ -22,8 +22,6 @@ const seedDatabase = async () => {
   // Require only when needed to avoid circular dependency
   const { seedDefaultAgent } = require('./seedDefaultAgent');
   await seedDefaultAgent();
-  const { seedWhatfixAgents } = require('./seedWhatfixAgents');
-  await seedWhatfixAgents();
 };
 
 module.exports = {

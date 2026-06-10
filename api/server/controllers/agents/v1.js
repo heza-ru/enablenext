@@ -1,5 +1,7 @@
+const path = require('path');
 const { z } = require('zod');
 const fs = require('fs').promises;
+const { readFileSync } = require('fs');
 const { nanoid } = require('nanoid');
 const { logger } = require('@librechat/data-schemas');
 const {
@@ -35,9 +37,6 @@ const {
   getAgent,
 } = require('~/models/Agent');
 const {
-  GLOBAL_AGENT_NAMES,
-} = require('~/server/middleware/accessResources/canAccessAgentResource');
-const {
   findPubliclyAccessibleResources,
   findAccessibleResources,
   hasPublicPermission,
@@ -52,6 +51,73 @@ const { filterFile } = require('~/server/services/Files/process');
 const { updateAction, getActions } = require('~/models/Action');
 const { getCachedTools } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
+
+const AGENTS_ROOT = path.resolve(__dirname, '../../../../agents');
+
+const WHATFIX_AGENT_DEFS = [
+  {
+    name: 'Presentation Creator',
+    description: 'Create polished Whatfix-branded presentations and playbooks for any topic.',
+    skillFile: 'presentation-creator.skill.md',
+  },
+  {
+    name: 'Excel Creator',
+    description: 'Create Whatfix-branded spreadsheets, trackers, and dashboards.',
+    skillFile: 'excel-creator.skill.md',
+  },
+  {
+    name: 'Document Creator',
+    description: 'Create Whatfix-branded documents, reports, and proposals.',
+    skillFile: 'doc-creator.skill.md',
+  },
+];
+
+/**
+ * Lazily ensures the three Whatfix creator agents exist for a given user.
+ * Each user gets their own editable copy owned by them.
+ * Called on every agent list request; skips creation if copies already exist.
+ */
+const ensureWhatfixAgentsForUser = async (userId) => {
+  for (const def of WHATFIX_AGENT_DEFS) {
+    try {
+      const existing = await getAgents({ name: def.name, author: userId });
+      if (existing.length > 0) {
+        continue;
+      }
+
+      const instructions = readFileSync(path.join(AGENTS_ROOT, def.skillFile), 'utf8');
+
+      const agent = await createAgent({
+        id: `agent_${nanoid()}`,
+        name: def.name,
+        description: def.description,
+        instructions,
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        tools: [],
+        tool_resources: {},
+        actions: [],
+        model_parameters: { max_tokens: 8192 },
+        author: userId,
+      });
+
+      await grantPermission({
+        principalType: PrincipalType.USER,
+        principalId: userId,
+        resourceType: ResourceType.AGENT,
+        resourceId: agent._id,
+        accessRoleId: AccessRoleIds.AGENT_OWNER,
+        grantedBy: userId,
+      });
+
+      logger.info(`[ensureWhatfixAgents] Created "${def.name}" for user ${userId}`);
+    } catch (err) {
+      logger.error(
+        `[ensureWhatfixAgents] Failed to create "${def.name}" for user ${userId}: ${err.message}`,
+      );
+    }
+  }
+};
 
 const systemTools = {
   [Tools.execute_code]: true,
@@ -465,6 +531,7 @@ const deleteAgentHandler = async (req, res) => {
 const getListAgentsHandler = async (req, res) => {
   try {
     const userId = req.user.id;
+    await ensureWhatfixAgentsForUser(userId);
     const { category, search, limit, cursor, promoted } = req.query;
     let requiredPermission = req.query.requiredPermission;
     if (typeof requiredPermission === 'string') {
@@ -551,25 +618,16 @@ const getListAgentsHandler = async (req, res) => {
 
     const publicSet = new Set(publiclyAccessibleIds.map((oid) => oid.toString()));
 
-    // Always include global Whatfix agents for every authenticated user,
-    // regardless of ACL. Query by name so this works no matter what id MongoDB assigned.
-    const globalAgentDocs = await getAgents({ name: { $in: Array.from(GLOBAL_AGENT_NAMES) } });
-    const existingIds = new Set(agents.map((a) => a.id));
-    const toInject = globalAgentDocs.filter((a) => !existingIds.has(a.id));
-
-    data.data = [
-      ...toInject,
-      ...agents.map((agent) => {
-        try {
-          if (agent?._id && publicSet.has(agent._id.toString())) {
-            agent.isPublic = true;
-          }
-        } catch (e) {
-          void e;
+    data.data = agents.map((agent) => {
+      try {
+        if (agent?._id && publicSet.has(agent._id.toString())) {
+          agent.isPublic = true;
         }
-        return agent;
-      }),
-    ];
+      } catch (e) {
+        void e;
+      }
+      return agent;
+    });
 
     return res.json(data);
   } catch (error) {

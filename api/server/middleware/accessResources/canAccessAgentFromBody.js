@@ -7,7 +7,6 @@ const {
 } = require('librechat-data-provider');
 const { canAccessResource } = require('./canAccessResource');
 const { getAgent } = require('~/models/Agent');
-const { GLOBAL_AGENT_NAMES } = require('./canAccessAgentResource');
 
 const resolveAgentIdFromBody = async (agentCustomId) => {
   if (isEphemeralAgentId(agentCustomId)) {
@@ -43,20 +42,7 @@ const canAccessAgentFromBody = (options) => {
         return next();
       }
 
-      // Resolve agent early so we can check its name for the global bypass.
       const resolvedAgent = await resolveAgentIdFromBody(agentId).catch(() => null);
-
-      // Global Whatfix agents bypass ACL for chat regardless of their DB id.
-      if (resolvedAgent && GLOBAL_AGENT_NAMES.has(resolvedAgent.name)) {
-        req.resourceAccess = {
-          resourceType: ResourceType.AGENT,
-          resourceId: resolvedAgent._id,
-          customResourceId: agentId,
-          permission: requiredPermission,
-          userId: req.user?.id,
-        };
-        return next();
-      }
 
       const agentAccessMiddleware = canAccessResource({
         resourceType: ResourceType.AGENT,
