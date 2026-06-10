@@ -82,6 +82,8 @@ const seedWhatfixAgents = async () => {
             name: def.name,
             description: def.description,
             instructions,
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
             tools: def.tools,
             artifacts: def.artifacts,
           },
