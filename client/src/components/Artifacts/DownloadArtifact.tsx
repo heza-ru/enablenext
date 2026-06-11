@@ -23,127 +23,50 @@ function detectNativeFormats(content: string): NativeFormat[] {
 }
 
 /**
- * Injected into the hidden iframe before any other script runs.
- * Intercepts blob URL downloads (via anchor click OR dispatchEvent)
- * and posts the base64 data to window.parent instead of triggering a
- * sandboxed download — works with pptx.writeFile(), XLSX.writeFile(),
- * Packer.toBlob()+a.click(), and FileSaver.js.
+ * Opens a 1×1 off-screen popup, writes the full artifact HTML into it, waits for
+ * all CDN scripts (PptxGenJS / SheetJS / docx.js) to load, then calls the named
+ * download function.  Popup windows are top-level browsing contexts — Chrome never
+ * blocks their blob downloads regardless of async timing or user-activation state.
+ * window.open() is called synchronously from the button's onClick, so the browser
+ * treats it as user-activated and does not trigger the popup blocker.
  */
-const INTERCEPTOR_SCRIPT = `<script>
-(function(){
-  var _blobs = new Map();
-
-  // Track every blob that gets a URL so we can read it back
-  var _origCreate = URL.createObjectURL.bind(URL);
-  URL.createObjectURL = function(b) {
-    var u = _origCreate(b);
-    if (b instanceof Blob) _blobs.set(u, b);
-    return u;
-  };
-  var _origRevoke = URL.revokeObjectURL.bind(URL);
-  URL.revokeObjectURL = function(u) {
-    // Don't delete immediately — FileReader may still need the blob
-    setTimeout(function(){ _blobs.delete(u); }, 60000);
-    _origRevoke(u);
-  };
-
-  function intercept(anchor) {
-    var href = anchor.href || anchor.getAttribute('href') || '';
-    if (!anchor.download || !href.startsWith('blob:')) return false;
-    var blob = _blobs.get(href);
-    if (!blob) return false;
-    var filename = anchor.download;
-    var mimeType = blob.type ||
-      (filename.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' :
-       filename.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
-       filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
-       'application/octet-stream');
-    var reader = new FileReader();
-    reader.onload = function() {
-      if (typeof reader.result !== 'string') return;
-      window.parent.postMessage({
-        type: 'artifact-download',
-        filename: filename,
-        data: reader.result.split(',')[1],
-        mimeType: mimeType,
-      }, '*');
-    };
-    reader.readAsDataURL(blob);
-    return true;
-  }
-
-  // Patch 1: HTMLElement.prototype.click — this is where .click() actually lives;
-  // patching here catches PptxGenJS / SheetJS / docx user code regardless of element subtype
-  var _origHTMLClick = HTMLElement.prototype.click;
-  HTMLElement.prototype.click = function() {
-    if (this.tagName === 'A' && intercept(this)) return;
-    _origHTMLClick.call(this);
-  };
-
-  // Patch 2: EventTarget.prototype.dispatchEvent (belt-and-suspenders for synthetic clicks)
-  var _origDispatch = EventTarget.prototype.dispatchEvent;
-  EventTarget.prototype.dispatchEvent = function(evt) {
-    if (evt && evt.type === 'click' && this.tagName === 'A') {
-      if (intercept(this)) return true;
-    }
-    return _origDispatch.call(this, evt);
-  };
-})();
-<\/script>`;
-
-/**
- * Prepends the interceptor script right after <head> so it runs before any
- * library scripts (PptxGenJS / SheetJS / docx.js) load.
- */
-function injectInterceptor(html: string): string {
-  if (html.includes('<head>')) {
-    return html.replace('<head>', '<head>\n' + INTERCEPTOR_SCRIPT);
-  }
-  // Fallback: prepend before everything
-  return INTERCEPTOR_SCRIPT + '\n' + html;
-}
-
-/**
- * Loads the artifact HTML in a zero-size, non-sandboxed iframe so that
- * external scripts (PptxGenJS / SheetJS / docx.js) load and execute normally.
- * The injected interceptor posts blob data back to the parent window.
- * The iframe is removed 60 s after load.
- */
-function runInHiddenIframe(html: string, fnName: string): void {
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  // allow-scripts + allow-same-origin lets the artifact run and postMessage to parent;
-  // allow-downloads + allow-downloads-without-user-activation lets async blob downloads
-  // proceed directly inside the frame as a fallback if the interceptor doesn't fire
-  iframe.setAttribute(
-    'sandbox',
-    'allow-scripts allow-same-origin allow-downloads allow-downloads-without-user-activation',
+function runInPopup(html: string, fnName: string): void {
+  const popup = window.open(
+    '',
+    '_blank',
+    'width=1,height=1,left=-9999,top=-9999,menubar=no,toolbar=no,location=no,scrollbars=no,status=no',
   );
-  iframe.style.cssText =
-    'position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;top:-9999px;left:-9999px;';
-  document.body.appendChild(iframe);
+  if (!popup) {
+    console.error('[DownloadArtifact] popup blocked — allow popups for this site to use native downloads');
+    return;
+  }
 
-  iframe.onload = () => {
-    // 400 ms lets synchronous scripts finish executing after DOMContentLoaded
+  const run = () => {
     setTimeout(() => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (iframe.contentWindow as any)?.[fnName]?.();
+        (popup as any)[fnName]?.();
       } catch (e) {
-        console.error('[DownloadArtifact] could not call', fnName, e);
+        console.error('[DownloadArtifact] could not invoke', fnName, e);
       }
-      // Keep iframe alive long enough for async operations (pptx build, etc.)
+      // Keep popup alive while async file generation finishes, then close
       setTimeout(() => {
         try {
-          document.body.removeChild(iframe);
+          popup.close();
         } catch {
-          /* already removed */
+          /* already closed */
         }
-      }, 60_000);
-    }, 400);
+      }, 90_000);
+    }, 500);
   };
 
-  iframe.srcdoc = injectInterceptor(html);
+  // document.open/write/close on a blank window creates a new document; the
+  // browser fetches CDN scripts and fires window.load when everything is ready.
+  // onload is set before document.write so it is in place before loading starts.
+  popup.onload = run;
+
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
 }
 
 const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
@@ -175,7 +98,7 @@ const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
   };
 
   const downloadNative = (fmt: NativeFormat) => {
-    runInHiddenIframe(content, fmt.triggerFn);
+    runInPopup(content, fmt.triggerFn);
     flash(fmt.ext);
   };
 
