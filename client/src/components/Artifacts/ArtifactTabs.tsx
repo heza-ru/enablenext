@@ -60,7 +60,7 @@ export default function ArtifactTabs({
         />
       </Tabs.Content>
 
-      <Tabs.Content value="preview" className="h-full w-full flex-grow overflow-auto" tabIndex={-1}>
+      <Tabs.Content forceMount value="preview" className="h-full w-full flex-grow overflow-auto" tabIndex={-1}>
         <ArtifactPreview
           files={files}
           fileKey={fileKey}
