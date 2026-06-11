@@ -83,7 +83,26 @@ function triggerViaPreviewIframe(
  */
 const FALLBACK_MS = 10_000;
 
+/**
+ * Replace CDN URLs for known libraries with the locally-hosted copies.
+ * srcdoc iframes on Vercel cannot load from external CDNs blocked by CSP.
+ * The local bundle is served from the same origin so it always loads.
+ */
+function patchLibUrls(html: string): string {
+  const origin = window.location.origin;
+  // pptxgenjs — any version from any permitted CDN
+  const patched = html.replace(
+    /https?:\/\/(?:cdnjs\.cloudflare\.com\/ajax\/libs\/pptxgenjs\/[^\s"'>]+|unpkg\.com\/pptxgenjs[^\s"'>]*|cdn\.jsdelivr\.net\/npm\/pptxgenjs[^\s"'>]*)/g,
+    `${origin}/libs/pptxgen.bundle.js`,
+  );
+  console.log(
+    `${LOG} [hiddenIframe] patchLibUrls — pptxgenjs CDN replaced: ${patched !== html}`,
+  );
+  return patched;
+}
+
 function runInHiddenIframe(html: string, fnName: string): () => void {
+  const patchedHtml = patchLibUrls(html);
   console.log(`${LOG} [hiddenIframe] Creating hidden iframe to run ${fnName}`);
 
   const iframe = document.createElement('iframe');
@@ -192,7 +211,7 @@ function runInHiddenIframe(html: string, fnName: string): () => void {
     }, 800);
   };
 
-  iframe.srcdoc = html;
+  iframe.srcdoc = patchedHtml;
   return cleanup;
 }
 
