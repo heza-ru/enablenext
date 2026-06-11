@@ -310,7 +310,7 @@ export default function Artifacts() {
                 />
               )}
               <CopyCodeButton content={currentArtifact.content ?? ''} />
-              <DownloadArtifact artifact={currentArtifact} previewRef={previewRef} />
+              <DownloadArtifact artifact={currentArtifact} />
               <Button
                 size="icon"
                 variant="ghost"
