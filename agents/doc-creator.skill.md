@@ -322,18 +322,13 @@ async function downloadDocx() {
     sections: [{ children }],
   });
 
-  const base64 = await Packer.toBase64String(doc);
+  const blob = await Packer.toBlob(doc);
   const slug = (DOC.title || 'document').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  window.parent.postMessage({
-    type: 'artifact-download',
-    filename: slug + '.docx',
-    data: base64,
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  }, '*');
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: slug + '.docx' });
+  a.click();
+  URL.revokeObjectURL(url);
 }
-window.addEventListener('message', e => {
-  if (e.data?.type === 'artifact-trigger-download') downloadDocx();
-});
 </script>
 </body>
 </html>

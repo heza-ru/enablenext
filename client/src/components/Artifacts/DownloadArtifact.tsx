@@ -1,15 +1,5 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import ReactDOM from 'react-dom';
-import {
-  Download,
-  CircleCheckBig,
-  ChevronDown,
-  FileText,
-  FileSpreadsheet,
-  Presentation,
-  Code2,
-} from 'lucide-react';
-import type { SandpackPreviewRef } from '@codesandbox/sandpack-react/unstyled';
+import React, { useState } from 'react';
+import { CircleCheckBig } from 'lucide-react';
 import type { Artifact } from '~/common';
 import { Button } from '@librechat/client';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
@@ -19,247 +9,193 @@ import { useLocalize } from '~/hooks';
 type NativeFormat = {
   label: string;
   ext: string;
-  mimeType: string;
   triggerFn: string;
-  Icon: React.ElementType;
 };
 
 const NATIVE_FORMATS: NativeFormat[] = [
-  {
-    label: 'PowerPoint (.pptx)',
-    ext: 'pptx',
-    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    triggerFn: 'downloadPptx',
-    Icon: Presentation,
-  },
-  {
-    label: 'Excel (.xlsx)',
-    ext: 'xlsx',
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    triggerFn: 'downloadExcel',
-    Icon: FileSpreadsheet,
-  },
-  {
-    label: 'Word (.docx)',
-    ext: 'docx',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    triggerFn: 'downloadDocx',
-    Icon: FileText,
-  },
+  { label: 'PPTX', ext: 'pptx', triggerFn: 'downloadPptx' },
+  { label: 'XLSX', ext: 'xlsx', triggerFn: 'downloadExcel' },
+  { label: 'DOCX', ext: 'docx', triggerFn: 'downloadDocx' },
 ];
 
 function detectNativeFormats(content: string): NativeFormat[] {
   return NATIVE_FORMATS.filter((f) => content.includes(f.triggerFn));
 }
 
-/** Wait up to `ms` for the Sandpack client's iframe to become available */
-function waitForIframe(
-  previewRef: React.MutableRefObject<SandpackPreviewRef>,
-  ms = 4000,
-): Promise<HTMLIFrameElement | null> {
-  return new Promise((resolve) => {
-    const deadline = Date.now() + ms;
-    const tick = () => {
-      const client = previewRef.current?.getClient?.();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const iframe = (client as any)?.iframe as HTMLIFrameElement | undefined;
-      if (iframe?.contentWindow) {
-        resolve(iframe);
-        return;
-      }
-      if (Date.now() >= deadline) {
-        resolve(null);
-        return;
-      }
-      setTimeout(tick, 100);
+/**
+ * Injected into the hidden iframe before any other script runs.
+ * Intercepts blob URL downloads (via anchor click OR dispatchEvent)
+ * and posts the base64 data to window.parent instead of triggering a
+ * sandboxed download — works with pptx.writeFile(), XLSX.writeFile(),
+ * Packer.toBlob()+a.click(), and FileSaver.js.
+ */
+const INTERCEPTOR_SCRIPT = `<script>
+(function(){
+  var _blobs = new Map();
+
+  // Track every blob that gets a URL so we can read it back
+  var _origCreate = URL.createObjectURL.bind(URL);
+  URL.createObjectURL = function(b) {
+    var u = _origCreate(b);
+    if (b instanceof Blob) _blobs.set(u, b);
+    return u;
+  };
+  var _origRevoke = URL.revokeObjectURL.bind(URL);
+  URL.revokeObjectURL = function(u) {
+    // Don't delete immediately — FileReader may still need the blob
+    setTimeout(function(){ _blobs.delete(u); }, 60000);
+    _origRevoke(u);
+  };
+
+  function intercept(anchor) {
+    var href = anchor.href || anchor.getAttribute('href') || '';
+    if (!anchor.download || !href.startsWith('blob:')) return false;
+    var blob = _blobs.get(href);
+    if (!blob) return false;
+    var filename = anchor.download;
+    var mimeType = blob.type ||
+      (filename.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' :
+       filename.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
+       filename.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+       'application/octet-stream');
+    var reader = new FileReader();
+    reader.onload = function() {
+      if (typeof reader.result !== 'string') return;
+      window.parent.postMessage({
+        type: 'artifact-download',
+        filename: filename,
+        data: reader.result.split(',')[1],
+        mimeType: mimeType,
+      }, '*');
     };
-    tick();
-  });
+    reader.readAsDataURL(blob);
+    return true;
+  }
+
+  // Patch 1: HTMLAnchorElement.prototype.click (used by SheetJS, docx.js user code)
+  var _origClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function() {
+    if (!intercept(this)) _origClick.call(this);
+  };
+
+  // Patch 2: EventTarget.prototype.dispatchEvent (used by FileSaver / PptxGenJS)
+  var _origDispatch = EventTarget.prototype.dispatchEvent;
+  EventTarget.prototype.dispatchEvent = function(evt) {
+    if (evt && evt.type === 'click' && this.tagName === 'A') {
+      if (intercept(this)) return true;
+    }
+    return _origDispatch.call(this, evt);
+  };
+})();
+<\/script>`;
+
+/**
+ * Prepends the interceptor script right after <head> so it runs before any
+ * library scripts (PptxGenJS / SheetJS / docx.js) load.
+ */
+function injectInterceptor(html: string): string {
+  if (html.includes('<head>')) {
+    return html.replace('<head>', '<head>\n' + INTERCEPTOR_SCRIPT);
+  }
+  // Fallback: prepend before everything
+  return INTERCEPTOR_SCRIPT + '\n' + html;
 }
 
-const DownloadArtifact = ({
-  artifact,
-  previewRef,
-}: {
-  artifact: Artifact;
-  previewRef?: React.MutableRefObject<SandpackPreviewRef>;
-}) => {
+/**
+ * Loads the artifact HTML in a zero-size, non-sandboxed iframe so that
+ * external scripts (PptxGenJS / SheetJS / docx.js) load and execute normally.
+ * The injected interceptor posts blob data back to the parent window.
+ * The iframe is removed 60 s after load.
+ */
+function runInHiddenIframe(html: string, fnName: string): void {
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText =
+    'position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;top:-9999px;left:-9999px;';
+  document.body.appendChild(iframe);
+
+  iframe.onload = () => {
+    // 400 ms lets synchronous scripts finish executing after DOMContentLoaded
+    setTimeout(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (iframe.contentWindow as any)?.[fnName]?.();
+      } catch (e) {
+        console.error('[DownloadArtifact] could not call', fnName, e);
+      }
+      // Keep iframe alive long enough for async operations (pptx build, etc.)
+      setTimeout(() => {
+        try {
+          document.body.removeChild(iframe);
+        } catch {
+          /* already removed */
+        }
+      }, 60_000);
+    }, 400);
+  };
+
+  iframe.srcdoc = injectInterceptor(html);
+}
+
+const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
   const localize = useLocalize();
   const { currentCode } = useCodeState();
   const { fileKey: fileName } = useArtifactProps({ artifact });
-  const [isDownloaded, setIsDownloaded] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
-  const triggerRef = useRef<HTMLDivElement>(null);
+  const [done, setDone] = useState<string | null>(null);
 
   const content = currentCode ?? artifact.content ?? '';
   const nativeFormats = detectNativeFormats(content);
-  const hasNative = nativeFormats.length > 0;
 
-  // Position the portal menu under the trigger button
-  const updateMenuPosition = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setMenuStyle({
-      position: 'fixed',
-      top: rect.bottom + 4,
-      right: window.innerWidth - rect.right,
-      zIndex: 9999,
-      minWidth: 210,
-    });
-  }, []);
-
-  const handleOpen = () => {
-    updateMenuPosition();
-    setOpen(true);
-  };
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (triggerRef.current && !triggerRef.current.contains(target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
-
-  const flashDone = () => {
-    setIsDownloaded(true);
-    setOpen(false);
-    setTimeout(() => setIsDownloaded(false), 2500);
+  const flash = (key: string) => {
+    setDone(key);
+    setTimeout(() => setDone(null), 2500);
   };
 
   const downloadHtml = () => {
-    try {
-      if (!content) return;
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      flashDone();
-    } catch (err) {
-      console.error('HTML download failed:', err);
-    }
+    if (!content) return;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    flash('html');
   };
 
-  const triggerNativeDownload = async (format: NativeFormat) => {
-    if (!previewRef) {
-      downloadHtml();
-      return;
-    }
-    setOpen(false);
-    const iframe = await waitForIframe(previewRef);
-    if (iframe?.contentWindow) {
-      iframe.contentWindow.postMessage(
-        { type: 'artifact-trigger-download', fn: format.triggerFn },
-        '*',
-      );
-      flashDone();
-    } else {
-      // iframe never became available — fall back to HTML
-      downloadHtml();
-    }
+  const downloadNative = (fmt: NativeFormat) => {
+    runInHiddenIframe(content, fmt.triggerFn);
+    flash(fmt.ext);
   };
 
-  // Simple icon-only button when no native formats available
-  if (!hasNative) {
-    return (
+  return (
+    <div className="flex items-center gap-1">
+      {nativeFormats.map((fmt) => (
+        <Button
+          key={fmt.ext}
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs font-medium"
+          onClick={() => downloadNative(fmt)}
+          aria-label={`Download as ${fmt.label}`}
+        >
+          {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+          {fmt.label}
+        </Button>
+      ))}
       <Button
-        size="icon"
+        size="sm"
         variant="ghost"
+        className="h-7 px-2 text-xs font-medium"
         onClick={downloadHtml}
         aria-label={localize('com_ui_download_artifact')}
       >
-        {isDownloaded ? (
-          <CircleCheckBig size={16} aria-hidden="true" />
-        ) : (
-          <Download size={16} aria-hidden="true" />
-        )}
+        {done === 'html' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+        HTML
       </Button>
-    );
-  }
-
-  const menu = open
-    ? ReactDOM.createPortal(
-        <div
-          className="overflow-hidden rounded-lg border border-border-light bg-surface-primary shadow-xl"
-          style={menuStyle}
-        >
-          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-            Download as
-          </p>
-          {nativeFormats.map((fmt) => (
-            <button
-              key={fmt.ext}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary transition-colors hover:bg-surface-hover"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => triggerNativeDownload(fmt)}
-            >
-              <fmt.Icon size={15} className="shrink-0 text-text-secondary" />
-              {fmt.label}
-            </button>
-          ))}
-          <div className="mx-3 my-1 border-t border-border-light" />
-          <button
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary transition-colors hover:bg-surface-hover"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={downloadHtml}
-          >
-            <Code2 size={15} className="shrink-0 text-text-secondary" />
-            HTML source
-          </button>
-        </div>,
-        document.body,
-      )
-    : null;
-
-  return (
-    <>
-      <div ref={triggerRef} className="flex items-center">
-        {/* Primary: download in first detected native format */}
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 gap-1.5 rounded-r-none border-r border-border-light px-2 text-xs"
-          onClick={() => triggerNativeDownload(nativeFormats[0])}
-          aria-label={`Download as ${nativeFormats[0].ext.toUpperCase()}`}
-        >
-          {isDownloaded ? (
-            <CircleCheckBig size={14} aria-hidden="true" />
-          ) : (
-            <Download size={14} aria-hidden="true" />
-          )}
-          <span>{nativeFormats[0].ext.toUpperCase()}</span>
-        </Button>
-
-        {/* Chevron: open format menu */}
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 rounded-l-none px-1"
-          onClick={open ? () => setOpen(false) : handleOpen}
-          aria-label="More download options"
-          aria-expanded={open}
-        >
-          <ChevronDown
-            size={12}
-            aria-hidden="true"
-            className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
-          />
-        </Button>
-      </div>
-
-      {menu}
-    </>
+    </div>
   );
 };
 

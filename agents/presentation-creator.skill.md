@@ -472,9 +472,6 @@ document.querySelector('.deck').addEventListener('click', e => {
   go(e.clientX / window.innerWidth > 0.5 ? cur + 1 : cur - 1);
 });
 go(0);
-window.addEventListener('message', e => {
-  if (e.data?.type === 'artifact-trigger-download') downloadPptx();
-});
 
 // ── PPTX Export ───────────────────────────────────────────────────────────
 // Whatfix brand colors — NO '#' prefix (causes PptxGenJS file corruption)
@@ -598,13 +595,7 @@ function downloadPptx() {
   });
 
   const slug = (document.title || 'presentation').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  const base64 = await pptx.write({ outputType: 'base64' });
-  window.parent.postMessage({
-    type: 'artifact-download',
-    filename: slug + '.pptx',
-    data: base64,
-    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  }, '*');
+  pptx.writeFile({ fileName: slug + '.pptx' });
 }
 </script>
 </body>

@@ -308,7 +308,7 @@ export default function Artifacts() {
                 />
               )}
               <CopyCodeButton content={currentArtifact.content ?? ''} />
-              <DownloadArtifact artifact={currentArtifact} previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>} />
+              <DownloadArtifact artifact={currentArtifact} />
               <Button
                 size="icon"
                 variant="ghost"
