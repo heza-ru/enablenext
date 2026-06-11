@@ -465,7 +465,7 @@ const C = {
   gray100: 'F9F9F2',
   gray300: 'E5E3DC',
 };
-const FONT = 'Calibri';
+const FONT = 'Lato';
 
 function downloadPptx() {
   const pptx = new PptxGenJS();
@@ -481,22 +481,22 @@ function downloadPptx() {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:5.2, w:'100%', h:2.4, fill:{ color: C.ink } });
       if (slide.dataset.eyebrow)
-        s.addText(slide.dataset.eyebrow.toUpperCase(), { x:.55, y:.5, w:9, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:3 });
-      s.addText(slide.dataset.title || '', { x:.55, y:1, w:8.5, h:2.8, fontSize:36, color:C.white, fontFace:FONT, bold:true, valign:'top' });
+        s.addText(slide.dataset.eyebrow.toUpperCase(), { x:.55, y:.5, w:9, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:3 , margin:0});
+      s.addText(slide.dataset.title || '', { x:.55, y:1, w:8.5, h:2.8, fontSize:36, color:C.white, fontFace:FONT, bold:true, valign:'top' , margin:0});
       s.addShape(pptx.ShapeType.rect, { x:.55, y:3.95, w:.5, h:.055, fill:{ color: C.orange } });
       if (slide.dataset.subtitle)
-        s.addText(slide.dataset.subtitle, { x:.55, y:4.15, w:9, h:.8, fontSize:13, color:C.ink300, fontFace:FONT });
+        s.addText(slide.dataset.subtitle, { x:.55, y:4.15, w:9, h:.8, fontSize:13, color:C.ink300, fontFace:FONT , margin:0});
       if (slide.dataset.meta)
-        s.addText(slide.dataset.meta, { x:7, y:5.2, w:3, h:.35, fontSize:8, color:C.ink300, fontFace:FONT, align:'right' });
+        s.addText(slide.dataset.meta, { x:7, y:5.2, w:3, h:.35, fontSize:8, color:C.ink300, fontFace:FONT, align:'right' , margin:0});
 
     } else if (type === 'agenda') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
-      s.addText('AGENDA', { x:.55, y:.45, w:3, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:4 });
+      s.addText('AGENDA', { x:.55, y:.45, w:3, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:4 , margin:0});
       const items = JSON.parse(slide.dataset.items || '[]');
       items.forEach((item, i) => {
         s.addShape(pptx.ShapeType.ellipse, { x:.55, y:1.25 + i*.85, w:.38, h:.38, fill:{ color: C.ink }, line:{ color: C.orange, width:1 } });
-        s.addText(`0${i+1}`, { x:.55, y:1.25 + i*.85, w:.38, h:.38, fontSize:7.5, color:C.orange, fontFace:FONT, bold:true, align:'center', valign:'middle' });
-        s.addText(item, { x:1.1, y:1.25 + i*.85, w:8.7, h:.38, fontSize:16, color:C.white, fontFace:FONT, valign:'middle' });
+        s.addText(`0${i+1}`, { x:.55, y:1.25 + i*.85, w:.38, h:.38, fontSize:7.5, color:C.orange, fontFace:FONT, bold:true, align:'center', valign:'middle' , margin:0});
+        s.addText(item, { x:1.1, y:1.25 + i*.85, w:8.7, h:.38, fontSize:16, color:C.white, fontFace:FONT, valign:'middle' , margin:0});
         s.addShape(pptx.ShapeType.line, { x:.55, y:1.7 + i*.85, w:9.2, h:0, line:{ color:'2a2840', width:.5 } });
       });
 
@@ -504,17 +504,17 @@ function downloadPptx() {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:6.2, h:'100%', fill:{ color: C.ink700 } });
       s.addShape(pptx.ShapeType.rect, { x:6.2, y:0, w:3.8, h:'100%', fill:{ color: C.orange } });
       if (slide.dataset.secnum)
-        s.addText(slide.dataset.secnum.toUpperCase(), { x:.55, y:2.3, w:5.4, h:.35, fontSize:7.5, color:C.white, fontFace:FONT, bold:true, charSpacing:3, transparency:65 });
-      s.addText(slide.dataset.title || '', { x:.55, y:2.7, w:5.4, h:2, fontSize:26, color:C.white, fontFace:FONT, bold:true });
+        s.addText(slide.dataset.secnum.toUpperCase(), { x:.55, y:2.3, w:5.4, h:.35, fontSize:7.5, color:C.white, fontFace:FONT, bold:true, charSpacing:3, transparency:65 , margin:0});
+      s.addText(slide.dataset.title || '', { x:.55, y:2.7, w:5.4, h:2, fontSize:26, color:C.white, fontFace:FONT, bold:true , margin:0});
 
     } else if (type === 'content') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText(slide.dataset.headline || '', { x:.55, y:.3, w:9, h:1.2, fontSize:24, color:C.orange, fontFace:FONT, bold:true });
+      s.addText(slide.dataset.headline || '', { x:.55, y:.3, w:9, h:1.2, fontSize:24, color:C.orange, fontFace:FONT, bold:true , margin:0});
       const bullets = JSON.parse(slide.dataset.bullets || '[]');
       bullets.forEach((b, i) => {
         s.addShape(pptx.ShapeType.ellipse, { x:.55, y:1.85 + i*.95 + .05, w:.1, h:.1, fill:{ color: C.orange } });
-        s.addText(b, { x:.8, y:1.8 + i*.95, w:9, h:.65, fontSize:15, color:C.white, fontFace:FONT });
+        s.addText(b, { x:.8, y:1.8 + i*.95, w:9, h:.65, fontSize:15, color:C.white, fontFace:FONT , margin:0});
         if (i < bullets.length - 1)
           s.addShape(pptx.ShapeType.line, { x:.55, y:2.5 + i*.95, w:8.9, h:0, line:{ color:'2a2840', width:.4 } });
       });
@@ -524,52 +524,52 @@ function downloadPptx() {
     } else if (type === 'two-col') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText(slide.dataset.headline || '', { x:.55, y:.3, w:9, h:.9, fontSize:22, color:C.orange, fontFace:FONT, bold:true });
+      s.addText(slide.dataset.headline || '', { x:.55, y:.3, w:9, h:.9, fontSize:22, color:C.orange, fontFace:FONT, bold:true , margin:0});
       const lBullets = JSON.parse(slide.dataset.leftBullets || '[]');
       lBullets.forEach((b, i) => {
         s.addShape(pptx.ShapeType.ellipse, { x:.55, y:1.6 + i*.75 + .05, w:.1, h:.1, fill:{ color: C.orange } });
-        s.addText(b, { x:.8, y:1.55 + i*.75, w:4.5, h:.6, fontSize:14, color:C.white, fontFace:FONT });
+        s.addText(b, { x:.8, y:1.55 + i*.75, w:4.5, h:.6, fontSize:14, color:C.white, fontFace:FONT , margin:0});
       });
       s.addShape(pptx.ShapeType.rect, { x:5.6, y:1.4, w:3.85, h:3.8, fill:{ color: C.ink }, rectRadius:.06 });
       const rStats = JSON.parse(slide.dataset.rightStats || '[]');
       rStats.forEach((st, i) => {
-        s.addText(st.value, { x:5.7, y:1.65 + i*1.75, w:3.65, h:1.1, fontSize:42, color:C.orange, fontFace:FONT, bold:true, align:'center' });
-        s.addText(st.label, { x:5.7, y:2.85 + i*1.75, w:3.65, h:.4, fontSize:11, color:C.ink300, fontFace:FONT, align:'center' });
+        s.addText(st.value, { x:5.7, y:1.65 + i*1.75, w:3.65, h:1.1, fontSize:42, color:C.orange, fontFace:FONT, bold:true, align:'center' , margin:0});
+        s.addText(st.label, { x:5.7, y:2.85 + i*1.75, w:3.65, h:.4, fontSize:11, color:C.ink300, fontFace:FONT, align:'center' , margin:0});
       });
 
     } else if (type === 'stat') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
       if (slide.dataset.title)
-        s.addText(slide.dataset.title, { x:.5, y:.45, w:9.3, h:.55, fontSize:16, color:C.ink300, fontFace:FONT, align:'center' });
+        s.addText(slide.dataset.title, { x:.5, y:.45, w:9.3, h:.55, fontSize:16, color:C.ink300, fontFace:FONT, align:'center' , margin:0});
       const stats = JSON.parse(slide.dataset.stats || '[]');
       const colW = 10 / stats.length;
       stats.forEach((st, i) => {
-        s.addText(st.value, { x:i*colW+.3, y:1.4, w:colW-.6, h:2.3, fontSize:56, color:C.orange, fontFace:FONT, bold:true, align:'center' });
-        s.addText(st.label, { x:i*colW+.3, y:3.9, w:colW-.6, h:.9, fontSize:12, color:C.ink300, fontFace:FONT, align:'center', wrap:true });
+        s.addText(st.value, { x:i*colW+.3, y:1.4, w:colW-.6, h:2.3, fontSize:56, color:C.orange, fontFace:FONT, bold:true, align:'center' , margin:0});
+        s.addText(st.label, { x:i*colW+.3, y:3.9, w:colW-.6, h:.9, fontSize:12, color:C.ink300, fontFace:FONT, align:'center', wrap:true , margin:0});
       });
 
     } else if (type === 'quote') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText('“', { x:.4, y:.2, w:2, h:1.4, fontSize:72, color:C.orange, fontFace:'Georgia', bold:true });
+      s.addText('“', { x:.4, y:.2, w:2, h:1.4, fontSize:72, color:C.orange, fontFace:'Georgia', bold:true , margin:0});
       const qt = slide.querySelector('blockquote')?.textContent?.trim() || '';
-      s.addText(qt, { x:.5, y:1.5, w:9.3, h:2.6, fontSize:20, color:C.white, fontFace:FONT, italic:true, align:'center', wrap:true });
+      s.addText(qt, { x:.5, y:1.5, w:9.3, h:2.6, fontSize:20, color:C.white, fontFace:FONT, italic:true, align:'center', wrap:true , margin:0});
       const cite = slide.querySelector('cite')?.textContent?.trim() || '';
       if (cite)
-        s.addText('— ' + cite, { x:.5, y:4.3, w:9.3, h:.45, fontSize:11, color:C.orange, fontFace:FONT, bold:true, align:'center', charSpacing:2 });
+        s.addText('— ' + cite, { x:.5, y:4.3, w:9.3, h:.45, fontSize:11, color:C.orange, fontFace:FONT, bold:true, align:'center', charSpacing:2 , margin:0});
 
     } else if (type === 'closing') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:5.57, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText(slide.dataset.title || 'Thank you', { x:.5, y:1.3, w:9.3, h:2.2, fontSize:42, color:C.white, fontFace:FONT, bold:true, align:'center' });
+      s.addText(slide.dataset.title || 'Thank you', { x:.5, y:1.3, w:9.3, h:2.2, fontSize:42, color:C.white, fontFace:FONT, bold:true, align:'center' , margin:0});
       s.addShape(pptx.ShapeType.rect, { x:4.65, y:3.65, w:.5, h:.05, fill:{ color: C.orange } });
       if (slide.dataset.body)
-        s.addText(slide.dataset.body, { x:.5, y:3.9, w:9.3, h:.6, fontSize:14, color:C.ink300, fontFace:FONT, align:'center' });
+        s.addText(slide.dataset.body, { x:.5, y:3.9, w:9.3, h:.6, fontSize:14, color:C.ink300, fontFace:FONT, align:'center' , margin:0});
       if (slide.dataset.cta) {
         s.addShape(pptx.ShapeType.roundRect, { x:3.9, y:4.7, w:2.5, h:.6, rectRadius:.07, fill:{ color: C.orange } });
-        s.addText(slide.dataset.cta, { x:3.9, y:4.7, w:2.5, h:.6, fontSize:12, color:C.white, fontFace:FONT, bold:true, align:'center', valign:'middle' });
+        s.addText(slide.dataset.cta, { x:3.9, y:4.7, w:2.5, h:.6, fontSize:12, color:C.white, fontFace:FONT, bold:true, align:'center', valign:'middle' , margin:0});
       }
     }
   });
@@ -762,26 +762,26 @@ if (type === 'cover') {
   s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:5.8, h:'100%', fill:{ color:'872345' } });
   s.addShape(pptx.ShapeType.rect, { x:5.8, y:0, w:4.2, h:'100%', fill:{ color:'FF6B18' } });
   s.addShape(pptx.ShapeType.ellipse, { x:3.5, y:-1.5, w:8, h:8, line:{ color:'FFFFFF', width:1.5, transparency:75 }, fill:{ type:'none' } });
-  s.addText((slide.dataset.tagline||'').toUpperCase(), { x:.5,y:.55,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:3,transparency:55 });
-  s.addText(slide.dataset.title||'', { x:.5,y:3.0,w:5,h:1.8,fontSize:26,color:'FFFFFF',fontFace:FONT,bold:true,valign:'top' });
-  s.addText(slide.dataset.docType||'', { x:.5,y:4.95,w:4.8,h:.45,fontSize:11,color:'FFFFFF',fontFace:FONT,transparency:38 });
+  s.addText((slide.dataset.tagline||'').toUpperCase(), { x:.5,y:.55,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:3,transparency:55 , margin:0});
+  s.addText(slide.dataset.title||'', { x:.5,y:3.0,w:5,h:1.8,fontSize:26,color:'FFFFFF',fontFace:FONT,bold:true,valign:'top' , margin:0});
+  s.addText(slide.dataset.docType||'', { x:.5,y:4.95,w:4.8,h:.45,fontSize:11,color:'FFFFFF',fontFace:FONT,transparency:38 , margin:0});
   s.addShape(pptx.ShapeType.rect, { x:.5,y:5.55,w:5,h:.02,fill:{ color:'FFFFFF' },transparency:80 });
-  s.addText('Whatfix', { x:.5,y:5.72,w:1.8,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT,bold:true });
-  if (slide.dataset.customer) s.addText(slide.dataset.customer, { x:2.55,y:5.72,w:3,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT });
-  s.addText(DISCLAIMER_TEXT, { x:0,y:5.38,w:10,h:.2,fontSize:5,color:'FFFFFF',fontFace:FONT,align:'center',transparency:72 });
+  s.addText('Whatfix', { x:.5,y:5.72,w:1.8,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT,bold:true , margin:0});
+  if (slide.dataset.customer) s.addText(slide.dataset.customer, { x:2.55,y:5.72,w:3,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT , margin:0});
+  s.addText(DISCLAIMER_TEXT, { x:0,y:5.38,w:10,h:.2,fontSize:5,color:'FFFFFF',fontFace:FONT,align:'center',transparency:72 , margin:0});
 
 } else if (type === 'section-div') {
   s.addShape(pptx.ShapeType.rect, { x:0,y:0,w:5.8,h:'100%',fill:{ color:'25223B' } });
   s.addShape(pptx.ShapeType.rect, { x:5.8,y:0,w:4.2,h:'100%',fill:{ color:'FF6B18' } });
   if (slide.dataset.secLabel)
-    s.addText(slide.dataset.secLabel.toUpperCase(), { x:.5,y:2.6,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:4,transparency:70 });
-  s.addText(slide.dataset.title||'', { x:.5,y:3.0,w:5,h:1.8,fontSize:24,color:'FFFFFF',fontFace:FONT,bold:true });
+    s.addText(slide.dataset.secLabel.toUpperCase(), { x:.5,y:2.6,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:4,transparency:70 , margin:0});
+  s.addText(slide.dataset.title||'', { x:.5,y:3.0,w:5,h:1.8,fontSize:24,color:'FFFFFF',fontFace:FONT,bold:true , margin:0});
 
 } else if (type === 'table' || type === 'success-metrics') {
   s.addShape(pptx.ShapeType.rect, { x:0,y:0,w:'100%',h:'100%',fill:{ color:'FFFFFF' } });
   s.addShape(pptx.ShapeType.rect, { x:0,y:0,w:'100%',h:.05,fill:{ color:'872345' } });
-  s.addText(slide.dataset.title||'', { x:.4,y:.2,w:9.2,h:.65,fontSize:18,color:'872345',fontFace:FONT,bold:true });
-  s.addText('Whatfix', { x:8.5,y:.25,w:1.3,h:.35,fontSize:8,color:'872345',fontFace:FONT,bold:true,align:'right' });
+  s.addText(slide.dataset.title||'', { x:.4,y:.2,w:9.2,h:.65,fontSize:18,color:'872345',fontFace:FONT,bold:true , margin:0});
+  s.addText('Whatfix', { x:8.5,y:.25,w:1.3,h:.35,fontSize:8,color:'872345',fontFace:FONT,bold:true,align:'right' , margin:0});
   s.addShape(pptx.ShapeType.line, { x:.4,y:1.0,w:9.2,h:0,line:{ color:'E5E3DC',width:.5 } });
   const domTable = slide.querySelector('table');
   if (domTable) {
@@ -795,7 +795,7 @@ if (type === 'cover') {
     ];
     if (tableData.length > 1) s.addTable(tableData, { x:.4,y:1.1,w:9.2,colW:colWs,border:{ type:'solid',color:'E5E3DC',pt:.4 },rowH:.65 });
   }
-  s.addText(DISCLAIMER_TEXT, { x:.4,y:5.35,w:9.2,h:.2,fontSize:5,color:'8A8A9C',fontFace:FONT,italic:true });
+  s.addText(DISCLAIMER_TEXT, { x:.4,y:5.35,w:9.2,h:.2,fontSize:5,color:'8A8A9C',fontFace:FONT,italic:true , margin:0});
 }
 ```
 
