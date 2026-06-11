@@ -472,6 +472,9 @@ document.querySelector('.deck').addEventListener('click', e => {
   go(e.clientX / window.innerWidth > 0.5 ? cur + 1 : cur - 1);
 });
 go(0);
+window.addEventListener('message', e => {
+  if (e.data?.type === 'artifact-trigger-download') downloadPptx();
+});
 
 // ── PPTX Export ───────────────────────────────────────────────────────────
 // Whatfix brand colors — NO '#' prefix (causes PptxGenJS file corruption)

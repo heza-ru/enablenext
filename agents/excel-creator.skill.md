@@ -289,6 +289,9 @@ function downloadExcel() {
 // Init
 buildTabs();
 renderSheet(0);
+window.addEventListener('message', e => {
+  if (e.data?.type === 'artifact-trigger-download') downloadExcel();
+});
 </script>
 </body>
 </html>

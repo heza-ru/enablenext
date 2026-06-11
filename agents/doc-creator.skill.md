@@ -331,6 +331,9 @@ async function downloadDocx() {
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   }, '*');
 }
+window.addEventListener('message', e => {
+  if (e.data?.type === 'artifact-trigger-download') downloadDocx();
+});
 </script>
 </body>
 </html>
