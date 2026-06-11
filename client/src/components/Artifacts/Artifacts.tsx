@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { Code, Play, RefreshCw, X } from 'lucide-react';
 import { useSetRecoilState, useResetRecoilState } from 'recoil';
@@ -64,25 +64,35 @@ export default function Artifacts() {
       if (e.data?.type !== 'artifact-download') {
         return;
       }
+      console.log('[Artifacts] artifact-download message received', {
+        filename: e.data.filename,
+        mimeType: e.data.mimeType,
+        dataLength: (e.data.data as string)?.length,
+      });
       const { filename, data, mimeType } = e.data as {
         filename: string;
         data: string;
         mimeType: string;
       };
-      const bytes = atob(data);
-      const array = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) {
-        array[i] = bytes.charCodeAt(i);
+      try {
+        const bytes = atob(data);
+        const array = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) {
+          array[i] = bytes.charCodeAt(i);
+        }
+        const blob = new Blob([array], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log('[Artifacts] artifact-download: browser download triggered for', filename);
+      } catch (err) {
+        console.error('[Artifacts] artifact-download: failed to decode or trigger download', err);
       }
-      const blob = new Blob([array], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     };
     window.addEventListener('message', handleArtifactDownload);
     return () => window.removeEventListener('message', handleArtifactDownload);
@@ -310,7 +320,10 @@ export default function Artifacts() {
                 />
               )}
               <CopyCodeButton content={currentArtifact.content ?? ''} />
-              <DownloadArtifact artifact={currentArtifact} />
+              <DownloadArtifact
+                artifact={currentArtifact}
+                previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
+              />
               <Button
                 size="icon"
                 variant="ghost"
