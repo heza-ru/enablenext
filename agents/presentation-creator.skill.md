@@ -577,6 +577,32 @@ function downloadPptx() {
   const slug = (document.title || 'presentation').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   pptx.writeFile({ fileName: slug + '.pptx' });
 }
+
+// Artifact-panel download bridge — receives a trigger from the panel header,
+// installs a one-shot blob interceptor around the named function, captures the
+// generated file, and postMessages the binary back to the parent window.
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'artifact-download-request') return;
+  if (typeof window[e.data.fn] !== 'function') return;
+  var src = e.source || window.parent;
+  var blobs = new Map();
+  var origCreate = URL.createObjectURL.bind(URL);
+  URL.createObjectURL = function(b) { var u = origCreate(b); if (b instanceof Blob) blobs.set(u, b); return u; };
+  var origClick = HTMLElement.prototype.click;
+  HTMLElement.prototype.click = function() {
+    if (this.tagName === 'A' && this.download && this.href && this.href.indexOf('blob:') === 0) {
+      var blob = blobs.get(this.href);
+      if (blob) {
+        var fn = this.download; var mime = blob.type || 'application/octet-stream';
+        var r = new FileReader();
+        r.onload = function() { src.postMessage({ type:'artifact-download', filename:fn, data:r.result.split(',')[1], mimeType:mime }, '*'); URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; };
+        r.readAsDataURL(blob); return;
+      }
+    }
+    origClick.call(this);
+  };
+  try { window[e.data.fn](); } catch(err) { URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; }
+});
 </script>
 </body>
 </html>
