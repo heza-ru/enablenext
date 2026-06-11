@@ -79,7 +79,9 @@ export default function Artifacts() {
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     };
     window.addEventListener('message', handleArtifactDownload);

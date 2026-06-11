@@ -75,16 +75,6 @@ body {
 .header h1 { font-size: 1.4rem; font-weight: 600; color: #FFFFFF; }
 .header .sub { font-size: .8rem; color: #8A8A9C; margin-top: .2rem; }
 
-.dl-btn {
-  display: flex; align-items: center; gap: .5rem;
-  padding: .5rem 1.25rem; background: rgba(255,107,24,.12);
-  border: 1px solid rgba(255,107,24,.4); border-radius: 6px;
-  color: #FF6B18; font-size: .8rem; font-weight: 500;
-  font-family: 'DM Sans', sans-serif; cursor: pointer;
-  transition: background .2s;
-}
-.dl-btn:hover { background: rgba(255,107,24,.22); }
-.dl-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* Tab bar for multi-sheet */
 .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
@@ -135,12 +125,6 @@ tfoot td { padding: .6rem 1rem; font-weight: 600; color: #FF6B18; }
     <h1>SPREADSHEET TITLE</h1>
     <p class="sub">DESCRIPTION · DATE</p>
   </div>
-  <button class="dl-btn" onclick="downloadExcel()">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <path d="M8 2v8M5 7l3 3 3-3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/>
-    </svg>
-    Download Excel
-  </button>
 </div>
 
 <!-- Tab buttons (one per sheet — remove if single sheet) -->

@@ -75,16 +75,6 @@ body {
 .toolbar .doc-meta h1 { font-size: 1rem; font-weight: 600; color: #FFFFFF; }
 .toolbar .doc-meta p  { font-size: .75rem; color: #8A8A9C; margin-top: .15rem; }
 
-.dl-btn {
-  display: flex; align-items: center; gap: .5rem;
-  padding: .45rem 1.1rem; background: rgba(255,107,24,.12);
-  border: 1px solid rgba(255,107,24,.4); border-radius: 6px;
-  color: #FF6B18; font-size: .78rem; font-weight: 500;
-  font-family: 'DM Sans', sans-serif; cursor: pointer;
-  transition: background .2s;
-}
-.dl-btn:hover { background: rgba(255,107,24,.22); }
-.dl-btn svg { width: 13px; height: 13px; }
 
 /* Document page */
 .page {
@@ -131,12 +121,6 @@ body {
     <h1>DOCUMENT TITLE</h1>
     <p>Whatfix · June 2026</p>
   </div>
-  <button class="dl-btn" onclick="downloadDocx()">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <path d="M8 2v8M5 7l3 3 3-3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/>
-    </svg>
-    Download Word
-  </button>
 </div>
 
 <!-- ═══ DOCUMENT PREVIEW ════════════════════════════════ -->

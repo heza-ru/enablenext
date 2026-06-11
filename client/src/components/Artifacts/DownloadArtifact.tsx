@@ -72,13 +72,15 @@ const INTERCEPTOR_SCRIPT = `<script>
     return true;
   }
 
-  // Patch 1: HTMLAnchorElement.prototype.click (used by SheetJS, docx.js user code)
-  var _origClick = HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click = function() {
-    if (!intercept(this)) _origClick.call(this);
+  // Patch 1: HTMLElement.prototype.click — this is where .click() actually lives;
+  // patching here catches PptxGenJS / SheetJS / docx user code regardless of element subtype
+  var _origHTMLClick = HTMLElement.prototype.click;
+  HTMLElement.prototype.click = function() {
+    if (this.tagName === 'A' && intercept(this)) return;
+    _origHTMLClick.call(this);
   };
 
-  // Patch 2: EventTarget.prototype.dispatchEvent (used by FileSaver / PptxGenJS)
+  // Patch 2: EventTarget.prototype.dispatchEvent (belt-and-suspenders for synthetic clicks)
   var _origDispatch = EventTarget.prototype.dispatchEvent;
   EventTarget.prototype.dispatchEvent = function(evt) {
     if (evt && evt.type === 'click' && this.tagName === 'A') {
@@ -110,6 +112,13 @@ function injectInterceptor(html: string): string {
 function runInHiddenIframe(html: string, fnName: string): void {
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
+  // allow-scripts + allow-same-origin lets the artifact run and postMessage to parent;
+  // allow-downloads + allow-downloads-without-user-activation lets async blob downloads
+  // proceed directly inside the frame as a fallback if the interceptor doesn't fire
+  iframe.setAttribute(
+    'sandbox',
+    'allow-scripts allow-same-origin allow-downloads allow-downloads-without-user-activation',
+  );
   iframe.style.cssText =
     'position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;top:-9999px;left:-9999px;';
   document.body.appendChild(iframe);

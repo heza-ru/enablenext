@@ -1,6 +1,6 @@
 ---
 name: presentation-creator
-description: Use when the user asks for a presentation, slides, slide deck, pitch deck, POC playbook, demo playbook, proof of concept deck, sales playbook, or engagement playbook. Generates an interactive HTML artifact rendered inline with a one-click PPTX download — no code execution or API keys required.
+description: Use when the user asks for a presentation, slides, slide deck, pitch deck, POC playbook, demo playbook, proof of concept deck, sales playbook, or engagement playbook. Generates an interactive HTML artifact rendered inline — no code execution or API keys required.
 user-invocable: true
 allowed-tools: ["artifacts", "file_search"]
 ---
@@ -9,7 +9,7 @@ allowed-tools: ["artifacts", "file_search"]
 
 Generate a single complete self-contained HTML artifact that:
 1. **Renders as interactive professional slides** in the side panel
-2. **Includes a "Download PPTX" button** that generates a real `.pptx` file client-side using PptxGenJS
+2. **Exposes a `downloadPptx()` function** used by the artifact panel to generate a real `.pptx` file client-side using PptxGenJS
 
 ## Output Format — MANDATORY
 
@@ -315,18 +315,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 .notes { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 300; background: rgba(8,6,18,0.95); color: rgba(255,255,255,0.75); padding: 1rem 3rem; font-size: 0.82rem; line-height: 1.6; border-top: 2px solid #FF6B18; }
 .notes.visible { display: block; }
 
-/* ── Download button ──────────────────────────────── */
-.dl-btn {
-  position: fixed; top: 1rem; right: 1rem; z-index: 200;
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.45rem 1rem; background: rgba(255,107,24,0.12);
-  border: 1px solid rgba(255,107,24,0.35); border-radius: 6px;
-  color: #FF6B18; font-size: 0.72rem; font-weight: 600;
-  font-family: 'DM Sans', sans-serif; cursor: pointer;
-  transition: background 0.2s;
-}
-.dl-btn:hover { background: rgba(255,107,24,0.22); }
-.dl-btn svg { width: 13px; height: 13px; }
 </style>
 </head>
 <body>
@@ -432,13 +420,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 <div class="slide-counter" id="sc"></div>
 <div class="nav-hint">&#8592; &#8594; navigate &nbsp;&#183;&nbsp; F fullscreen &nbsp;&#183;&nbsp; N notes</div>
 
-<button class="dl-btn" onclick="downloadPptx()">
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-    <path d="M8 2v8M5 7l3 3 3-3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/>
-  </svg>
-  Download PPTX
-</button>
-
 <script>
 // ── Navigation ────────────────────────────────────────────────────────────
 const slides = [...document.querySelectorAll('.slide')];
@@ -468,7 +449,6 @@ document.addEventListener('keydown', e => {
   }
 });
 document.querySelector('.deck').addEventListener('click', e => {
-  if (e.target.closest('.dl-btn')) return;
   go(e.clientX / window.innerWidth > 0.5 ? cur + 1 : cur - 1);
 });
 go(0);
