@@ -96,6 +96,42 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 
 ---
 
+## Brand Graphics
+
+Official Whatfix product graphics are hosted at `/brand/` and available to every slide. Use them instead of placeholder shapes whenever the content is about a specific Whatfix product.
+
+Use `<img>` in the HTML slide. Always set an explicit size and use `object-fit: contain`.
+
+```html
+<img src="/brand/product-suite-dark.png" style="width:100%;height:100%;object-fit:contain;" alt="">
+```
+
+| File | Contents | Use on |
+|------|----------|--------|
+| `/brand/product-suite-dark.png` | Full product suite diagram | Dark slides, overview/closing |
+| `/brand/ai-agents-suite-dark.png` | Product suite — AI Agents highlight | AI agent slides |
+| `/brand/screensense-suite-dark.png` | Product suite — ScreenSense highlight | ScreenSense slides |
+| `/brand/product-suite-full-dark.png` | Full product suite with all logos | Architecture / product overview |
+| `/brand/product-suite-light.png` | Full product suite (light bg) | Light-background slides |
+| `/brand/authoring-agent-dark.png` | Authoring Agent logo | Authoring Agent slides |
+| `/brand/guidance-agent-dark.png` | Guidance Agent logo | Guidance Agent slides |
+| `/brand/insights-agent-dark.png` | Insights Agent logo | Insights Agent slides |
+| `/brand/authoring-agent-box-dark.png` | Authoring Agent logo in box | Dark card insets |
+| `/brand/guidance-agent-box-dark.png` | Guidance Agent logo in box | Dark card insets |
+| `/brand/insights-agent-box-dark.png` | Insights Agent logo in box | Dark card insets |
+| `/brand/dap-dark.png` | DAP product logo | DAP-focused slides |
+| `/brand/dap-light.png` | DAP product logo (light) | Light-background slides |
+| `/brand/mirror-dark.png` | Mirror product logo | Mirror slides |
+| `/brand/screensense-dark.png` | ScreenSense product logo | ScreenSense slides |
+| `/brand/product-analytics-dark.png` | Product Analytics logo | Analytics slides |
+
+**Rules:**
+- Use dark variants on dark slides (default), light variants on white/gray slides
+- Never stretch or crop brand graphics — always `object-fit: contain`
+- Prefer a product graphic over a blank colored rectangle whenever the slide topic matches a product
+
+---
+
 ## Full HTML Template — Dark Deck
 
 Replace ALL_CAPS placeholders. The `data-*` attributes on each `<section>` drive the PPTX export — **always fill them in AND the visible HTML**; they must stay in sync.
@@ -465,10 +501,35 @@ const C = {
   gray100: 'F9F9F2',
   gray300: 'E5E3DC',
 };
-const FONT = 'Lato';
+const FONT = 'Aeonik';
+
+// Pre-load Aeonik brand font in the background so it's ready when the user downloads.
+// Falls back gracefully — if fetching fails the PPTX still generates, Google Slides
+// will substitute the closest available font.
+var _aeonik = { regular: null, bold: null, light: null };
+(function () {
+  var origin = window.location.origin !== 'null' ? window.location.origin : '';
+  if (!origin) { try { origin = window.parent.location.origin; } catch (e) {} }
+  if (!origin) return;
+  function loadFont(url, key) {
+    fetch(url).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+      var bytes = new Uint8Array(buf), result = '', chunk = 8192;
+      for (var i = 0; i < bytes.length; i += chunk)
+        result += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      _aeonik[key] = btoa(result);
+    }).catch(function (e) { console.warn('[pptx] font preload failed (' + key + '):', e); });
+  }
+  loadFont(origin + '/libs/fonts/Aeonik-Regular.ttf', 'regular');
+  loadFont(origin + '/libs/fonts/Aeonik-Bold.ttf', 'bold');
+  loadFont(origin + '/libs/fonts/Aeonik-Light.ttf', 'light');
+})();
 
 function downloadPptx() {
   const pptx = new PptxGenJS();
+  // Embed brand font so Google Slides renders it correctly
+  if (_aeonik.regular) pptx.addFont({ name: 'Aeonik', data: _aeonik.regular });
+  if (_aeonik.bold)    pptx.addFont({ name: 'Aeonik', data: _aeonik.bold });
+  if (_aeonik.light)   pptx.addFont({ name: 'Aeonik', data: _aeonik.light });
   pptx.layout = 'LAYOUT_16x9';
   pptx.title  = document.title;
   pptx.author = 'Whatfix';
