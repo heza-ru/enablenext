@@ -643,9 +643,12 @@ var _IMG_PATHS = {
   'product-analytics-dark':  '/brand/product-analytics-dark.png',
 };
 
-// Detect the app origin — works in both the DownloadArtifact hidden iframe (same-origin srcdoc)
-// and the Sandpack live iframe (tries parent.location; falls back to postMessage-provided origin).
+// Detect the app origin so brand asset fetches resolve against the real server.
+// Priority: (1) _BRAND_ORIGIN injected by LibreChat before the Sandpack iframe loads,
+// (2) window.location.origin (works in blob-URL tabs and same-origin iframes),
+// (3) window.parent.location.origin (works in the DownloadArtifact hidden srcdoc iframe).
 function _getOrigin() {
+  if (window._BRAND_ORIGIN) return window._BRAND_ORIGIN;
   var o = window.location.origin;
   if (o && o !== 'null') return o;
   try { return window.parent.location.origin; } catch (e) {}

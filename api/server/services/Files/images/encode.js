@@ -145,7 +145,14 @@ async function encodeAndFormat(req, files, params, mode) {
       promises.push([_file, await fetchImageToBase64(imageURL)]);
       continue;
     }
-    promises.push(preparePayload(req, file));
+    promises.push(
+      preparePayload(req, file).catch((err) => {
+        logger.warn(
+          `[encodeAndFormat] Failed to prepare image payload for file "${file.filename}" (${file.filepath}): ${err.message}`,
+        );
+        return [file, null];
+      }),
+    );
   }
 
   const detail = req.body.imageDetail ?? ImageDetail.auto;

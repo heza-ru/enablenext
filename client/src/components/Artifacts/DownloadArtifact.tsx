@@ -84,19 +84,34 @@ function triggerViaPreviewIframe(
 const FALLBACK_MS = 10_000;
 
 /**
- * Replace CDN URLs for known libraries with the locally-hosted copies.
- * srcdoc iframes on Vercel cannot load from external CDNs blocked by CSP.
- * The local bundle is served from the same origin so it always loads.
+ * Patch an HTML string so it works when run outside the Sandpack iframe:
+ *  - Replace CDN pptxgenjs with the locally-hosted bundle
+ *  - Rewrite relative /brand/ and /libs/ asset paths to absolute app-origin URLs
+ *  - Inject window._BRAND_ORIGIN so the presentation script's _getOrigin() returns
+ *    the correct origin even when running inside a sandboxed iframe
  */
 function patchLibUrls(html: string): string {
   const origin = window.location.origin;
-  // pptxgenjs — any version from any permitted CDN
-  const patched = html.replace(
+
+  // pptxgenjs — any version from any permitted CDN → local bundle
+  let patched = html.replace(
     /https?:\/\/(?:cdnjs\.cloudflare\.com\/ajax\/libs\/pptxgenjs\/[^\s"'>]+|unpkg\.com\/pptxgenjs[^\s"'>]*|cdn\.jsdelivr\.net\/npm\/pptxgenjs[^\s"'>]*)/g,
     `${origin}/libs/pptxgen.bundle.js`,
   );
+
+  // Relative /brand/ and /libs/ paths in HTML attributes (src="…") and CSS url(…)
+  patched = patched
+    .replace(/(src=['"])\/brand\//g, `$1${origin}/brand/`)
+    .replace(/(src=['"])\/libs\//g, `$1${origin}/libs/`)
+    .replace(/(url\(['"]?)\/brand\//g, `$1${origin}/brand/`)
+    .replace(/(url\(['"]?)\/libs\//g, `$1${origin}/libs/`);
+
+  // Inject _BRAND_ORIGIN before </head> so the JS fetch path uses the right origin
+  const originTag = `<script>window._BRAND_ORIGIN=${JSON.stringify(origin)};<\\/script>`;
+  patched = patched.replace(/<\/head>/i, `${originTag}</head>`);
+
   console.log(
-    `${LOG} [hiddenIframe] patchLibUrls — pptxgenjs CDN replaced: ${patched !== html}`,
+    `${LOG} [patchLibUrls] pptxgenjs CDN replaced: ${patched !== html}`,
   );
   return patched;
 }
@@ -286,12 +301,17 @@ const DownloadArtifact = ({
 </style>`;
     // Auto-trigger print after resources load (1.2 s gives fonts/images time to load)
     const AUTO_PRINT = `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},1200);});<\/script>`;
-    const printHtml = content
-      .replace('</head>', PRINT_CSS + '</head>')
-      .replace('</body>', AUTO_PRINT + '</body>');
+    // Patch brand asset paths and inject _BRAND_ORIGIN, then inject print CSS + auto-print
+    // Use case-insensitive regex so </HEAD> / </BODY> variants also match
+    const printHtml = patchLibUrls(content)
+      .replace(/<\/head>/i, PRINT_CSS + '</head>')
+      .replace(/<\/body>/i, AUTO_PRINT + '</body>');
     const blob = new Blob([printHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    const opened = window.open(url, '_blank');
+    if (!opened) {
+      console.warn(`${LOG} [printPdf] window.open was blocked — user may need to allow popups`);
+    }
     // Keep the blob URL alive long enough for the new tab to finish loading
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
     flash('pdf');
