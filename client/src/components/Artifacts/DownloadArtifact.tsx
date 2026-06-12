@@ -265,6 +265,38 @@ const DownloadArtifact = ({
     setTimeout(() => setDone(null), 2500);
   };
 
+  /**
+   * Static PDF export: inject landscape print CSS + auto-print script into the
+   * artifact HTML and open it in a new tab. The browser's "Save as PDF" dialog
+   * (triggered automatically after ~1s) renders the full design pixel-perfectly
+   * since it uses the browser engine rather than PptxGenJS coordinate mapping.
+   */
+  const printPdf = () => {
+    if (!content) return;
+    const PRINT_CSS = `<style>
+@media print {
+  @page { size: landscape; margin: 0; }
+  *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+  html, body { width: 100%; height: auto; overflow: visible !important; }
+  .deck { position: relative !important; height: auto !important; overflow: visible !important; }
+  .slide { position: relative !important; inset: auto !important; opacity: 1 !important; transform: none !important; display: block !important; width: 100vw !important; height: 100vh !important; page-break-after: always; break-after: page; }
+  .slide:last-child { page-break-after: avoid; break-after: avoid; }
+  .progress-bar, .slide-counter, .nav-hint, .notes { display: none !important; }
+}
+</style>`;
+    // Auto-trigger print after resources load (1.2 s gives fonts/images time to load)
+    const AUTO_PRINT = `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},1200);});<\/script>`;
+    const printHtml = content
+      .replace('</head>', PRINT_CSS + '</head>')
+      .replace('</body>', AUTO_PRINT + '</body>');
+    const blob = new Blob([printHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Keep the blob URL alive long enough for the new tab to finish loading
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    flash('pdf');
+  };
+
   const downloadHtml = () => {
     if (!content) return;
     const blob = new Blob([content], { type: 'text/plain' });
@@ -320,6 +352,9 @@ const DownloadArtifact = ({
     flash(fmt.ext);
   };
 
+  // Show PDF button only for presentations (which have downloadPptx)
+  const isPresentationArtifact = nativeFormats.some((f) => f.triggerFn === 'downloadPptx');
+
   return (
     <div className="flex items-center gap-1">
       {nativeFormats.map((fmt) => (
@@ -335,6 +370,19 @@ const DownloadArtifact = ({
           {fmt.label}
         </Button>
       ))}
+      {isPresentationArtifact && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs font-medium"
+          onClick={printPdf}
+          aria-label="Export as PDF (opens print dialog)"
+          title="Opens in a new tab — use browser Save as PDF for pixel-perfect output"
+        >
+          {done === 'pdf' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+          PDF
+        </Button>
+      )}
       <Button
         size="sm"
         variant="ghost"

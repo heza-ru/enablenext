@@ -114,8 +114,14 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 All graphics are served from `/brand/` (pre-built into the app). Use them on relevant slides — prefer a brand graphic over a blank colored rectangle whenever content matches a product.
 
 ### Using in HTML slides
-Use `<img>` with explicit size and `object-fit: contain`. Always set `loading="eager"`:
+Use `<img>` with explicit size and `object-fit: contain`. Always set `loading="eager"`.
+**Prefer SVG over PNG** for AI Agent logos — SVGs are vector and render crisply at any size:
 ```html
+<!-- AI Agent logos: use .svg for HTML, .png for PPTX data-brand-image -->
+<img src="/brand/authoring-agent-dark.svg" loading="eager"
+     style="width:100%;height:100%;object-fit:contain;" alt="">
+
+<!-- Product suite composites (no SVG available): use .png -->
 <img src="/brand/product-suite-dark.png" loading="eager"
      style="width:100%;height:100%;object-fit:contain;" alt="">
 ```
@@ -140,15 +146,26 @@ Add `data-brand-image` to a `<section>` to embed the graphic in the PPTX. Option
 | `/brand/product-suite-full-dark.png` | Full product suite with all logos | Architecture / product overview |
 | `/brand/product-suite-light.png` | Full product suite (light bg) | Light-background slides |
 | `/brand/ai-agents-suite-light.png` | AI Agents suite (light) | Light-background slides |
-| `/brand/authoring-agent-dark.png` | Authoring Agent logo | Authoring Agent slides |
-| `/brand/guidance-agent-dark.png` | Guidance Agent logo | Guidance Agent slides |
-| `/brand/insights-agent-dark.png` | Insights Agent logo | Insights Agent slides |
-| `/brand/authoring-agent-box-dark.png` | Authoring Agent logo in box | Dark card insets |
-| `/brand/guidance-agent-box-dark.png` | Guidance Agent logo in box | Dark card insets |
-| `/brand/insights-agent-box-dark.png` | Insights Agent logo in box | Dark card insets |
-| `/brand/authoring-agent-light.png` | Authoring Agent logo (light) | Light-background slides |
-| `/brand/guidance-agent-light.png` | Guidance Agent logo (light) | Light-background slides |
-| `/brand/insights-agent-light.png` | Insights Agent logo (light) | Light-background slides |
+| `/brand/authoring-agent-dark.svg` ✦ | Authoring Agent logo | Authoring Agent slides (HTML) |
+| `/brand/guidance-agent-dark.svg` ✦ | Guidance Agent logo | Guidance Agent slides (HTML) |
+| `/brand/insights-agent-dark.svg` ✦ | Insights Agent logo | Insights Agent slides (HTML) |
+| `/brand/authoring-agent-box-dark.svg` ✦ | Authoring Agent logo in box | Dark card insets (HTML) |
+| `/brand/guidance-agent-box-dark.svg` ✦ | Guidance Agent logo in box | Dark card insets (HTML) |
+| `/brand/insights-agent-box-dark.svg` ✦ | Insights Agent logo in box | Dark card insets (HTML) |
+| `/brand/authoring-agent-light.svg` ✦ | Authoring Agent logo (light) | Light-background slides (HTML) |
+| `/brand/guidance-agent-light.svg` ✦ | Guidance Agent logo (light) | Light-background slides (HTML) |
+| `/brand/insights-agent-light.svg` ✦ | Insights Agent logo (light) | Light-background slides (HTML) |
+| `/brand/authoring-agent-dark.png` | Authoring Agent logo | PPTX data-brand-image only |
+| `/brand/guidance-agent-dark.png` | Guidance Agent logo | PPTX data-brand-image only |
+| `/brand/insights-agent-dark.png` | Insights Agent logo | PPTX data-brand-image only |
+| `/brand/authoring-agent-box-dark.png` | Authoring Agent logo in box | PPTX data-brand-image only |
+| `/brand/guidance-agent-box-dark.png` | Guidance Agent logo in box | PPTX data-brand-image only |
+| `/brand/insights-agent-box-dark.png` | Insights Agent logo in box | PPTX data-brand-image only |
+| `/brand/authoring-agent-light.png` | Authoring Agent logo (light) | PPTX data-brand-image only |
+| `/brand/guidance-agent-light.png` | Guidance Agent logo (light) | PPTX data-brand-image only |
+| `/brand/insights-agent-light.png` | Insights Agent logo (light) | PPTX data-brand-image only |
+
+✦ = SVG (vector) — use these in `<img src="...">` tags for pixel-perfect HTML rendering at any size.
 | `/brand/dap-dark.png` | DAP product logo | DAP-focused slides |
 | `/brand/dap-light.png` | DAP product logo (light) | Light-background slides |
 | `/brand/mirror-dark.png` | Mirror product logo | Mirror slides |
@@ -409,6 +426,29 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 .notes { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 300; background: rgba(8,6,18,0.95); color: rgba(255,255,255,0.72); padding: 1rem 3rem; font-size: 0.8rem; line-height: 1.65; border-top: 2px solid #FF6B18; }
 .notes.visible { display: block; }
 
+/* ── Print / PDF export ─────────────────────────────
+   When the PDF button opens this HTML in a new tab, @media print
+   stacks all slides as individual landscape pages.                */
+@media print {
+  @page { size: landscape; margin: 0; }
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  html, body { width: 100%; height: auto; overflow: visible !important; background: #25223B !important; }
+  .deck { position: relative !important; height: auto !important; overflow: visible !important; }
+  .slide {
+    position: relative !important; inset: auto !important;
+    opacity: 1 !important; transform: none !important; pointer-events: all !important;
+    display: block !important;
+    width: 100vw !important; height: 100vh !important;
+    page-break-after: always; break-after: page;
+  }
+  .slide:last-child { page-break-after: avoid; break-after: avoid; }
+  .progress-bar, .slide-counter, .nav-hint, .notes { display: none !important; }
+}
+
 </style>
 </head>
 <body>
@@ -578,7 +618,10 @@ const SH = 5.625;
 // Using DM Sans means zero font substitution when the PPTX is opened in Google Slides.
 const FONT = 'DM Sans';
 
-// ── Brand image registry (key → base64 data URI, populated lazily)
+// ── Brand image registry
+// Each entry: { data: base64DataURI, nw: naturalPixelWidth, nh: naturalPixelHeight }
+// nw/nh are the image's actual pixel dimensions — required for PptxGenJS sizing.contain
+// to compute the correct crop/letterbox values without distortion.
 var _imgs = {};
 var _IMG_PATHS = {
   'product-suite-dark':      '/brand/product-suite-dark.png',
@@ -609,28 +652,47 @@ function _getOrigin() {
   return '';
 }
 
+// Load one image: fetch → detect natural dimensions → store as { data, nw, nh }.
+function _loadImgEntry(key, blob) {
+  return new Promise(function (res) {
+    var objUrl = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function () {
+      var nw = img.naturalWidth || 0;
+      var nh = img.naturalHeight || 0;
+      URL.revokeObjectURL(objUrl);
+      var fr = new FileReader();
+      fr.onload = function () { _imgs[key] = { data: fr.result, nw: nw, nh: nh }; res(); };
+      fr.onerror = res;
+      fr.readAsDataURL(blob);
+    };
+    img.onerror = function () { URL.revokeObjectURL(objUrl); res(); };
+    img.src = objUrl;
+  });
+}
+
 // Eager preload on page load (for the DownloadArtifact hidden iframe path where it works).
 (function () {
   var origin = _getOrigin();
   if (!origin) return;
-  function loadImg(key) {
-    return fetch(origin + _IMG_PATHS[key]).then(function (r) { return r.blob(); }).then(function (blob) {
-      return new Promise(function (res) {
-        var fr = new FileReader();
-        fr.onload = function () { _imgs[key] = fr.result; res(); };
-        fr.onerror = res;
-        fr.readAsDataURL(blob);
-      });
-    }).catch(function () {});
-  }
-  Object.keys(_IMG_PATHS).forEach(loadImg);
+  Object.keys(_IMG_PATHS).forEach(function (key) {
+    fetch(origin + _IMG_PATHS[key])
+      .then(function (r) { return r.blob(); })
+      .then(function (blob) { return _loadImgEntry(key, blob); })
+      .catch(function () {});
+  });
 })();
 
-// Helper: embed a brand image into a PPTX slide.
+// Helper: embed a brand image into a PPTX slide with correct aspect-ratio contain.
+// PptxGenJS sizing.contain needs the image's actual pixel dimensions as the first
+// argument — using the placement dims instead causes wrong crop calculations.
 function addBrandImg(s, key, x, y, w, h) {
-  if (!key || !_imgs[key]) return;
-  s.addImage({ data: _imgs[key], x: x, y: y, w: w, h: h,
-               sizing: { type: 'contain', w: w, h: h } });
+  var entry = _imgs[key];
+  if (!key || !entry || !entry.data) return;
+  var nw = entry.nw > 0 ? entry.nw : Math.round(w * 96);
+  var nh = entry.nh > 0 ? entry.nh : Math.round(h * 96);
+  s.addImage({ data: entry.data, x: x, y: y, w: w, h: h,
+               sizing: { type: 'contain', w: nw, h: nh } });
 }
 
 // downloadPptx is async because pptx.writeFile() returns a Promise in PptxGenJS v4.
@@ -639,17 +701,13 @@ async function downloadPptx() {
   // Lazily load any images not yet fetched (handles Sandpack cross-origin iframe).
   var origin = _getOrigin();
   if (origin) {
-    var missing = Object.keys(_IMG_PATHS).filter(function (k) { return !_imgs[k]; });
+    var missing = Object.keys(_IMG_PATHS).filter(function (k) { return !_imgs[k] || !_imgs[k].data; });
     if (missing.length) {
       var proms = missing.map(function (key) {
-        return fetch(origin + _IMG_PATHS[key]).then(function (r) { return r.blob(); }).then(function (blob) {
-          return new Promise(function (res) {
-            var fr = new FileReader();
-            fr.onload = function () { _imgs[key] = fr.result; res(); };
-            fr.onerror = res;
-            fr.readAsDataURL(blob);
-          });
-        }).catch(function () {});
+        return fetch(origin + _IMG_PATHS[key])
+          .then(function (r) { return r.blob(); })
+          .then(function (blob) { return _loadImgEntry(key, blob); })
+          .catch(function () {});
       });
       // Wait up to 4 s; proceed even if some images don't load.
       await Promise.race([Promise.allSettled(proms), new Promise(function (r) { setTimeout(r, 4000); })]);
@@ -707,7 +765,7 @@ async function downloadPptx() {
         s.addText('0' + (i + 1), { x:.55, y:iy, w:.36, h:.36, fontSize:7, color:C.orange, fontFace:FONT, bold:true, align:'center', valign:'middle', margin:0 });
         s.addText(item, { x:1.08, y:iy, w:8.7, h:itemH - 0.1, fontSize:15, color:C.white, fontFace:FONT, valign:'middle', margin:0 });
         if (i < maxItems - 1)
-          s.addShape(pptx.ShapeType.line, { x:.55, y:iy + itemH - 0.06, w:9.2, h:0, line:{ color:'2a2840', width:.5 } });
+          s.addShape(pptx.ShapeType.rect, { x:.55, y:iy + itemH - 0.06, w:9.2, h:0.008, fill:{ color:'2a2840' } });
       });
 
     } else if (type === 'section') {
@@ -728,10 +786,10 @@ async function downloadPptx() {
       const bSpacing = Math.min(0.95, bAreaH / maxB);
       bullets.slice(0, maxB).forEach((b, i) => {
         const by = 1.55 + i * bSpacing;
-        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:by + .05, w:.1, h:.1, fill:{ color: C.orange } });
-        s.addText(b, { x:.8, y:by, w:9.0, h:bSpacing - 0.15, fontSize:14, color:C.white, fontFace:FONT, wrap:true, margin:0 });
+        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:by + .06, w:.13, h:.13, fill:{ color: C.orange } });
+        s.addText(b, { x:.82, y:by, w:8.95, h:bSpacing - 0.15, fontSize:14, color:C.white, fontFace:FONT, wrap:true, margin:0 });
         if (i < maxB - 1)
-          s.addShape(pptx.ShapeType.line, { x:.55, y:by + bSpacing - 0.1, w:9.2, h:0, line:{ color:'2a2840', width:.4 } });
+          s.addShape(pptx.ShapeType.rect, { x:.55, y:by + bSpacing - 0.1, w:9.2, h:0.008, fill:{ color:'2a2840' } });
       });
       if (biKey) addBrandImg(s, biKey, biX, biY, biW, biH);
       const notesEl = slide.querySelector('.notes');
@@ -747,15 +805,15 @@ async function downloadPptx() {
       const lSpacing = Math.min(0.78, lAreaH / maxLB);
       lBullets.slice(0, maxLB).forEach((b, i) => {
         const by = 1.45 + i * lSpacing;
-        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:by + .05, w:.1, h:.1, fill:{ color: C.orange } });
-        s.addText(b, { x:.8, y:by, w:4.6, h:lSpacing - 0.08, fontSize:13, color:C.white, fontFace:FONT, wrap:true, margin:0 });
+        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:by + .06, w:.13, h:.13, fill:{ color: C.orange } });
+        s.addText(b, { x:.82, y:by, w:4.55, h:lSpacing - 0.08, fontSize:13, color:C.white, fontFace:FONT, wrap:true, margin:0 });
       });
       // Right panel: brand image if available, otherwise stat cards
-      if (biKey && _imgs[biKey]) {
-        s.addShape(pptx.ShapeType.rect, { x:5.6, y:1.3, w:3.9, h:3.85, fill:{ color: C.ink }, rectRadius:.08 });
+      if (biKey && _imgs[biKey] && _imgs[biKey].data) {
+        s.addShape(pptx.ShapeType.roundRect, { x:5.6, y:1.3, w:3.9, h:3.85, fill:{ color: C.ink }, rectRadius:.08 });
         addBrandImg(s, biKey, biX, biY, biW, biH);
       } else {
-        s.addShape(pptx.ShapeType.rect, { x:5.6, y:1.3, w:3.9, h:3.85, fill:{ color: C.ink }, rectRadius:.08 });
+        s.addShape(pptx.ShapeType.roundRect, { x:5.6, y:1.3, w:3.9, h:3.85, fill:{ color: C.ink }, rectRadius:.08 });
         const rStats = JSON.parse(slide.dataset.rightStats || '[]');
         const maxRS = Math.min(rStats.length, 2);
         rStats.slice(0, maxRS).forEach((st, i) => {
@@ -796,7 +854,7 @@ async function downloadPptx() {
       s.addShape(pptx.ShapeType.rect, { x:0, y:SH - .05,   w:SW, h:.05, fill:{ color: C.orange } });
       // Brand graphic as subtle background watermark (large, low opacity not directly
       // available in PptxGenJS for images; embed at reduced size in corner instead)
-      if (biKey && _imgs[biKey])
+      if (biKey && _imgs[biKey] && _imgs[biKey].data)
         addBrandImg(s, biKey, 5.8, 1.8, 3.8, 3.8);
       s.addText(slide.dataset.title || 'Thank you', { x:.5, y:1.2, w:9.3, h:2.1, fontSize:40, color:C.white, fontFace:FONT, bold:false, align:'center', margin:0 });
       s.addShape(pptx.ShapeType.rect, { x:4.66, y:3.55, w:.42, h:.05, fill:{ color: C.orange } });
@@ -1001,7 +1059,7 @@ if (type === 'cover') {
   s.addShape(pptx.ShapeType.rect, { x:0,   y:0, w:5.8, h:SH, fill:{ color:'872345' } });
   s.addShape(pptx.ShapeType.rect, { x:5.8, y:0, w:4.2, h:SH, fill:{ color:'FF6B18' } });
   // Brand image on the orange right panel
-  if (biKey && _imgs[biKey]) addBrandImg(s, biKey, biX, biY, biW, biH);
+  if (biKey && _imgs[biKey] && _imgs[biKey].data) addBrandImg(s, biKey, biX, biY, biW, biH);
   s.addText((slide.dataset.tagline||'').toUpperCase(), { x:.5,y:.55,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:3,transparency:55,margin:0});
   s.addText(slide.dataset.title||'', { x:.5,y:2.9,w:5,h:1.8,fontSize:24,color:'FFFFFF',fontFace:FONT,bold:false,valign:'top',wrap:true,margin:0});
   s.addText(slide.dataset.docType||'', { x:.5,y:4.85,w:4.8,h:.42,fontSize:11,color:'FFFFFF',fontFace:FONT,transparency:38,margin:0});
@@ -1022,7 +1080,7 @@ if (type === 'cover') {
   s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color:'872345' } });
   s.addText(slide.dataset.title||'', { x:.4,y:.18,w:9.2,h:.65,fontSize:18,color:'872345',fontFace:FONT,bold:false,margin:0});
   s.addText('Whatfix', { x:8.5,y:.22,w:1.3,h:.35,fontSize:8,color:'872345',fontFace:FONT,bold:true,align:'right',margin:0});
-  s.addShape(pptx.ShapeType.line, { x:.4,y:1.0,w:9.2,h:0,line:{ color:'E5E3DC',width:.5 } });
+  s.addShape(pptx.ShapeType.rect, { x:.4,y:1.0,w:9.2,h:0.008,fill:{ color:'E5E3DC' } });
   const domTable = slide.querySelector('table');
   if (domTable) {
     const headers = [...domTable.querySelectorAll('thead th')].map(th => th.textContent.trim());

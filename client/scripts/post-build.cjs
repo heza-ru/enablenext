@@ -40,6 +40,19 @@ async function postBuild() {
     await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/PNG/Guidance_Agent_color.png'),   'dist/brand/guidance-agent-light.png');
     await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/PNG/Insights_Agent_color.png'),   'dist/brand/insights-agent-light.png');
 
+    // AI Agent logos — SVG variants (vector, crisp at any scale, used in HTML slides)
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Dark Mode/SVG/Authoring_Agent_color.svg'),                   'dist/brand/authoring-agent-dark.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Dark Mode/SVG/Authoring_Agent_color_box_darkBackground.svg'),'dist/brand/authoring-agent-box-dark.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Dark Mode/SVG/Guidance_Agent_color.svg'),                    'dist/brand/guidance-agent-dark.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Dark Mode/SVG/Guidance_Agent_color_box_darkBackground.svg'), 'dist/brand/guidance-agent-box-dark.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Dark Mode/SVG/Insights_Agent_color.svg'),                    'dist/brand/insights-agent-dark.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Dark Mode/SVG/Insights_Agent_color_box_darkBackground.svg'), 'dist/brand/insights-agent-box-dark.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/SVG/Authoring_Agent_color.svg'),   'dist/brand/authoring-agent-light.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/SVG/Guidance_Agent_color.svg'),    'dist/brand/guidance-agent-light.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/SVG/Insights_Agent_color.svg'),    'dist/brand/insights-agent-light.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/SVG/Guidance_Agent_color_box.svg'),'dist/brand/guidance-agent-box-light.svg');
+    await fs.copy(path.join(gfx, 'AI Agents Logos/Light Mode/SVG/Insights_Agent_color_box.svg'),'dist/brand/insights-agent-box-light.svg');
+
     // Product logos
     await fs.copy(path.join(gfx, 'Product Logos/DAP/Dark Mode/DAP.png'),                      'dist/brand/dap-dark.png');
     await fs.copy(path.join(gfx, 'Product Logos/DAP/Light Mode/DAP.png'),                     'dist/brand/dap-light.png');
