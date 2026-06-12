@@ -31,22 +31,26 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 - **NO EMOJIS** — ever. Use inline SVG icons or Unicode symbols (→ ● ◆ ▸) only
 - **ALL colors from Whatfix palette only** — zero invented hex values
 - **Layout must look like PowerPoint slides** — fixed 16:9 viewport, `position:absolute` full-bleed, not a scrolling webpage
-- **Load PptxGenJS from cdnjs only**: `<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>` — this is the only permitted CDN; never use jsdelivr, unpkg, or a local `/libs/` path
+- **Load PptxGenJS from cdnjs only**: `<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/4.0.1/pptxgen.bundle.js"></script>` — use **v4.0.1 exactly**. Never use 3.x, jsdelivr, unpkg, or a local `/libs/` path (the local `/libs/pptxgen.bundle.js` is the fallback and is also v4.0.1)
+- **PptxGenJS v4 has no `addFont()` method** — do NOT call `pptx.addFont()` (removed in v4); font embedding is not supported
+- **`pptx.writeFile()` is async in v4** — `downloadPptx()` must be an `async` function and must `await pptx.writeFile(...)`
 - **PptxGenJS hex colors NEVER use `#` prefix** — `'FF6B18'` not `'#FF6B18'` (causes file corruption)
-- **Never encode opacity in hex** — use the `opacity` property instead of 8-char hex strings
+- **Never encode opacity in hex** — use the `transparency` property instead of 8-char hex strings
 - **Never reuse option objects** across PptxGenJS calls — it mutates them in-place
-- **PPTX slide dimensions: `SW = 10"` wide, `SH = 5.625"` tall** (LAYOUT_16x9). Never use `w:'100%'` or `h:'100%'` — always use explicit `w:SW` (`10`) and `h:SH` (`5.625`) for full-bleed shapes. Using `'100%'` causes layout inconsistencies in Google Slides.
-- **Brand font is Aeonik** (loaded via `@font-face` from `/libs/fonts/`) with DM Sans as PPTX fallback when embedding fails
+- **PPTX slide dimensions: `SW = 10"` wide, `SH = 5.625"` tall** (LAYOUT_16x9). Never use `w:'100%'` or `h:'100%'` — always use explicit `w:SW` (`10`) and `h:SH` (`5.625`) for full-bleed shapes
+- **Brand font is Aeonik** (loaded via `@font-face` from `/libs/fonts/`) with DM Sans as PPTX font (DM Sans is natively available in Google Slides — no embedding needed)
 - Google Fonts `@import` is allowed
 
 ## Content Rules (apply before generating any slide)
 
 1. **Action titles** — every slide title is a complete sentence stating the takeaway, not a topic label. "Onboarding time drops 40% in week one" not "Onboarding Results". Ghost deck test: reading only the titles in sequence must tell the full story.
 2. **One idea per slide** — if a slide needs two conclusions, split it into two slides
-3. **Max 3–4 bullets per slide, max 40 words of body text** — if the audience is reading, they are not listening
-4. **Top-down structure** — key message first, supporting evidence below. Never bury the conclusion at the end
-5. **Varied layouts** — never repeat the same layout on consecutive slides. Alternate between: bullets, two-column, stat callout, quote, chart, image+text
-6. **Every content slide needs a visual element** — a brand graphic, stat callout, icon row, or chart accent. No text-only content slides
+3. **Hard limits for content: max 3 bullets, max 8 words per bullet** — if you can't say it in 8 words, you have two ideas. No paragraphs, no sentences, only tight phrases
+4. **Minimum font sizes (never go below these):** PPTX headline 22pt, bullets 15pt, captions 9pt. In HTML: headline `clamp(1.4rem,2.6vw,2.2rem)`, bullets `clamp(0.9rem,1.6vw,1.1rem)`
+5. **Top-down structure** — key message first, supporting evidence below. Never bury the conclusion at the end
+6. **Varied layouts** — never repeat the same layout on consecutive slides. Alternate between: bullets, two-column, stat callout, quote, chart, image+text
+7. **Every content slide needs a visual anchor** — a brand graphic, stat callout, or chart. No text-only slides. If you have no data visual, use a brand graphic in the right column
+8. **Generous whitespace** — better to have 3 bullets with breathing room than 5 cramped ones. Slide titles should never wrap to 3 lines
 
 ## Design Rules
 
@@ -171,7 +175,7 @@ Replace ALL_CAPS placeholders. The `data-*` attributes on each `<section>` drive
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PRESENTATION_TITLE</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/4.0.1/pptxgen.bundle.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
 @font-face { font-family:'Aeonik'; src:url('/libs/fonts/Aeonik-Light.ttf') format('truetype'); font-weight:300; font-style:normal; font-display:swap; }
@@ -566,87 +570,93 @@ const C = {
   blue:    'AED2F3',
 };
 
-// Slide canvas: LAYOUT_16x9 = 10" × 5.625". NEVER use w:'100%' or h:'100%' —
-// use SW and SH for all full-bleed shapes to ensure pixel-perfect Google Slides output.
-const SW = 10;      // slide width in inches
-const SH = 5.625;   // slide height in inches
+// Slide canvas: LAYOUT_16x9 = 10" × 5.625"
+const SW = 10;
+const SH = 5.625;
 
-// Primary PPTX font. 'DM Sans' is used because Google Slides ignores embedded
-// custom fonts from PPTX files and substitutes Arial (wider → text overflows).
-// DM Sans is natively available in Google Slides as a Google Font, so layout is
-// pixel-perfect with no substitution. It also matches the HTML preview font stack.
-// Aeonik is still preloaded so desktop PowerPoint users get the brand font.
+// DM Sans: natively available in Google Slides (Google Font) — no embedding needed.
+// Using DM Sans means zero font substitution when the PPTX is opened in Google Slides.
 const FONT = 'DM Sans';
 
-// ── Preload Aeonik font (used in desktop PowerPoint; ignored by Google Slides)
-var _aeonik = { regular: null, medium: null, bold: null, light: null };
-(function () {
-  var origin = window.location.origin !== 'null' ? window.location.origin : '';
-  if (!origin) { try { origin = window.parent.location.origin; } catch (e) {} }
-  if (!origin) return;
-  function loadFont(url, key) {
-    fetch(url).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
-      var bytes = new Uint8Array(buf), result = '', chunk = 8192;
-      for (var i = 0; i < bytes.length; i += chunk)
-        result += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-      _aeonik[key] = btoa(result);
-    }).catch(function (e) { console.warn('[pptx] font preload failed (' + key + '):', e); });
-  }
-  loadFont(origin + '/libs/fonts/Aeonik-Regular.ttf', 'regular');
-  loadFont(origin + '/libs/fonts/Aeonik-Medium.ttf',  'medium');
-  loadFont(origin + '/libs/fonts/Aeonik-Bold.ttf',    'bold');
-  loadFont(origin + '/libs/fonts/Aeonik-Light.ttf',   'light');
-})();
-
-// ── Preload brand images (embedded into PPTX via slide.addImage)
-// Maps data-brand-image key → base64 data URI
+// ── Brand image registry (key → base64 data URI, populated lazily)
 var _imgs = {};
+var _IMG_PATHS = {
+  'product-suite-dark':      '/brand/product-suite-dark.png',
+  'product-suite-full-dark': '/brand/product-suite-full-dark.png',
+  'product-suite-light':     '/brand/product-suite-light.png',
+  'ai-agents-suite-dark':    '/brand/ai-agents-suite-dark.png',
+  'ai-agents-suite-light':   '/brand/ai-agents-suite-light.png',
+  'screensense-suite-dark':  '/brand/screensense-suite-dark.png',
+  'authoring-agent-dark':    '/brand/authoring-agent-dark.png',
+  'authoring-agent-box-dark':'/brand/authoring-agent-box-dark.png',
+  'guidance-agent-dark':     '/brand/guidance-agent-dark.png',
+  'guidance-agent-box-dark': '/brand/guidance-agent-box-dark.png',
+  'insights-agent-dark':     '/brand/insights-agent-dark.png',
+  'insights-agent-box-dark': '/brand/insights-agent-box-dark.png',
+  'dap-dark':                '/brand/dap-dark.png',
+  'dap-light':               '/brand/dap-light.png',
+  'mirror-dark':             '/brand/mirror-dark.png',
+  'screensense-dark':        '/brand/screensense-dark.png',
+  'product-analytics-dark':  '/brand/product-analytics-dark.png',
+};
+
+// Detect the app origin — works in both the DownloadArtifact hidden iframe (same-origin srcdoc)
+// and the Sandpack live iframe (tries parent.location; falls back to postMessage-provided origin).
+function _getOrigin() {
+  var o = window.location.origin;
+  if (o && o !== 'null') return o;
+  try { return window.parent.location.origin; } catch (e) {}
+  return '';
+}
+
+// Eager preload on page load (for the DownloadArtifact hidden iframe path where it works).
 (function () {
-  var origin = window.location.origin !== 'null' ? window.location.origin : '';
-  if (!origin) { try { origin = window.parent.location.origin; } catch (e) {} }
+  var origin = _getOrigin();
   if (!origin) return;
-  var paths = {
-    'product-suite-dark':     '/brand/product-suite-dark.png',
-    'product-suite-full-dark':'/brand/product-suite-full-dark.png',
-    'product-suite-light':    '/brand/product-suite-light.png',
-    'ai-agents-suite-dark':   '/brand/ai-agents-suite-dark.png',
-    'ai-agents-suite-light':  '/brand/ai-agents-suite-light.png',
-    'screensense-suite-dark': '/brand/screensense-suite-dark.png',
-    'authoring-agent-dark':   '/brand/authoring-agent-dark.png',
-    'authoring-agent-box-dark':'/brand/authoring-agent-box-dark.png',
-    'guidance-agent-dark':    '/brand/guidance-agent-dark.png',
-    'guidance-agent-box-dark':'/brand/guidance-agent-box-dark.png',
-    'insights-agent-dark':    '/brand/insights-agent-dark.png',
-    'insights-agent-box-dark':'/brand/insights-agent-box-dark.png',
-    'dap-dark':               '/brand/dap-dark.png',
-    'dap-light':              '/brand/dap-light.png',
-    'mirror-dark':            '/brand/mirror-dark.png',
-    'screensense-dark':       '/brand/screensense-dark.png',
-    'product-analytics-dark': '/brand/product-analytics-dark.png',
-  };
-  Object.keys(paths).forEach(function (key) {
-    fetch(origin + paths[key]).then(function (r) { return r.blob(); }).then(function (blob) {
-      var fr = new FileReader();
-      fr.onload = function () { _imgs[key] = fr.result; };
-      fr.readAsDataURL(blob);
+  function loadImg(key) {
+    return fetch(origin + _IMG_PATHS[key]).then(function (r) { return r.blob(); }).then(function (blob) {
+      return new Promise(function (res) {
+        var fr = new FileReader();
+        fr.onload = function () { _imgs[key] = fr.result; res(); };
+        fr.onerror = res;
+        fr.readAsDataURL(blob);
+      });
     }).catch(function () {});
-  });
+  }
+  Object.keys(_IMG_PATHS).forEach(loadImg);
 })();
 
-// Helper: add a brand image to a PPTX slide if the image has been preloaded
+// Helper: embed a brand image into a PPTX slide.
 function addBrandImg(s, key, x, y, w, h) {
   if (!key || !_imgs[key]) return;
   s.addImage({ data: _imgs[key], x: x, y: y, w: w, h: h,
                sizing: { type: 'contain', w: w, h: h } });
 }
 
-function downloadPptx() {
+// downloadPptx is async because pptx.writeFile() returns a Promise in PptxGenJS v4.
+// NOTE: pptx.addFont() was removed in PptxGenJS v4 — do not add it back.
+async function downloadPptx() {
+  // Lazily load any images not yet fetched (handles Sandpack cross-origin iframe).
+  var origin = _getOrigin();
+  if (origin) {
+    var missing = Object.keys(_IMG_PATHS).filter(function (k) { return !_imgs[k]; });
+    if (missing.length) {
+      var proms = missing.map(function (key) {
+        return fetch(origin + _IMG_PATHS[key]).then(function (r) { return r.blob(); }).then(function (blob) {
+          return new Promise(function (res) {
+            var fr = new FileReader();
+            fr.onload = function () { _imgs[key] = fr.result; res(); };
+            fr.onerror = res;
+            fr.readAsDataURL(blob);
+          });
+        }).catch(function () {});
+      });
+      // Wait up to 4 s; proceed even if some images don't load.
+      await Promise.race([Promise.allSettled(proms), new Promise(function (r) { setTimeout(r, 4000); })]);
+    }
+  }
+
   const pptx = new PptxGenJS();
-  // Embed Aeonik font. Register only the medium/regular weight as 'Aeonik' —
-  // registering multiple weights under the same name causes the last one to overwrite.
-  // Bold text uses PptxGenJS bold:true which synthesizes bold from the embedded face.
-  if (_aeonik.medium)  pptx.addFont({ name: 'Aeonik', data: _aeonik.medium });
-  else if (_aeonik.regular) pptx.addFont({ name: 'Aeonik', data: _aeonik.regular });
   pptx.layout = 'LAYOUT_16x9';
   pptx.title  = document.title;
   pptx.author = 'Whatfix';
@@ -800,10 +810,12 @@ function downloadPptx() {
   });
 
   const slug = (document.title || 'presentation').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  pptx.writeFile({ fileName: slug + '.pptx' });
+  await pptx.writeFile({ fileName: slug + '.pptx' });
 }
 
-// Artifact-panel download bridge
+// Artifact-panel download bridge — intercepts the blob URL click PptxGenJS emits
+// and relays the file data to the parent frame as a base64 message.
+// downloadPptx() is async, so the bridge awaits the returned Promise before cleanup.
 window.addEventListener('message', function(e) {
   if (!e.data || e.data.type !== 'artifact-download-request') return;
   if (typeof window[e.data.fn] !== 'function') return;
@@ -812,19 +824,20 @@ window.addEventListener('message', function(e) {
   var origCreate = URL.createObjectURL.bind(URL);
   URL.createObjectURL = function(b) { var u = origCreate(b); if (b instanceof Blob) blobs.set(u, b); return u; };
   var origClick = HTMLElement.prototype.click;
+  function restore() { URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; }
   HTMLElement.prototype.click = function() {
     if (this.tagName === 'A' && this.download && this.href && this.href.indexOf('blob:') === 0) {
       var blob = blobs.get(this.href);
       if (blob) {
         var fn = this.download; var mime = blob.type || 'application/octet-stream';
         var r = new FileReader();
-        r.onload = function() { src.postMessage({ type:'artifact-download', filename:fn, data:r.result.split(',')[1], mimeType:mime }, '*'); URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; };
+        r.onload = function() { src.postMessage({ type:'artifact-download', filename:fn, data:r.result.split(',')[1], mimeType:mime }, '*'); restore(); };
         r.readAsDataURL(blob); return;
       }
     }
     origClick.call(this);
   };
-  try { window[e.data.fn](); } catch(err) { URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; }
+  Promise.resolve(window[e.data.fn]()).catch(function(err) { console.error('[pptx bridge] error:', err); restore(); });
 });
 </script>
 </body>
