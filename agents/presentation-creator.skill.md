@@ -35,6 +35,8 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 - **PptxGenJS hex colors NEVER use `#` prefix** — `'FF6B18'` not `'#FF6B18'` (causes file corruption)
 - **Never encode opacity in hex** — use the `opacity` property instead of 8-char hex strings
 - **Never reuse option objects** across PptxGenJS calls — it mutates them in-place
+- **PPTX slide dimensions: `SW = 10"` wide, `SH = 5.625"` tall** (LAYOUT_16x9). Never use `w:'100%'` or `h:'100%'` — always use explicit `w:SW` (`10`) and `h:SH` (`5.625`) for full-bleed shapes. Using `'100%'` causes layout inconsistencies in Google Slides.
+- **Brand font is Aeonik** (loaded via `@font-face` from `/libs/fonts/`) with DM Sans as PPTX fallback when embedding fails
 - Google Fonts `@import` is allowed
 
 ## Content Rules (apply before generating any slide)
@@ -44,7 +46,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 3. **Max 3–4 bullets per slide, max 40 words of body text** — if the audience is reading, they are not listening
 4. **Top-down structure** — key message first, supporting evidence below. Never bury the conclusion at the end
 5. **Varied layouts** — never repeat the same layout on consecutive slides. Alternate between: bullets, two-column, stat callout, quote, chart, image+text
-6. **Every content slide needs a visual element** — a shape, stat callout, icon row, or chart accent. No text-only content slides
+6. **Every content slide needs a visual element** — a brand graphic, stat callout, icon row, or chart accent. No text-only content slides
 
 ## Design Rules
 
@@ -52,7 +54,8 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 ```
 #25223B  Ink 700    — dark slide backgrounds, section dividers
 #35324A  Ink        — card/surface backgrounds on dark slides
-#FF6B18  Orange     — headlines, stat numbers, accent bars, CTAs
+#FF6B18  Orange     — stat numbers, accent bars, CTAs, headline accent
+#F55800  Orange 700 — hover/pressed CTAs
 #8A8A9C  Ink 300    — muted text, captions, metadata
 #872345  Crimson    — playbook cover, table headers
 #AED2F3  Bright Blue — data / chart accent
@@ -61,30 +64,36 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 #FFFFFF  White      — text on dark, light slide background
 ```
 
+**Orange usage rules:**
+- Use for: stat numbers, accent bars, CTA buttons, one key word in a headline
+- Never use as full slide background or body paragraph color
+
 ### Typography
-- Slide title (action title): `clamp(1.6rem, 3vw, 2.4rem)` bold — left-aligned except on title/closing slides
-- Body text: `clamp(0.9rem, 1.6vw, 1.1rem)` regular
-- Stat callouts / big numbers: `clamp(3.5rem, 8vw, 6rem)` bold, Orange
+- **Primary font: Aeonik** — load via `@font-face` from `/libs/fonts/Aeonik-Medium.ttf` (weight 500), `Aeonik-Regular.ttf` (400), `Aeonik-Bold.ttf` (700), `Aeonik-Light.ttf` (300)
+- **Fallback stack:** `'Aeonik', 'DM Sans', -apple-system, sans-serif`
+- Slide title: `clamp(1.6rem, 3vw, 2.4rem)` medium (500) — sentence case always
+- Body text: `clamp(0.9rem, 1.6vw, 1.1rem)` regular (400)
+- Stat callouts: `clamp(3.5rem, 8vw, 6rem)` bold (700), Orange
 - Captions / metadata: `0.7rem` Ink 300
-- **No accent lines under titles** — use whitespace or a background color change instead (accent lines are the hallmark of AI-generated slides)
+- **No accent lines under titles** — use whitespace, background color, or brand graphics instead
 
 ### Dark / Light Sandwich
 - Title slide: dark (Ink 700)
 - Section dividers: dark (Ink 700) with Orange right panel
-- Content slides: dark (Ink 700) — use the `#35324A` card background for contrast blocks
-- Stat slides: dark (Ink 35324A) with Orange numbers
+- Content slides: dark (Ink 700) — use `#35324A` card backgrounds for contrast blocks
+- Stat slides: dark (#35324A) with Orange numbers
 - Closing slide: dark (Ink 700)
 - Table / playbook data slides: white (`#FFFFFF`) with Crimson headers
 
 ### Layout Variety (pick appropriate type per slide)
 - **`content`** — headline + 3–4 short bullets with left-edge Orange dot
-- **`two-col`** — headline spans full width; below: left column text/bullets, right column visual (stat, icon row, or chart bar)
+- **`two-col`** — headline spans full width; left column text/bullets, right column brand graphic or stat card
 - **`stat`** — 2–3 large KPI numbers centered, each with a one-line label
 - **`quote`** — large quotation mark, italic blockquote, cite attribution
-- **`split`** — full-bleed left panel (dark) with text, right panel (Orange or Crimson) with accent visual
+- **`split`** — full-bleed left panel (dark) with text, right panel (Orange or Crimson) with brand visual
 - **`chart`** — bar chart with value labels, built from inline HTML bars
 - **`agenda`** — numbered list with counter bubbles
-- **`section`** — gradient banner, section number, section title centered
+- **`section`** — two-panel layout: left dark with text, right Orange
 - **`closing`** — dark, centered, CTA button
 
 ## Choosing the Right Mode
@@ -98,13 +107,26 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 
 ## Brand Graphics
 
-Official Whatfix product graphics are hosted at `/brand/` and available to every slide. Use them instead of placeholder shapes whenever the content is about a specific Whatfix product.
+All graphics are served from `/brand/` (pre-built into the app). Use them on relevant slides — prefer a brand graphic over a blank colored rectangle whenever content matches a product.
 
-Use `<img>` in the HTML slide. Always set an explicit size and use `object-fit: contain`.
+### Using in HTML slides
+Use `<img>` with explicit size and `object-fit: contain`. Always set `loading="eager"`:
+```html
+<img src="/brand/product-suite-dark.png" loading="eager"
+     style="width:100%;height:100%;object-fit:contain;" alt="">
+```
+
+### Using in PPTX (data-brand-image attribute)
+Add `data-brand-image` to a `<section>` to embed the graphic in the PPTX. Optionally control position/size with `data-bi-x`, `data-bi-y`, `data-bi-w`, `data-bi-h` (all in inches). If omitted, sensible per-type defaults apply.
 
 ```html
-<img src="/brand/product-suite-dark.png" style="width:100%;height:100%;object-fit:contain;" alt="">
+<section class="slide two-col" data-type="two-col"
+  data-brand-image="authoring-agent-dark"
+  data-bi-x="5.8" data-bi-y="1.3" data-bi-w="3.7" data-bi-h="3.7"
+  ...>
 ```
+
+### Available Files
 
 | File | Contents | Use on |
 |------|----------|--------|
@@ -113,12 +135,16 @@ Use `<img>` in the HTML slide. Always set an explicit size and use `object-fit: 
 | `/brand/screensense-suite-dark.png` | Product suite — ScreenSense highlight | ScreenSense slides |
 | `/brand/product-suite-full-dark.png` | Full product suite with all logos | Architecture / product overview |
 | `/brand/product-suite-light.png` | Full product suite (light bg) | Light-background slides |
+| `/brand/ai-agents-suite-light.png` | AI Agents suite (light) | Light-background slides |
 | `/brand/authoring-agent-dark.png` | Authoring Agent logo | Authoring Agent slides |
 | `/brand/guidance-agent-dark.png` | Guidance Agent logo | Guidance Agent slides |
 | `/brand/insights-agent-dark.png` | Insights Agent logo | Insights Agent slides |
 | `/brand/authoring-agent-box-dark.png` | Authoring Agent logo in box | Dark card insets |
 | `/brand/guidance-agent-box-dark.png` | Guidance Agent logo in box | Dark card insets |
 | `/brand/insights-agent-box-dark.png` | Insights Agent logo in box | Dark card insets |
+| `/brand/authoring-agent-light.png` | Authoring Agent logo (light) | Light-background slides |
+| `/brand/guidance-agent-light.png` | Guidance Agent logo (light) | Light-background slides |
+| `/brand/insights-agent-light.png` | Insights Agent logo (light) | Light-background slides |
 | `/brand/dap-dark.png` | DAP product logo | DAP-focused slides |
 | `/brand/dap-light.png` | DAP product logo (light) | Light-background slides |
 | `/brand/mirror-dark.png` | Mirror product logo | Mirror slides |
@@ -128,7 +154,9 @@ Use `<img>` in the HTML slide. Always set an explicit size and use `object-fit: 
 **Rules:**
 - Use dark variants on dark slides (default), light variants on white/gray slides
 - Never stretch or crop brand graphics — always `object-fit: contain`
-- Prefer a product graphic over a blank colored rectangle whenever the slide topic matches a product
+- For `title` and `closing` slides, add `data-brand-image="product-suite-dark"` unless the content is product-specific
+- For product-specific slides (DAP, ScreenSense, Mirror, etc.), use the matching product logo
+- For AI Agent slides, use the matching agent logo or `ai-agents-suite-dark`
 
 ---
 
@@ -146,9 +174,13 @@ Replace ALL_CAPS placeholders. The `data-*` attributes on each `<section>` drive
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
+@font-face { font-family:'Aeonik'; src:url('/libs/fonts/Aeonik-Light.ttf') format('truetype'); font-weight:300; font-style:normal; font-display:swap; }
+@font-face { font-family:'Aeonik'; src:url('/libs/fonts/Aeonik-Regular.ttf') format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:'Aeonik'; src:url('/libs/fonts/Aeonik-Medium.ttf') format('truetype'); font-weight:500; font-style:normal; font-display:swap; }
+@font-face { font-family:'Aeonik'; src:url('/libs/fonts/Aeonik-Bold.ttf') format('truetype'); font-weight:700; font-style:normal; font-display:swap; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; font-family: 'DM Sans', sans-serif; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; font-family: 'Aeonik', 'DM Sans', sans-serif; }
 
 /* ── Deck ─────────────────────────────────────────── */
 .deck { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
@@ -166,29 +198,41 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 
 /* ── TITLE ───────────────────────────────────────── */
 .slide.title {
-  display: flex; flex-direction: column;
-  justify-content: flex-end;
+  display: flex; flex-direction: column; justify-content: flex-end;
   padding: clamp(2.5rem,6vw,5rem) clamp(2.5rem,6vw,5.5rem) clamp(3rem,7vh,5rem);
   background: linear-gradient(150deg, #25223B 0%, #2e2b42 60%, #35324A 100%);
+  overflow: hidden;
 }
+.slide.title .brand-graphic {
+  position: absolute; top: 0; right: 0; width: 42%; height: 80%;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: clamp(1.5rem,4vh,3.5rem); pointer-events: none;
+}
+.slide.title .brand-graphic img { width: 100%; height: 100%; object-fit: contain; opacity: 0.9; }
 .slide.title .eyebrow {
-  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.16em;
-  text-transform: uppercase; color: #FF6B18; margin-bottom: 1rem;
+  position: relative; z-index: 1;
+  font-size: 0.65rem; font-weight: 500; letter-spacing: 0.16em;
+  text-transform: uppercase; color: #FF6B18; margin-bottom: 0.85rem;
 }
 .slide.title h1 {
-  font-size: clamp(2.4rem,5vw,4.2rem); font-weight: 700;
-  color: #fff; line-height: 1.1; max-width: 15ch; margin-bottom: 1rem;
+  position: relative; z-index: 1;
+  font-size: clamp(2.2rem,4.5vw,3.8rem); font-weight: 500;
+  color: #fff; line-height: 1.12; max-width: 14ch; margin-bottom: 1rem;
+  letter-spacing: -0.02em;
 }
 .slide.title .title-bar {
-  width: 48px; height: 4px; background: #FF6B18; border-radius: 2px; margin-bottom: 1.2rem;
+  width: 40px; height: 3px; background: #FF6B18; border-radius: 2px;
+  margin-bottom: 1rem; position: relative; z-index: 1;
 }
 .slide.title .subtitle {
-  font-size: clamp(0.95rem,1.6vw,1.15rem); font-weight: 300;
-  color: rgba(255,255,255,0.5); max-width: 44ch; line-height: 1.6;
+  position: relative; z-index: 1;
+  font-size: clamp(0.9rem,1.5vw,1.1rem); font-weight: 300;
+  color: rgba(255,255,255,0.5); max-width: 40ch; line-height: 1.65;
 }
 .slide.title .meta {
   position: absolute; bottom: clamp(1.5rem,4vh,3rem);
-  right: clamp(2rem,5vw,5rem); font-size: 0.7rem; color: rgba(255,255,255,0.2);
+  right: clamp(2rem,5vw,5rem); font-size: 0.65rem; color: rgba(255,255,255,0.18);
+  letter-spacing: 0.04em;
 }
 
 /* ── AGENDA ──────────────────────────────────────── */
@@ -197,29 +241,27 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
   padding: clamp(2rem,5vw,5rem);
 }
 .slide.agenda .label {
-  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.16em;
+  font-size: 0.62rem; font-weight: 500; letter-spacing: 0.18em;
   text-transform: uppercase; color: #FF6B18; margin-bottom: 1.75rem;
 }
 .slide.agenda ol { list-style: none; counter-reset: a; }
 .slide.agenda ol li {
   counter-increment: a; display: flex; align-items: center;
-  gap: 1.25rem; padding: 0.7rem 0;
+  gap: 1.25rem; padding: 0.65rem 0;
   border-bottom: 1px solid rgba(255,255,255,0.05);
-  font-size: clamp(0.95rem,1.8vw,1.3rem); font-weight: 400;
-  color: rgba(255,255,255,0.85);
+  font-size: clamp(0.9rem,1.75vw,1.25rem); font-weight: 400;
+  color: rgba(255,255,255,0.82);
 }
 .slide.agenda ol li::before {
   content: counter(a,decimal-leading-zero);
-  font-size: 0.7rem; font-weight: 700; color: #FF6B18;
-  background: rgba(255,107,24,0.12); border: 1px solid rgba(255,107,24,0.3);
-  width: 2rem; height: 2rem; border-radius: 50%; flex-shrink: 0;
+  font-size: 0.65rem; font-weight: 700; color: #FF6B18;
+  background: rgba(255,107,24,0.1); border: 1px solid rgba(255,107,24,0.25);
+  width: 1.9rem; height: 1.9rem; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
 }
 
 /* ── SECTION ─────────────────────────────────────── */
-.slide.section {
-  display: flex; flex-direction: row;
-}
+.slide.section { display: flex; flex-direction: row; }
 .slide.section .sec-left {
   flex: 0 0 62%; background: #25223B;
   display: flex; flex-direction: column; justify-content: center;
@@ -231,16 +273,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 .slide.section .sec-right::before {
   content: ''; position: absolute;
   width: 150%; height: 150%; border-radius: 50%;
-  border: clamp(20px,3vw,40px) solid rgba(255,255,255,0.15);
+  border: clamp(20px,3vw,40px) solid rgba(255,255,255,0.12);
   top: -25%; left: -80%;
 }
 .slide.section .sec-num {
-  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.16em;
-  text-transform: uppercase; color: rgba(255,255,255,0.35); margin-bottom: 0.75rem;
+  font-size: 0.62rem; font-weight: 500; letter-spacing: 0.18em;
+  text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 0.75rem;
 }
 .slide.section h2 {
-  font-size: clamp(1.8rem,3.5vw,3rem); font-weight: 700;
-  color: #fff; line-height: 1.15; max-width: 18ch;
+  font-size: clamp(1.7rem,3.2vw,2.8rem); font-weight: 500;
+  color: #fff; line-height: 1.15; max-width: 18ch; letter-spacing: -0.02em;
 }
 
 /* ── CONTENT (bullets) ───────────────────────────── */
@@ -249,20 +291,21 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
   padding: clamp(2rem,5vw,4.5rem);
 }
 .slide.content h2 {
-  font-size: clamp(1.4rem,2.6vw,2.2rem); font-weight: 600;
-  color: #FF6B18; line-height: 1.2; margin-bottom: 2rem; max-width: 28ch;
+  font-size: clamp(1.3rem,2.4vw,2rem); font-weight: 500;
+  color: #FF6B18; line-height: 1.2; margin-bottom: 1.75rem; max-width: 30ch;
+  letter-spacing: -0.02em;
 }
-.slide.content ul { list-style: none; display: flex; flex-direction: column; gap: 0.85rem; }
+.slide.content ul { list-style: none; display: flex; flex-direction: column; gap: 0.8rem; }
 .slide.content ul li {
   display: flex; align-items: flex-start; gap: 1rem;
-  font-size: clamp(0.88rem,1.55vw,1.08rem); font-weight: 300;
-  color: rgba(255,255,255,0.85); line-height: 1.55;
-  padding-bottom: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: clamp(0.85rem,1.5vw,1.05rem); font-weight: 300;
+  color: rgba(255,255,255,0.82); line-height: 1.6;
+  padding-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .slide.content ul li:last-child { border-bottom: none; }
 .slide.content ul li .dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #FF6B18; flex-shrink: 0; margin-top: 0.45rem;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #FF6B18; flex-shrink: 0; margin-top: 0.5rem;
 }
 
 /* ── TWO-COLUMN ──────────────────────────────────── */
@@ -271,28 +314,32 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
   padding: clamp(2rem,5vw,4.5rem);
 }
 .slide.two-col h2 {
-  font-size: clamp(1.4rem,2.6vw,2.2rem); font-weight: 600;
-  color: #FF6B18; margin-bottom: 1.75rem; max-width: 34ch;
+  font-size: clamp(1.3rem,2.4vw,2rem); font-weight: 500;
+  color: #FF6B18; margin-bottom: 1.5rem; max-width: 34ch; letter-spacing: -0.02em;
 }
-.slide.two-col .cols { display: flex; gap: 3vw; align-items: flex-start; }
+.slide.two-col .cols { display: flex; gap: 3vw; align-items: stretch; }
 .slide.two-col .col-left { flex: 1.1; }
 .slide.two-col .col-right {
-  flex: 0.9; background: #35324A; border-radius: 8px;
-  padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;
+  flex: 0.9; background: #35324A; border-radius: 10px;
+  padding: 1.25rem 1.5rem; display: flex; flex-direction: column;
+  gap: 0.9rem; justify-content: center; overflow: hidden;
 }
-.slide.two-col ul { list-style: none; display: flex; flex-direction: column; gap: 0.8rem; }
+.slide.two-col .col-right img {
+  width: 100%; height: 100%; object-fit: contain; border-radius: 6px;
+}
+.slide.two-col ul { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
 .slide.two-col ul li {
   display: flex; align-items: flex-start; gap: 0.85rem;
-  font-size: clamp(0.85rem,1.5vw,1.05rem); font-weight: 300;
-  color: rgba(255,255,255,0.82); line-height: 1.5;
+  font-size: clamp(0.82rem,1.45vw,1.02rem); font-weight: 300;
+  color: rgba(255,255,255,0.8); line-height: 1.55;
 }
 .slide.two-col ul li .dot {
   width: 5px; height: 5px; border-radius: 50%;
   background: #FF6B18; flex-shrink: 0; margin-top: 0.5rem;
 }
 .col-right .stat-row { display: flex; flex-direction: column; align-items: flex-start; }
-.col-right .stat-row .big { font-size: clamp(2rem,4vw,3.2rem); font-weight: 700; color: #FF6B18; line-height: 1; }
-.col-right .stat-row .lbl { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem; }
+.col-right .stat-row .big { font-size: clamp(2rem,4vw,3rem); font-weight: 700; color: #FF6B18; line-height: 1; letter-spacing: -0.03em; }
+.col-right .stat-row .lbl { font-size: 0.72rem; color: rgba(255,255,255,0.45); margin-top: 0.2rem; }
 
 /* ── STAT ────────────────────────────────────────── */
 .slide.stat {
@@ -300,55 +347,62 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
   justify-content: center; background: #35324A; text-align: center;
 }
 .slide.stat .stat-label {
-  font-size: clamp(0.9rem,1.6vw,1.2rem); font-weight: 400;
-  color: rgba(255,255,255,0.4); margin-bottom: 2.5rem;
+  font-size: clamp(0.85rem,1.5vw,1.1rem); font-weight: 400;
+  color: rgba(255,255,255,0.35); margin-bottom: 2.5rem; letter-spacing: 0.02em;
 }
-.kpi-grid { display: flex; gap: clamp(2.5rem,6vw,6rem); align-items: flex-end; flex-wrap: wrap; justify-content: center; }
-.kpi { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; }
-.big-num { font-size: clamp(3.2rem,8vw,6rem); font-weight: 700; color: #FF6B18; line-height: 1; letter-spacing: -0.03em; }
-.kpi-lbl { font-size: clamp(0.75rem,1.3vw,0.95rem); color: rgba(255,255,255,0.5); max-width: 12ch; text-align: center; }
+.kpi-grid { display: flex; gap: clamp(2rem,6vw,6rem); align-items: flex-end; flex-wrap: wrap; justify-content: center; }
+.kpi { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.big-num { font-size: clamp(3rem,8vw,5.5rem); font-weight: 700; color: #FF6B18; line-height: 1; letter-spacing: -0.04em; }
+.kpi-lbl { font-size: clamp(0.72rem,1.2vw,0.9rem); color: rgba(255,255,255,0.45); max-width: 13ch; text-align: center; line-height: 1.4; }
 
 /* ── QUOTE ───────────────────────────────────────── */
 .slide.quote {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; background: #35324A; padding: clamp(2rem,5vw,6rem);
 }
-.slide.quote .qmark { font-size: 6rem; color: rgba(255,107,24,0.18); line-height: 0.6; font-family: Georgia, serif; margin-bottom: 1.5rem; }
+.slide.quote .qmark { font-size: 5rem; color: rgba(255,107,24,0.15); line-height: 0.6; font-family: Georgia, serif; margin-bottom: 1.5rem; }
 .slide.quote blockquote {
-  font-size: clamp(1.05rem,1.9vw,1.55rem); font-weight: 300; font-style: italic;
-  color: #fff; max-width: 680px; line-height: 1.65; text-align: center;
+  font-size: clamp(1rem,1.8vw,1.5rem); font-weight: 300; font-style: italic;
+  color: #fff; max-width: 640px; line-height: 1.7; text-align: center;
 }
 .slide.quote cite {
-  display: block; margin-top: 1.75rem; font-size: 0.82rem; font-weight: 500;
-  font-style: normal; color: #FF6B18; letter-spacing: 0.08em; text-transform: uppercase;
+  display: block; margin-top: 1.75rem; font-size: 0.78rem; font-weight: 500;
+  font-style: normal; color: #FF6B18; letter-spacing: 0.1em; text-transform: uppercase;
 }
 
 /* ── CLOSING ─────────────────────────────────────── */
 .slide.closing {
   display: flex; flex-direction: column; align-items: center;
-  justify-content: center; text-align: center;
+  justify-content: center; text-align: center; overflow: hidden;
   background: linear-gradient(150deg, #25223B 0%, #2e2b42 100%);
 }
+.slide.closing .closing-bg {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; opacity: 0.07; pointer-events: none;
+}
+.slide.closing .closing-bg img { width: 110%; height: 110%; object-fit: cover; }
 .slide.closing h2 {
-  font-size: clamp(2.2rem,4.5vw,4rem); font-weight: 700;
-  color: #fff; line-height: 1.1; margin-bottom: 1rem;
+  position: relative; z-index: 1;
+  font-size: clamp(2rem,4vw,3.6rem); font-weight: 500;
+  color: #fff; line-height: 1.1; margin-bottom: 0.8rem; letter-spacing: -0.02em;
 }
 .slide.closing .closing-bar {
-  width: 48px; height: 4px; background: #FF6B18; border-radius: 2px; margin: 0 auto 1.2rem;
+  width: 36px; height: 3px; background: #FF6B18; border-radius: 2px;
+  margin: 0 auto 1rem; position: relative; z-index: 1;
 }
-.slide.closing p { font-size: 1rem; font-weight: 300; color: rgba(255,255,255,0.5); }
+.slide.closing p { font-size: 1rem; font-weight: 300; color: rgba(255,255,255,0.45); position: relative; z-index: 1; }
 .slide.closing .cta-btn {
-  margin-top: 2rem; padding: 0.7rem 2.2rem; background: #FF6B18;
-  color: #fff; border-radius: 6px; font-size: 0.9rem; font-weight: 600;
-  display: inline-block; letter-spacing: 0.02em;
+  margin-top: 1.75rem; padding: 0.65rem 2rem; background: #FF6B18;
+  color: #fff; border-radius: 6px; font-size: 0.88rem; font-weight: 500;
+  display: inline-block; letter-spacing: 0.02em; position: relative; z-index: 1;
 }
 
 /* ── Chrome ───────────────────────────────────────── */
-.progress-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.06); z-index: 100; }
+.progress-bar { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: rgba(255,255,255,0.06); z-index: 100; }
 .progress-fill { height: 100%; background: #FF6B18; border-radius: 0 2px 2px 0; transition: width 0.3s ease; }
-.slide-counter { position: fixed; bottom: 1.25rem; right: 1.75rem; font-size: 0.65rem; font-weight: 500; color: rgba(255,255,255,0.2); z-index: 100; letter-spacing: 0.08em; }
-.nav-hint { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: rgba(255,255,255,0.12); z-index: 100; white-space: nowrap; }
-.notes { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 300; background: rgba(8,6,18,0.95); color: rgba(255,255,255,0.75); padding: 1rem 3rem; font-size: 0.82rem; line-height: 1.6; border-top: 2px solid #FF6B18; }
+.slide-counter { position: fixed; bottom: 1.25rem; right: 1.75rem; font-size: 0.62rem; font-weight: 400; color: rgba(255,255,255,0.18); z-index: 100; letter-spacing: 0.1em; }
+.nav-hint { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-size: 0.58rem; color: rgba(255,255,255,0.1); z-index: 100; white-space: nowrap; }
+.notes { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 300; background: rgba(8,6,18,0.95); color: rgba(255,255,255,0.72); padding: 1rem 3rem; font-size: 0.8rem; line-height: 1.65; border-top: 2px solid #FF6B18; }
 .notes.visible { display: block; }
 
 </style>
@@ -357,12 +411,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 
 <div class="deck">
 
-  <!-- ═══ TITLE — dark, bottom-anchored ═══════════ -->
+  <!-- ═══ TITLE — dark, brand graphic top-right ════ -->
   <section class="slide title active" data-type="title"
     data-title="YOUR ACTION TITLE HERE"
     data-subtitle="Supporting context — one line"
     data-eyebrow="Whatfix · Department · Month Year"
-    data-meta="Prepared by Name · Month Year">
+    data-meta="Prepared by Name · Month Year"
+    data-brand-image="product-suite-dark">
+    <div class="brand-graphic">
+      <img src="/brand/product-suite-dark.png" loading="eager" alt="">
+    </div>
     <p class="eyebrow">Whatfix · Department · Month Year</p>
     <h1>Your action title captures the core message</h1>
     <div class="title-bar"></div>
@@ -405,11 +463,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
     <div class="notes">Speaker notes.</div>
   </section>
 
-  <!-- ═══ TWO-COLUMN (text + stat accent) ══════════ -->
+  <!-- ═══ TWO-COLUMN (text + brand graphic) ═════════ -->
   <section class="slide two-col" data-type="two-col"
-    data-headline="Two-column action title for context+data slides"
+    data-headline="Two-column action title for context and data slides"
     data-left-bullets='["Key context point one","Key context point two","Key context point three"]'
-    data-right-stats='[{"value":"40%","label":"Reduction in time"},{"value":"3×","label":"Faster adoption"}]'>
+    data-right-stats='[{"value":"40%","label":"Reduction in time"},{"value":"3×","label":"Faster adoption"}]'
+    data-brand-image="authoring-agent-dark"
+    data-bi-x="5.7" data-bi-y="1.3" data-bi-w="3.9" data-bi-h="3.7">
     <h2>Two-column action title for context and data slides</h2>
     <div class="cols">
       <div class="col-left">
@@ -420,8 +480,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
         </ul>
       </div>
       <div class="col-right">
-        <div class="stat-row"><span class="big">40%</span><span class="lbl">Reduction in time</span></div>
-        <div class="stat-row"><span class="big">3×</span><span class="lbl">Faster adoption</span></div>
+        <img src="/brand/authoring-agent-dark.png" loading="eager" alt="">
       </div>
     </div>
   </section>
@@ -442,7 +501,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
   <section class="slide closing" data-type="closing"
     data-title="Thank you"
     data-body="Next step or closing thought."
-    data-cta="Get in touch">
+    data-cta="Get in touch"
+    data-brand-image="product-suite-dark">
+    <div class="closing-bg">
+      <img src="/brand/product-suite-dark.png" loading="eager" alt="">
+    </div>
     <h2>Thank you</h2>
     <div class="closing-bar"></div>
     <p>Next step or closing thought.</p>
@@ -500,13 +563,23 @@ const C = {
   white:   'FFFFFF',
   gray100: 'F9F9F2',
   gray300: 'E5E3DC',
+  blue:    'AED2F3',
 };
-const FONT = 'Aeonik';
 
-// Pre-load Aeonik brand font in the background so it's ready when the user downloads.
-// Falls back gracefully — if fetching fails the PPTX still generates, Google Slides
-// will substitute the closest available font.
-var _aeonik = { regular: null, bold: null, light: null };
+// Slide canvas: LAYOUT_16x9 = 10" × 5.625". NEVER use w:'100%' or h:'100%' —
+// use SW and SH for all full-bleed shapes to ensure pixel-perfect Google Slides output.
+const SW = 10;      // slide width in inches
+const SH = 5.625;   // slide height in inches
+
+// Primary PPTX font. 'DM Sans' is used because Google Slides ignores embedded
+// custom fonts from PPTX files and substitutes Arial (wider → text overflows).
+// DM Sans is natively available in Google Slides as a Google Font, so layout is
+// pixel-perfect with no substitution. It also matches the HTML preview font stack.
+// Aeonik is still preloaded so desktop PowerPoint users get the brand font.
+const FONT = 'DM Sans';
+
+// ── Preload Aeonik font (used in desktop PowerPoint; ignored by Google Slides)
+var _aeonik = { regular: null, medium: null, bold: null, light: null };
 (function () {
   var origin = window.location.origin !== 'null' ? window.location.origin : '';
   if (!origin) { try { origin = window.parent.location.origin; } catch (e) {} }
@@ -520,16 +593,60 @@ var _aeonik = { regular: null, bold: null, light: null };
     }).catch(function (e) { console.warn('[pptx] font preload failed (' + key + '):', e); });
   }
   loadFont(origin + '/libs/fonts/Aeonik-Regular.ttf', 'regular');
-  loadFont(origin + '/libs/fonts/Aeonik-Bold.ttf', 'bold');
-  loadFont(origin + '/libs/fonts/Aeonik-Light.ttf', 'light');
+  loadFont(origin + '/libs/fonts/Aeonik-Medium.ttf',  'medium');
+  loadFont(origin + '/libs/fonts/Aeonik-Bold.ttf',    'bold');
+  loadFont(origin + '/libs/fonts/Aeonik-Light.ttf',   'light');
 })();
+
+// ── Preload brand images (embedded into PPTX via slide.addImage)
+// Maps data-brand-image key → base64 data URI
+var _imgs = {};
+(function () {
+  var origin = window.location.origin !== 'null' ? window.location.origin : '';
+  if (!origin) { try { origin = window.parent.location.origin; } catch (e) {} }
+  if (!origin) return;
+  var paths = {
+    'product-suite-dark':     '/brand/product-suite-dark.png',
+    'product-suite-full-dark':'/brand/product-suite-full-dark.png',
+    'product-suite-light':    '/brand/product-suite-light.png',
+    'ai-agents-suite-dark':   '/brand/ai-agents-suite-dark.png',
+    'ai-agents-suite-light':  '/brand/ai-agents-suite-light.png',
+    'screensense-suite-dark': '/brand/screensense-suite-dark.png',
+    'authoring-agent-dark':   '/brand/authoring-agent-dark.png',
+    'authoring-agent-box-dark':'/brand/authoring-agent-box-dark.png',
+    'guidance-agent-dark':    '/brand/guidance-agent-dark.png',
+    'guidance-agent-box-dark':'/brand/guidance-agent-box-dark.png',
+    'insights-agent-dark':    '/brand/insights-agent-dark.png',
+    'insights-agent-box-dark':'/brand/insights-agent-box-dark.png',
+    'dap-dark':               '/brand/dap-dark.png',
+    'dap-light':              '/brand/dap-light.png',
+    'mirror-dark':            '/brand/mirror-dark.png',
+    'screensense-dark':       '/brand/screensense-dark.png',
+    'product-analytics-dark': '/brand/product-analytics-dark.png',
+  };
+  Object.keys(paths).forEach(function (key) {
+    fetch(origin + paths[key]).then(function (r) { return r.blob(); }).then(function (blob) {
+      var fr = new FileReader();
+      fr.onload = function () { _imgs[key] = fr.result; };
+      fr.readAsDataURL(blob);
+    }).catch(function () {});
+  });
+})();
+
+// Helper: add a brand image to a PPTX slide if the image has been preloaded
+function addBrandImg(s, key, x, y, w, h) {
+  if (!key || !_imgs[key]) return;
+  s.addImage({ data: _imgs[key], x: x, y: y, w: w, h: h,
+               sizing: { type: 'contain', w: w, h: h } });
+}
 
 function downloadPptx() {
   const pptx = new PptxGenJS();
-  // Embed brand font so Google Slides renders it correctly
-  if (_aeonik.regular) pptx.addFont({ name: 'Aeonik', data: _aeonik.regular });
-  if (_aeonik.bold)    pptx.addFont({ name: 'Aeonik', data: _aeonik.bold });
-  if (_aeonik.light)   pptx.addFont({ name: 'Aeonik', data: _aeonik.light });
+  // Embed Aeonik font. Register only the medium/regular weight as 'Aeonik' —
+  // registering multiple weights under the same name causes the last one to overwrite.
+  // Bold text uses PptxGenJS bold:true which synthesizes bold from the embedded face.
+  if (_aeonik.medium)  pptx.addFont({ name: 'Aeonik', data: _aeonik.medium });
+  else if (_aeonik.regular) pptx.addFont({ name: 'Aeonik', data: _aeonik.regular });
   pptx.layout = 'LAYOUT_16x9';
   pptx.title  = document.title;
   pptx.author = 'Whatfix';
@@ -538,99 +655,146 @@ function downloadPptx() {
     const type = slide.dataset.type;
     const s = pptx.addSlide();
 
+    // Resolve brand image key and position from data attributes
+    const biKey = slide.dataset.brandImage || null;
+    const biX = parseFloat(slide.dataset.biX || '6.5');
+    const biY = parseFloat(slide.dataset.biY || '0.8');
+    const biW = parseFloat(slide.dataset.biW || '3.2');
+    const biH = parseFloat(slide.dataset.biH || '3.6');
+
     if (type === 'title') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:5.2, w:'100%', h:2.4, fill:{ color: C.ink } });
+      // Full background
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      // Subtle darker lower band to ground the text (stays fully within slide)
+      s.addShape(pptx.ShapeType.rect, { x:0, y:3.2, w:SW, h:2.425, fill:{ color: C.ink } });
+      // Brand graphic — top-right quadrant
+      if (biKey) addBrandImg(s, biKey, biX, biY, biW, biH);
+      // Eyebrow
       if (slide.dataset.eyebrow)
-        s.addText(slide.dataset.eyebrow.toUpperCase(), { x:.55, y:.5, w:9, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:3 , margin:0});
-      s.addText(slide.dataset.title || '', { x:.55, y:1, w:8.5, h:2.8, fontSize:36, color:C.white, fontFace:FONT, bold:true, valign:'top' , margin:0});
-      s.addShape(pptx.ShapeType.rect, { x:.55, y:3.95, w:.5, h:.055, fill:{ color: C.orange } });
+        s.addText(slide.dataset.eyebrow.toUpperCase(), { x:.55, y:.6, w:6, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:3, margin:0 });
+      // Title — anchored in the middle-lower section, max h ensures within bounds
+      s.addText(slide.dataset.title || '', { x:.55, y:1.1, w:7.6, h:1.9, fontSize:32, color:C.white, fontFace:FONT, bold:false, valign:'top', wrap:true, margin:0 });
+      // Orange accent bar
+      s.addShape(pptx.ShapeType.rect, { x:.55, y:3.18, w:.42, h:.05, fill:{ color: C.orange } });
+      // Subtitle
       if (slide.dataset.subtitle)
-        s.addText(slide.dataset.subtitle, { x:.55, y:4.15, w:9, h:.8, fontSize:13, color:C.ink300, fontFace:FONT , margin:0});
+        s.addText(slide.dataset.subtitle, { x:.55, y:3.35, w:7.5, h:.65, fontSize:12, color:C.ink300, fontFace:FONT, wrap:true, margin:0 });
+      // Meta bottom-right (within bounds: 5.15 + 0.35 = 5.5 < 5.625)
       if (slide.dataset.meta)
-        s.addText(slide.dataset.meta, { x:7, y:5.2, w:3, h:.35, fontSize:8, color:C.ink300, fontFace:FONT, align:'right' , margin:0});
+        s.addText(slide.dataset.meta, { x:6.6, y:5.15, w:3.1, h:.35, fontSize:7.5, color:C.ink300, fontFace:FONT, align:'right', margin:0 });
 
     } else if (type === 'agenda') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
-      s.addText('AGENDA', { x:.55, y:.45, w:3, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:4 , margin:0});
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addText('AGENDA', { x:.55, y:.45, w:3, h:.3, fontSize:7, color:C.orange, fontFace:FONT, bold:true, charSpacing:4, margin:0 });
       const items = JSON.parse(slide.dataset.items || '[]');
-      items.forEach((item, i) => {
-        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:1.25 + i*.85, w:.38, h:.38, fill:{ color: C.ink }, line:{ color: C.orange, width:1 } });
-        s.addText(`0${i+1}`, { x:.55, y:1.25 + i*.85, w:.38, h:.38, fontSize:7.5, color:C.orange, fontFace:FONT, bold:true, align:'center', valign:'middle' , margin:0});
-        s.addText(item, { x:1.1, y:1.25 + i*.85, w:8.7, h:.38, fontSize:16, color:C.white, fontFace:FONT, valign:'middle' , margin:0});
-        s.addShape(pptx.ShapeType.line, { x:.55, y:1.7 + i*.85, w:9.2, h:0, line:{ color:'2a2840', width:.5 } });
+      const maxItems = Math.min(items.length, 6);
+      // Dynamic spacing: distribute items evenly within the content area (1.0 to 5.3)
+      const areaH = 4.3;
+      const itemH = Math.min(0.85, areaH / maxItems);
+      items.slice(0, maxItems).forEach((item, i) => {
+        const iy = 1.05 + i * itemH;
+        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:iy, w:.36, h:.36, fill:{ color: C.ink }, line:{ color: C.orange, width:1 } });
+        s.addText('0' + (i + 1), { x:.55, y:iy, w:.36, h:.36, fontSize:7, color:C.orange, fontFace:FONT, bold:true, align:'center', valign:'middle', margin:0 });
+        s.addText(item, { x:1.08, y:iy, w:8.7, h:itemH - 0.1, fontSize:15, color:C.white, fontFace:FONT, valign:'middle', margin:0 });
+        if (i < maxItems - 1)
+          s.addShape(pptx.ShapeType.line, { x:.55, y:iy + itemH - 0.06, w:9.2, h:0, line:{ color:'2a2840', width:.5 } });
       });
 
     } else if (type === 'section') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:6.2, h:'100%', fill:{ color: C.ink700 } });
-      s.addShape(pptx.ShapeType.rect, { x:6.2, y:0, w:3.8, h:'100%', fill:{ color: C.orange } });
+      s.addShape(pptx.ShapeType.rect, { x:0,   y:0, w:6.2, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:6.2, y:0, w:3.8, h:SH, fill:{ color: C.orange } });
       if (slide.dataset.secnum)
-        s.addText(slide.dataset.secnum.toUpperCase(), { x:.55, y:2.3, w:5.4, h:.35, fontSize:7.5, color:C.white, fontFace:FONT, bold:true, charSpacing:3, transparency:65 , margin:0});
-      s.addText(slide.dataset.title || '', { x:.55, y:2.7, w:5.4, h:2, fontSize:26, color:C.white, fontFace:FONT, bold:true , margin:0});
+        s.addText(slide.dataset.secnum.toUpperCase(), { x:.55, y:2.35, w:5.4, h:.35, fontSize:7.5, color:C.white, fontFace:FONT, bold:true, charSpacing:3, transparency:65, margin:0 });
+      s.addText(slide.dataset.title || '', { x:.55, y:2.75, w:5.4, h:1.95, fontSize:26, color:C.white, fontFace:FONT, bold:false, wrap:true, margin:0 });
 
     } else if (type === 'content') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText(slide.dataset.headline || '', { x:.55, y:.3, w:9, h:1.2, fontSize:24, color:C.orange, fontFace:FONT, bold:true , margin:0});
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText(slide.dataset.headline || '', { x:.55, y:.25, w:9.1, h:1.15, fontSize:22, color:C.orange, fontFace:FONT, bold:false, wrap:true, margin:0 });
       const bullets = JSON.parse(slide.dataset.bullets || '[]');
-      bullets.forEach((b, i) => {
-        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:1.85 + i*.95 + .05, w:.1, h:.1, fill:{ color: C.orange } });
-        s.addText(b, { x:.8, y:1.8 + i*.95, w:9, h:.65, fontSize:15, color:C.white, fontFace:FONT , margin:0});
-        if (i < bullets.length - 1)
-          s.addShape(pptx.ShapeType.line, { x:.55, y:2.5 + i*.95, w:8.9, h:0, line:{ color:'2a2840', width:.4 } });
+      const maxB = Math.min(bullets.length, 4);
+      // Distribute bullets in the remaining content area (1.55 to 5.35)
+      const bAreaH = 3.8;
+      const bSpacing = Math.min(0.95, bAreaH / maxB);
+      bullets.slice(0, maxB).forEach((b, i) => {
+        const by = 1.55 + i * bSpacing;
+        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:by + .05, w:.1, h:.1, fill:{ color: C.orange } });
+        s.addText(b, { x:.8, y:by, w:9.0, h:bSpacing - 0.15, fontSize:14, color:C.white, fontFace:FONT, wrap:true, margin:0 });
+        if (i < maxB - 1)
+          s.addShape(pptx.ShapeType.line, { x:.55, y:by + bSpacing - 0.1, w:9.2, h:0, line:{ color:'2a2840', width:.4 } });
       });
+      if (biKey) addBrandImg(s, biKey, biX, biY, biW, biH);
       const notesEl = slide.querySelector('.notes');
       if (notesEl) s.addNotes(notesEl.textContent.trim());
 
     } else if (type === 'two-col') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText(slide.dataset.headline || '', { x:.55, y:.3, w:9, h:.9, fontSize:22, color:C.orange, fontFace:FONT, bold:true , margin:0});
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText(slide.dataset.headline || '', { x:.55, y:.25, w:9.1, h:.9, fontSize:20, color:C.orange, fontFace:FONT, bold:false, wrap:true, margin:0 });
       const lBullets = JSON.parse(slide.dataset.leftBullets || '[]');
-      lBullets.forEach((b, i) => {
-        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:1.6 + i*.75 + .05, w:.1, h:.1, fill:{ color: C.orange } });
-        s.addText(b, { x:.8, y:1.55 + i*.75, w:4.5, h:.6, fontSize:14, color:C.white, fontFace:FONT , margin:0});
+      const maxLB = Math.min(lBullets.length, 5);
+      const lAreaH = 3.7;
+      const lSpacing = Math.min(0.78, lAreaH / maxLB);
+      lBullets.slice(0, maxLB).forEach((b, i) => {
+        const by = 1.45 + i * lSpacing;
+        s.addShape(pptx.ShapeType.ellipse, { x:.55, y:by + .05, w:.1, h:.1, fill:{ color: C.orange } });
+        s.addText(b, { x:.8, y:by, w:4.6, h:lSpacing - 0.08, fontSize:13, color:C.white, fontFace:FONT, wrap:true, margin:0 });
       });
-      s.addShape(pptx.ShapeType.rect, { x:5.6, y:1.4, w:3.85, h:3.8, fill:{ color: C.ink }, rectRadius:.06 });
-      const rStats = JSON.parse(slide.dataset.rightStats || '[]');
-      rStats.forEach((st, i) => {
-        s.addText(st.value, { x:5.7, y:1.65 + i*1.75, w:3.65, h:1.1, fontSize:42, color:C.orange, fontFace:FONT, bold:true, align:'center' , margin:0});
-        s.addText(st.label, { x:5.7, y:2.85 + i*1.75, w:3.65, h:.4, fontSize:11, color:C.ink300, fontFace:FONT, align:'center' , margin:0});
-      });
+      // Right panel: brand image if available, otherwise stat cards
+      if (biKey && _imgs[biKey]) {
+        s.addShape(pptx.ShapeType.rect, { x:5.6, y:1.3, w:3.9, h:3.85, fill:{ color: C.ink }, rectRadius:.08 });
+        addBrandImg(s, biKey, biX, biY, biW, biH);
+      } else {
+        s.addShape(pptx.ShapeType.rect, { x:5.6, y:1.3, w:3.9, h:3.85, fill:{ color: C.ink }, rectRadius:.08 });
+        const rStats = JSON.parse(slide.dataset.rightStats || '[]');
+        const maxRS = Math.min(rStats.length, 2);
+        rStats.slice(0, maxRS).forEach((st, i) => {
+          const sy = 1.65 + i * 1.8;
+          if (sy + 1.4 <= 5.15) {
+            s.addText(st.value, { x:5.7, y:sy,       w:3.7, h:1.1, fontSize:38, color:C.orange, fontFace:FONT, bold:true,  align:'center', margin:0 });
+            s.addText(st.label, { x:5.7, y:sy + 1.15, w:3.7, h:.4,  fontSize:10, color:C.ink300, fontFace:FONT, bold:false, align:'center', margin:0 });
+          }
+        });
+      }
 
     } else if (type === 'stat') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
       if (slide.dataset.title)
-        s.addText(slide.dataset.title, { x:.5, y:.45, w:9.3, h:.55, fontSize:16, color:C.ink300, fontFace:FONT, align:'center' , margin:0});
+        s.addText(slide.dataset.title, { x:.5, y:.4, w:9.3, h:.55, fontSize:14, color:C.ink300, fontFace:FONT, align:'center', margin:0 });
       const stats = JSON.parse(slide.dataset.stats || '[]');
-      const colW = 10 / stats.length;
-      stats.forEach((st, i) => {
-        s.addText(st.value, { x:i*colW+.3, y:1.4, w:colW-.6, h:2.3, fontSize:56, color:C.orange, fontFace:FONT, bold:true, align:'center' , margin:0});
-        s.addText(st.label, { x:i*colW+.3, y:3.9, w:colW-.6, h:.9, fontSize:12, color:C.ink300, fontFace:FONT, align:'center', wrap:true , margin:0});
+      const numStats = Math.min(stats.length, 4);
+      const colW = SW / numStats;
+      stats.slice(0, numStats).forEach((st, i) => {
+        s.addText(st.value, { x:i*colW+.3, y:1.35, w:colW-.6, h:2.25, fontSize:52, color:C.orange, fontFace:FONT, bold:true,  align:'center', margin:0 });
+        s.addText(st.label, { x:i*colW+.3, y:3.75, w:colW-.6, h:.95,  fontSize:11, color:C.ink300, fontFace:FONT, bold:false, align:'center', wrap:true, margin:0 });
       });
 
     } else if (type === 'quote') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText('“', { x:.4, y:.2, w:2, h:1.4, fontSize:72, color:C.orange, fontFace:'Georgia', bold:true , margin:0});
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText('"', { x:.4, y:.15, w:2, h:1.35, fontSize:72, color:C.orange, fontFace:'Georgia', bold:true, margin:0 });
       const qt = slide.querySelector('blockquote')?.textContent?.trim() || '';
-      s.addText(qt, { x:.5, y:1.5, w:9.3, h:2.6, fontSize:20, color:C.white, fontFace:FONT, italic:true, align:'center', wrap:true , margin:0});
+      s.addText(qt, { x:.5, y:1.45, w:9.3, h:2.55, fontSize:19, color:C.white, fontFace:FONT, italic:true, align:'center', wrap:true, margin:0 });
       const cite = slide.querySelector('cite')?.textContent?.trim() || '';
       if (cite)
-        s.addText('— ' + cite, { x:.5, y:4.3, w:9.3, h:.45, fontSize:11, color:C.orange, fontFace:FONT, bold:true, align:'center', charSpacing:2 , margin:0});
+        s.addText('— ' + cite, { x:.5, y:4.2, w:9.3, h:.45, fontSize:10.5, color:C.orange, fontFace:FONT, bold:true, align:'center', charSpacing:2, margin:0 });
 
     } else if (type === 'closing') {
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: C.ink700 } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addShape(pptx.ShapeType.rect, { x:0, y:5.57, w:'100%', h:.055, fill:{ color: C.orange } });
-      s.addText(slide.dataset.title || 'Thank you', { x:.5, y:1.3, w:9.3, h:2.2, fontSize:42, color:C.white, fontFace:FONT, bold:true, align:'center' , margin:0});
-      s.addShape(pptx.ShapeType.rect, { x:4.65, y:3.65, w:.5, h:.05, fill:{ color: C.orange } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0,          w:SW, h:.05, fill:{ color: C.orange } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:SH - .05,   w:SW, h:.05, fill:{ color: C.orange } });
+      // Brand graphic as subtle background watermark (large, low opacity not directly
+      // available in PptxGenJS for images; embed at reduced size in corner instead)
+      if (biKey && _imgs[biKey])
+        addBrandImg(s, biKey, 5.8, 1.8, 3.8, 3.8);
+      s.addText(slide.dataset.title || 'Thank you', { x:.5, y:1.2, w:9.3, h:2.1, fontSize:40, color:C.white, fontFace:FONT, bold:false, align:'center', margin:0 });
+      s.addShape(pptx.ShapeType.rect, { x:4.66, y:3.55, w:.42, h:.05, fill:{ color: C.orange } });
       if (slide.dataset.body)
-        s.addText(slide.dataset.body, { x:.5, y:3.9, w:9.3, h:.6, fontSize:14, color:C.ink300, fontFace:FONT, align:'center' , margin:0});
+        s.addText(slide.dataset.body, { x:.5, y:3.75, w:9.3, h:.6, fontSize:13, color:C.ink300, fontFace:FONT, align:'center', margin:0 });
       if (slide.dataset.cta) {
-        s.addShape(pptx.ShapeType.roundRect, { x:3.9, y:4.7, w:2.5, h:.6, rectRadius:.07, fill:{ color: C.orange } });
-        s.addText(slide.dataset.cta, { x:3.9, y:4.7, w:2.5, h:.6, fontSize:12, color:C.white, fontFace:FONT, bold:true, align:'center', valign:'middle' , margin:0});
+        s.addShape(pptx.ShapeType.roundRect, { x:3.88, y:4.55, w:2.55, h:.62, rectRadius:.07, fill:{ color: C.orange } });
+        s.addText(slide.dataset.cta, { x:3.88, y:4.55, w:2.55, h:.62, fontSize:12, color:C.white, fontFace:FONT, bold:true, align:'center', valign:'middle', margin:0 });
       }
     }
   });
@@ -639,9 +803,7 @@ function downloadPptx() {
   pptx.writeFile({ fileName: slug + '.pptx' });
 }
 
-// Artifact-panel download bridge — receives a trigger from the panel header,
-// installs a one-shot blob interceptor around the named function, captures the
-// generated file, and postMessages the binary back to the parent window.
+// Artifact-panel download bridge
 window.addEventListener('message', function(e) {
   if (!e.data || e.data.type !== 'artifact-download-request') return;
   if (typeof window[e.data.fn] !== 'function') return;
@@ -691,23 +853,22 @@ Add these inside the existing `<style>` tag:
 }
 .slide.cover .right {
   flex: 1; background: #FF6B18; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.slide.cover .right img {
+  width: 85%; height: 85%; object-fit: contain; opacity: 0.92;
 }
 .slide.cover .right::before {
   content: ''; position: absolute; width: 160%; height: 160%; border-radius: 50%;
-  border: clamp(20px,4vw,48px) solid rgba(255,255,255,0.18); top: -30%; left: -85%;
+  border: clamp(20px,4vw,48px) solid rgba(255,255,255,0.15); top: -30%; left: -85%;
 }
-.slide.cover .right::after {
-  content: ''; position: absolute; width: 110%; height: 110%; border-radius: 50%;
-  border: clamp(14px,2.5vw,32px) solid rgba(255,255,255,0.28); top: -5%; left: -55%;
-}
-.cover-arc3 { position: absolute; width: 68%; height: 68%; border-radius: 50%; border: clamp(10px,1.8vw,22px) solid rgba(255,255,255,0.35); top: 16%; left: -30%; }
-.slide.cover .tagline { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 1.75rem; }
-.slide.cover h1 { font-size: clamp(1.6rem,3.2vw,3rem); font-weight: 700; color: #fff; line-height: 1.15; max-width: 18ch; margin-bottom: 0.75rem; }
-.slide.cover .doc-type { font-size: clamp(0.85rem,1.4vw,1.05rem); font-weight: 300; color: rgba(255,255,255,0.6); margin-bottom: 2.5rem; }
-.logo-row { display: flex; align-items: center; gap: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,0.18); }
-.wf-wordmark { font-size: 0.95rem; font-weight: 800; color: #fff; }
-.customer-badge { font-size: 0.88rem; font-weight: 600; color: rgba(255,255,255,0.85); padding-left: 1.25rem; border-left: 1px solid rgba(255,255,255,0.2); }
-.disclaimer-cover { position: absolute; bottom: 0.5rem; left: 0; right: 0; font-size: 0.48rem; color: rgba(255,255,255,0.22); padding: 0 clamp(2rem,5vw,4.5rem); text-align: center; font-style: italic; }
+.slide.cover .tagline { font-size: 0.62rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 1.75rem; }
+.slide.cover h1 { font-size: clamp(1.5rem,3vw,2.8rem); font-weight: 500; color: #fff; line-height: 1.15; max-width: 18ch; margin-bottom: 0.75rem; letter-spacing: -0.02em; }
+.slide.cover .doc-type { font-size: clamp(0.82rem,1.35vw,1rem); font-weight: 300; color: rgba(255,255,255,0.55); margin-bottom: 2.5rem; }
+.logo-row { display: flex; align-items: center; gap: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,0.15); }
+.wf-wordmark { font-size: 0.92rem; font-weight: 700; color: #fff; }
+.customer-badge { font-size: 0.85rem; font-weight: 500; color: rgba(255,255,255,0.82); padding-left: 1.25rem; border-left: 1px solid rgba(255,255,255,0.18); }
+.disclaimer-cover { position: absolute; bottom: 0.5rem; left: 0; right: 0; font-size: 0.46rem; color: rgba(255,255,255,0.2); padding: 0 clamp(2rem,5vw,4.5rem); text-align: center; font-style: italic; }
 
 /* ── PLAYBOOK: SECTION DIVIDER ────────────────────────── */
 .slide.section-div { display: flex; flex-direction: row; }
@@ -719,45 +880,47 @@ Add these inside the existing `<style>` tag:
   flex: 1; background: #FF6B18; position: relative; overflow: hidden;
   display: flex; align-items: flex-end; justify-content: flex-end; padding: 1.5rem 1.75rem;
 }
-.slide.section-div .sec-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 0.75rem; }
-.slide.section-div h2 { font-size: clamp(1.6rem,3vw,2.8rem); font-weight: 700; color: #fff; line-height: 1.15; max-width: 16ch; }
-.sd-badge { position: relative; z-index: 1; font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.6); }
+.slide.section-div .sec-label { font-size: 0.62rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.28); margin-bottom: 0.75rem; }
+.slide.section-div h2 { font-size: clamp(1.5rem,2.8vw,2.6rem); font-weight: 500; color: #fff; line-height: 1.15; max-width: 16ch; letter-spacing: -0.02em; }
+.sd-badge { position: relative; z-index: 1; font-size: 0.62rem; font-weight: 700; color: rgba(255,255,255,0.55); }
 
 /* ── PLAYBOOK: TABLE SLIDE ────────────────────────────── */
 .slide.table-slide { flex-direction: column; background: #fff; display: flex; }
-.ts-header { flex-shrink: 0; padding: 1.4rem clamp(1.5rem,4vw,3rem) 0.85rem; border-bottom: 2px solid #E5E3DC; display: flex; align-items: center; justify-content: space-between; }
-.ts-header h2 { font-size: clamp(1rem,1.8vw,1.55rem); font-weight: 700; color: #872345; }
-.ts-wf { font-size: 0.62rem; font-weight: 800; color: #872345; }
-.ts-body { flex: 1; overflow: auto; padding: 0.6rem clamp(1.5rem,4vw,3rem) 0; }
-table.ptable { width: 100%; border-collapse: collapse; font-size: clamp(0.65rem,1.1vw,0.85rem); }
+.ts-header { flex-shrink: 0; padding: 1.2rem clamp(1.5rem,4vw,3rem) 0.75rem; border-bottom: 2px solid #E5E3DC; display: flex; align-items: center; justify-content: space-between; }
+.ts-header h2 { font-size: clamp(0.95rem,1.7vw,1.45rem); font-weight: 500; color: #872345; }
+.ts-wf { font-size: 0.6rem; font-weight: 700; color: #872345; }
+.ts-body { flex: 1; overflow: auto; padding: 0.5rem clamp(1.5rem,4vw,3rem) 0; }
+table.ptable { width: 100%; border-collapse: collapse; font-size: clamp(0.62rem,1.05vw,0.82rem); }
 table.ptable thead tr { background: #872345; }
-table.ptable thead th { padding: 0.6rem 0.85rem; font-weight: 600; color: #fff; text-align: left; border-right: 1px solid rgba(255,255,255,0.12); }
+table.ptable thead th { padding: 0.55rem 0.8rem; font-weight: 500; color: #fff; text-align: left; border-right: 1px solid rgba(255,255,255,0.1); }
 table.ptable thead th:last-child { border-right: none; }
 table.ptable tbody tr:nth-child(even) { background: #F9F9F2; }
 table.ptable tbody tr:nth-child(odd)  { background: #fff; }
-table.ptable tbody td { padding: 0.55rem 0.85rem; color: #35324A; border-bottom: 1px solid #E5E3DC; border-right: 1px solid #E5E3DC; vertical-align: middle; line-height: 1.45; }
+table.ptable tbody td { padding: 0.5rem 0.8rem; color: #35324A; border-bottom: 1px solid #E5E3DC; border-right: 1px solid #E5E3DC; vertical-align: middle; line-height: 1.45; }
 table.ptable tbody td:last-child { border-right: none; }
 table.ptable tbody td strong { font-weight: 600; color: #25223B; }
-.badge { display: inline-block; padding: 0.18rem 0.6rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; white-space: nowrap; }
+.badge { display: inline-block; padding: 0.16rem 0.55rem; border-radius: 4px; font-size: 0.68rem; font-weight: 500; white-space: nowrap; }
 .badge.complete   { background: #D4EDDA; color: #166534; }
 .badge.pending    { background: #FEF3C7; color: #92400E; }
 .badge.inprogress { background: #DBEAFE; color: #1E40AF; }
-.badge.present    { background: #FFE9DC; color: #C2410C; border: 1px solid rgba(255,107,24,0.25); }
+.badge.present    { background: #FFE9DC; color: #C2410C; border: 1px solid rgba(255,107,24,0.22); }
 .badge.notpresent { background: #F9F9F2; color: #8A8A9C; border: 1px solid #E5E3DC; }
-.ts-disclaimer { flex-shrink: 0; padding: 0.35rem clamp(1.5rem,4vw,3rem); font-size: 0.52rem; color: #8A8A9C; border-top: 1px solid #E5E3DC; font-style: italic; }
-.slide-counter.dark-text  { color: rgba(0,0,0,0.22); }
-.slide-counter.light-text { color: rgba(255,255,255,0.22); }
+.ts-disclaimer { flex-shrink: 0; padding: 0.3rem clamp(1.5rem,4vw,3rem); font-size: 0.5rem; color: #8A8A9C; border-top: 1px solid #E5E3DC; font-style: italic; }
+.slide-counter.dark-text  { color: rgba(0,0,0,0.2); }
+.slide-counter.light-text { color: rgba(255,255,255,0.2); }
 ```
 
 ### Playbook Slide Types
 
-**Cover** — `data-type="cover"`:
+**Cover** — `data-type="cover"` — include brand image on the right panel:
 ```html
 <section class="slide cover active" data-type="cover"
   data-title="Proof of Concept Playbook"
   data-doc-type="Proof of Concept Playbook"
   data-customer="Customer Name"
-  data-tagline="Drive Digital Adoption">
+  data-tagline="Drive Digital Adoption"
+  data-brand-image="product-suite-dark"
+  data-bi-x="6.2" data-bi-y="0.6" data-bi-w="3.4" data-bi-h="4.4">
   <div class="left">
     <p class="tagline">Drive Digital Adoption</p>
     <h1>Proof of Concept Playbook</h1>
@@ -767,7 +930,9 @@ table.ptable tbody td strong { font-weight: 600; color: #25223B; }
       <span class="customer-badge">Customer Name</span>
     </div>
   </div>
-  <div class="right"><div class="cover-arc3"></div></div>
+  <div class="right">
+    <img src="/brand/product-suite-dark.png" loading="eager" alt="">
+  </div>
   <p class="disclaimer-cover">Disclaimer: Please treat all information as confidential and do not share outside your organization. By default all calls will be recorded &amp; provided to you for internal use.</p>
 </section>
 ```
@@ -820,29 +985,30 @@ const DISCLAIMER_TEXT = 'Disclaimer: Please treat all information as confidentia
 function stripHtml(str) { const d = document.createElement('div'); d.innerHTML = str; return (d.textContent || d.innerText || '').trim(); }
 
 if (type === 'cover') {
-  s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:5.8, h:'100%', fill:{ color:'872345' } });
-  s.addShape(pptx.ShapeType.rect, { x:5.8, y:0, w:4.2, h:'100%', fill:{ color:'FF6B18' } });
-  s.addShape(pptx.ShapeType.ellipse, { x:3.5, y:-1.5, w:8, h:8, line:{ color:'FFFFFF', width:1.5, transparency:75 }, fill:{ type:'none' } });
-  s.addText((slide.dataset.tagline||'').toUpperCase(), { x:.5,y:.55,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:3,transparency:55 , margin:0});
-  s.addText(slide.dataset.title||'', { x:.5,y:3.0,w:5,h:1.8,fontSize:26,color:'FFFFFF',fontFace:FONT,bold:true,valign:'top' , margin:0});
-  s.addText(slide.dataset.docType||'', { x:.5,y:4.95,w:4.8,h:.45,fontSize:11,color:'FFFFFF',fontFace:FONT,transparency:38 , margin:0});
-  s.addShape(pptx.ShapeType.rect, { x:.5,y:5.55,w:5,h:.02,fill:{ color:'FFFFFF' },transparency:80 });
-  s.addText('Whatfix', { x:.5,y:5.72,w:1.8,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT,bold:true , margin:0});
-  if (slide.dataset.customer) s.addText(slide.dataset.customer, { x:2.55,y:5.72,w:3,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT , margin:0});
-  s.addText(DISCLAIMER_TEXT, { x:0,y:5.38,w:10,h:.2,fontSize:5,color:'FFFFFF',fontFace:FONT,align:'center',transparency:72 , margin:0});
+  s.addShape(pptx.ShapeType.rect, { x:0,   y:0, w:5.8, h:SH, fill:{ color:'872345' } });
+  s.addShape(pptx.ShapeType.rect, { x:5.8, y:0, w:4.2, h:SH, fill:{ color:'FF6B18' } });
+  // Brand image on the orange right panel
+  if (biKey && _imgs[biKey]) addBrandImg(s, biKey, biX, biY, biW, biH);
+  s.addText((slide.dataset.tagline||'').toUpperCase(), { x:.5,y:.55,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:3,transparency:55,margin:0});
+  s.addText(slide.dataset.title||'', { x:.5,y:2.9,w:5,h:1.8,fontSize:24,color:'FFFFFF',fontFace:FONT,bold:false,valign:'top',wrap:true,margin:0});
+  s.addText(slide.dataset.docType||'', { x:.5,y:4.85,w:4.8,h:.42,fontSize:11,color:'FFFFFF',fontFace:FONT,transparency:38,margin:0});
+  s.addShape(pptx.ShapeType.rect, { x:.5,y:5.45,w:5,h:.02,fill:{ color:'FFFFFF' },transparency:80});
+  s.addText('Whatfix', { x:.5,y:5.0,w:1.8,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT,bold:true,margin:0});
+  if (slide.dataset.customer) s.addText(slide.dataset.customer, { x:2.55,y:5.0,w:3,h:.35,fontSize:11,color:'FFFFFF',fontFace:FONT,margin:0});
+  s.addText(DISCLAIMER_TEXT, { x:0,y:5.35,w:SW,h:.2,fontSize:5,color:'FFFFFF',fontFace:FONT,align:'center',transparency:72,margin:0});
 
 } else if (type === 'section-div') {
-  s.addShape(pptx.ShapeType.rect, { x:0,y:0,w:5.8,h:'100%',fill:{ color:'25223B' } });
-  s.addShape(pptx.ShapeType.rect, { x:5.8,y:0,w:4.2,h:'100%',fill:{ color:'FF6B18' } });
+  s.addShape(pptx.ShapeType.rect, { x:0,   y:0, w:5.8, h:SH, fill:{ color:'25223B' } });
+  s.addShape(pptx.ShapeType.rect, { x:5.8, y:0, w:4.2, h:SH, fill:{ color:'FF6B18' } });
   if (slide.dataset.secLabel)
-    s.addText(slide.dataset.secLabel.toUpperCase(), { x:.5,y:2.6,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:4,transparency:70 , margin:0});
-  s.addText(slide.dataset.title||'', { x:.5,y:3.0,w:5,h:1.8,fontSize:24,color:'FFFFFF',fontFace:FONT,bold:true , margin:0});
+    s.addText(slide.dataset.secLabel.toUpperCase(), { x:.5,y:2.55,w:5,h:.3,fontSize:7,color:'FFFFFF',fontFace:FONT,bold:true,charSpacing:4,transparency:70,margin:0});
+  s.addText(slide.dataset.title||'', { x:.5,y:2.9,w:5,h:1.8,fontSize:24,color:'FFFFFF',fontFace:FONT,bold:false,wrap:true,margin:0});
 
 } else if (type === 'table' || type === 'success-metrics') {
-  s.addShape(pptx.ShapeType.rect, { x:0,y:0,w:'100%',h:'100%',fill:{ color:'FFFFFF' } });
-  s.addShape(pptx.ShapeType.rect, { x:0,y:0,w:'100%',h:.05,fill:{ color:'872345' } });
-  s.addText(slide.dataset.title||'', { x:.4,y:.2,w:9.2,h:.65,fontSize:18,color:'872345',fontFace:FONT,bold:true , margin:0});
-  s.addText('Whatfix', { x:8.5,y:.25,w:1.3,h:.35,fontSize:8,color:'872345',fontFace:FONT,bold:true,align:'right' , margin:0});
+  s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color:'FFFFFF' } });
+  s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color:'872345' } });
+  s.addText(slide.dataset.title||'', { x:.4,y:.18,w:9.2,h:.65,fontSize:18,color:'872345',fontFace:FONT,bold:false,margin:0});
+  s.addText('Whatfix', { x:8.5,y:.22,w:1.3,h:.35,fontSize:8,color:'872345',fontFace:FONT,bold:true,align:'right',margin:0});
   s.addShape(pptx.ShapeType.line, { x:.4,y:1.0,w:9.2,h:0,line:{ color:'E5E3DC',width:.5 } });
   const domTable = slide.querySelector('table');
   if (domTable) {
@@ -854,14 +1020,14 @@ if (type === 'cover') {
       headers.map(h => ({ text:h, options:{ bold:true,color:'FFFFFF',fill:'872345',fontFace:FONT,fontSize:9,align:'left',valign:'middle' } })),
       ...bodyRows.map((row,ri) => row.map(cell => ({ text:cell, options:{ color:'35324A',fontFace:FONT,fontSize:8.5,fill:ri%2===0?'FFFFFF':'F9F9F2',valign:'middle' } })))
     ];
-    if (tableData.length > 1) s.addTable(tableData, { x:.4,y:1.1,w:9.2,colW:colWs,border:{ type:'solid',color:'E5E3DC',pt:.4 },rowH:.65 });
+    if (tableData.length > 1) s.addTable(tableData, { x:.4,y:1.05,w:9.2,colW:colWs,border:{ type:'solid',color:'E5E3DC',pt:.4 },rowH:.62 });
   }
-  s.addText(DISCLAIMER_TEXT, { x:.4,y:5.35,w:9.2,h:.2,fontSize:5,color:'8A8A9C',fontFace:FONT,italic:true , margin:0});
+  s.addText(DISCLAIMER_TEXT, { x:.4,y:5.32,w:9.2,h:.22,fontSize:5,color:'8A8A9C',fontFace:FONT,italic:true,margin:0});
 }
 ```
 
 ### Typical playbook structure
-1. Cover — title + customer name
+1. Cover — title + customer name + brand graphic
 2. Section divider — "POC Prerequisites"
 3. Table slide — POC Stages checklist
 4. Section divider — "Use Cases and Success Criteria"
@@ -877,6 +1043,7 @@ if (type === 'cover') {
 3. **Action titles everywhere** — every `data-headline` and `data-title` must be a complete sentence stating the takeaway
 4. **Vary layouts** — do not use the same slide type more than twice in a row
 5. **Speaker notes** — put in `<div class="notes">` inside the slide; carried to PPTX notes pane automatically
+6. **Brand graphics are mandatory on title, closing, and any product-specific slide** — add `data-brand-image` and the corresponding `<img>` in HTML; the PPTX export will embed the graphic automatically if it has been preloaded
 
 ## After Generating
 
