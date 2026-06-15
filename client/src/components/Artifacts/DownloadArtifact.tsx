@@ -288,24 +288,52 @@ const DownloadArtifact = ({
    */
   const printPdf = () => {
     if (!content) return;
-    const PRINT_CSS = `<style>
-@media print {
-  @page { size: landscape; margin: 0; }
-  *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-  html, body { width: 100%; height: auto; overflow: visible !important; }
-  .deck { position: relative !important; height: auto !important; overflow: visible !important; }
-  .slide { position: relative !important; inset: auto !important; opacity: 1 !important; transform: none !important; display: block !important; width: 100vw !important; height: 100vh !important; page-break-after: always; break-after: page; }
-  .slide:last-child { page-break-after: avoid; break-after: avoid; }
-  .progress-bar, .slide-counter, .nav-hint, .notes { display: none !important; }
-}
-</style>`;
-    // Auto-trigger print after resources load (1.2 s gives fonts/images time to load)
-    const AUTO_PRINT = `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},1200);});<\/script>`;
-    // Patch brand asset paths and inject _BRAND_ORIGIN, then inject print CSS + auto-print
-    // Use case-insensitive regex so </HEAD> / </BODY> variants also match
+
+    // Design reference — must match the effective viewport in the Sandpack preview panel.
+    // All vw/vh-based sizes in the slide CSS are authored against these dimensions.
+    const DESIGN_W = 960;
+    const DESIGN_H = 540;
+
+    // Injected into the print tab.  Runs after load to:
+    //  1. Measure the actual window width and compute a zoom factor that makes the
+    //     browser render vw-based sizes as if the viewport were DESIGN_W wide.
+    //  2. Derive the slide height in raw (pre-zoom) CSS px so that, after zoom is
+    //     applied, each slide occupies exactly one 10 in × 5.625 in print page.
+    //  3. Dynamically inject @media print rules with those computed values.
+    //  4. Trigger window.print() once fonts/images have had time to load.
+    const PRINT_SETUP_SCRIPT = `<script>
+(function () {
+  window.addEventListener('load', function () {
+    var cw = document.documentElement.clientWidth || ${DESIGN_W};
+    // zoom that maps the window width onto the design width
+    var scale = ${DESIGN_W} / cw;
+    // slide height that will visually equal ${DESIGN_H}px after zoom
+    var slideH = Math.round(cw * ${DESIGN_H} / ${DESIGN_W});
+    document.documentElement.style.zoom = scale;
+    var s = document.createElement('style');
+    s.textContent =
+      '@media print{' +
+      '@page{size:10in 5.625in;margin:0}' +
+      'html,body{overflow:visible!important}' +
+      '.deck{position:relative!important;height:auto!important;overflow:visible!important}' +
+      '.slide{position:relative!important;inset:auto!important;opacity:1!important;' +
+      'transform:none!important;display:block!important;' +
+      'width:100vw!important;height:' + slideH + 'px!important;' +
+      'page-break-after:always;break-after:page}' +
+      '.slide:last-child{page-break-after:avoid;break-after:avoid}' +
+      '.progress-bar,.slide-counter,.nav-hint,.notes{display:none!important}' +
+      '*,*::before,*::after{' +
+      '-webkit-print-color-adjust:exact!important;' +
+      'print-color-adjust:exact!important;' +
+      'color-adjust:exact!important}}';
+    document.head.appendChild(s);
+    setTimeout(function () { window.print(); }, 1200);
+  });
+}());
+</script>`;
+
     const printHtml = patchLibUrls(content)
-      .replace(/<\/head>/i, PRINT_CSS + '</head>')
-      .replace(/<\/body>/i, AUTO_PRINT + '</body>');
+      .replace(/<\/head>/i, PRINT_SETUP_SCRIPT + '</head>');
     const blob = new Blob([printHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     // Use an anchor click instead of window.open — browsers do not block anchor-based

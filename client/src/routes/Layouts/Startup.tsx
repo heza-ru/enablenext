@@ -38,7 +38,7 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
   }, [isAuthenticated, navigate, data]);
 
   useEffect(() => {
-    document.title = startupConfig?.appTitle || 'Enable';
+    document.title = startupConfig?.appTitle || 'Whatfix Enable';
   }, [startupConfig?.appTitle]);
 
   useEffect(() => {

@@ -60,7 +60,7 @@ router.get('/', async function (req, res) {
 
     /** @type {TStartupConfig} */
     const payload = {
-      appTitle: process.env.APP_TITLE || 'Enable',
+      appTitle: process.env.APP_TITLE || 'Whatfix Enable',
       socialLogins: appConfig?.registration?.socialLogins ?? defaultSocialLogins,
       discordLoginEnabled: !!process.env.DISCORD_CLIENT_ID && !!process.env.DISCORD_CLIENT_SECRET,
       facebookLoginEnabled:
