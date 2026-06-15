@@ -107,7 +107,7 @@ function patchLibUrls(html: string): string {
     .replace(/(url\(['"]?)\/libs\//g, `$1${origin}/libs/`);
 
   // Inject _BRAND_ORIGIN before </head> so the JS fetch path uses the right origin
-  const originTag = `<script>window._BRAND_ORIGIN=${JSON.stringify(origin)};<\\/script>`;
+  const originTag = `<script>window._BRAND_ORIGIN=${JSON.stringify(origin)};</script>`;
   patched = patched.replace(/<\/head>/i, `${originTag}</head>`);
 
   console.log(
@@ -308,10 +308,16 @@ const DownloadArtifact = ({
       .replace(/<\/body>/i, AUTO_PRINT + '</body>');
     const blob = new Blob([printHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    const opened = window.open(url, '_blank');
-    if (!opened) {
-      console.warn(`${LOG} [printPdf] window.open was blocked — user may need to allow popups`);
-    }
+    // Use an anchor click instead of window.open — browsers do not block anchor-based
+    // navigation triggered from a user gesture, whereas window.open is often suppressed
+    // by popup blockers even inside a direct click handler.
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     // Keep the blob URL alive long enough for the new tab to finish loading
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
     flash('pdf');

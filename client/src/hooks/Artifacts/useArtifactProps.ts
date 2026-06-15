@@ -17,7 +17,7 @@ function patchHtmlForSandpack(html: string): string {
   // Inject origin constant before </head> so JS on the page can use it
   let patched = html.replace(
     /<\/head>/i,
-    `<script>window._BRAND_ORIGIN=${JSON.stringify(origin)};<\\/script></head>`,
+    `<script>window._BRAND_ORIGIN=${JSON.stringify(origin)};</script></head>`,
   );
   // Fix relative paths in HTML src attributes and CSS url() calls
   patched = patched
