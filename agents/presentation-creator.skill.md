@@ -11,6 +11,44 @@ Generate a single complete self-contained HTML artifact that:
 1. **Renders as interactive professional slides** in the side panel
 2. **Exposes a `downloadPptx()` function** used by the artifact panel to generate a real `.pptx` file client-side using PptxGenJS
 
+## Workflow — Always Follow This Two-Step Process
+
+**Step 1 — Understand and propose structure (do this first, every time)**
+
+Before writing any HTML, read the user's input and extract:
+- **Audience** — technical / executive / mixed / specific stakeholders named
+- **Tone** — consultative / assertive / educational / celebratory
+- **Goal** — win evaluation / progress to POC / close the deal / inform / align
+- **Must include** — specific slides, data, comparisons, or flows the user named
+- **Must avoid** — topics, slides, or framing to leave out
+- **Length** — explicit ("keep it under 10 slides") or inferred from context
+
+Then reply with:
+1. The slide structure you've decided on (slide number, type, action title, one-line rationale)
+2. Why you chose that flow — what story it tells
+3. A prompt: _"Looks good? Say 'build it' or tell me what to change."_
+
+**Example structure proposal:**
+> Here's the structure I'd suggest for this deck:
+>
+> 1. **Title** — Whatfix for [Customer]: From Evaluation to Decision _(sets stakes)_
+> 2. **Agenda** — What we'll cover today _(orients the room)_
+> 3. **Content** — What we heard from your team _(shows we listened)_
+> 4. **Stat** — The cost of the status quo _(creates urgency)_
+> 5. **Two-col** — Why Whatfix beats [Competitor] on analytics _(addresses key concern)_
+> 6. **Two-col** — Enterprise-grade integrations, zero rip-and-replace _(de-risks switch)_
+> 7. **Stat** — Customers like you, results like this _(social proof)_
+> 8. **Section** — What a POC looks like _(makes next step concrete)_
+> 9. **Closing** — Ready to run a 30-day POC? _(clear CTA)_
+>
+> Want to swap any slides, add a competitive table, or adjust the flow before I build it?
+
+**Step 2 — Build**
+
+Only start generating HTML after the user approves the structure or gives edits. When they say "build it", "looks good", "go ahead", or give specific tweaks — incorporate any changes and generate the full artifact.
+
+---
+
 ## Output Format — MANDATORY
 
 ALWAYS deliver the HTML inside an artifact block. NEVER output it as a plain code block.
@@ -1121,6 +1159,12 @@ if (type === 'cover') {
 
 ## After Generating
 
-1. Add more slides or adjust layout types?
-2. Switch between dark deck and playbook format?
-3. Add speaker notes to specific slides?
+After delivering the artifact, always offer specific iteration options based on what was built. Examples:
+
+- _"Want me to move the competitive slide earlier, or add a dedicated ROI slide?"_
+- _"Should I add speaker notes to every slide?"_
+- _"Want a two-column layout on slide 5 instead of bullets?"_
+- _"Should I add a SAP Enable Now column to the comparison table?"_
+- _"Want to switch this to a playbook format for the POC conversation?"_
+
+When the user asks for a change, update the artifact in place using the same identifier — never generate a new artifact for an iteration on the same deck.

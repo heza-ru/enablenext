@@ -289,27 +289,14 @@ const DownloadArtifact = ({
   const printPdf = () => {
     if (!content) return;
 
-    // Design reference — must match the effective viewport in the Sandpack preview panel.
-    // All vw/vh-based sizes in the slide CSS are authored against these dimensions.
-    const DESIGN_W = 960;
-    const DESIGN_H = 540;
-
-    // Injected into the print tab.  Runs after load to:
-    //  1. Measure the actual window width and compute a zoom factor that makes the
-    //     browser render vw-based sizes as if the viewport were DESIGN_W wide.
-    //  2. Derive the slide height in raw (pre-zoom) CSS px so that, after zoom is
-    //     applied, each slide occupies exactly one 10 in × 5.625 in print page.
-    //  3. Dynamically inject @media print rules with those computed values.
-    //  4. Trigger window.print() once fonts/images have had time to load.
+    // Injected into the print tab. @page sets the CSS viewport to exactly
+    // DESIGN_W × DESIGN_H px (10in × 5.625in at 96 dpi = 960 × 540 px), which
+    // matches the slide authoring dimensions — no zoom is needed or applied.
+    // Applying zoom to <html> would shrink the deck below the window/page width,
+    // leaving the body background exposed as a visible bar on the right side.
     const PRINT_SETUP_SCRIPT = `<script>
 (function () {
   window.addEventListener('load', function () {
-    var cw = document.documentElement.clientWidth || ${DESIGN_W};
-    // zoom that maps the window width onto the design width
-    var scale = ${DESIGN_W} / cw;
-    // slide height that will visually equal ${DESIGN_H}px after zoom
-    var slideH = Math.round(cw * ${DESIGN_H} / ${DESIGN_W});
-    document.documentElement.style.zoom = scale;
     var s = document.createElement('style');
     s.textContent =
       '@media print{' +
@@ -318,10 +305,10 @@ const DownloadArtifact = ({
       '.deck{position:relative!important;height:auto!important;overflow:visible!important}' +
       '.slide{position:relative!important;inset:auto!important;opacity:1!important;' +
       'transform:none!important;display:block!important;' +
-      'width:100vw!important;height:' + slideH + 'px!important;' +
+      'width:100vw!important;height:100vh!important;' +
       'page-break-after:always;break-after:page}' +
       '.slide:last-child{page-break-after:avoid;break-after:avoid}' +
-      '.progress-bar,.slide-counter,.nav-hint,.notes{display:none!important}' +
+      '.progress-bar,.progress-fill,.slide-counter,.nav-hint,.notes{display:none!important}' +
       '*,*::before,*::after{' +
       '-webkit-print-color-adjust:exact!important;' +
       'print-color-adjust:exact!important;' +
