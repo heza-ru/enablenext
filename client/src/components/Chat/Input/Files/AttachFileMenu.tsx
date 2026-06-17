@@ -3,6 +3,7 @@ import { useRecoilState } from 'recoil';
 import * as Ariakit from '@ariakit/react';
 import {
   FileSearch,
+  HardDrive,
   ImageUpIcon,
   FileType2Icon,
   FileImageIcon,
@@ -31,8 +32,11 @@ import {
   useLocalize,
 } from '~/hooks';
 import useSharePointFileHandling from '~/hooks/Files/useSharePointFileHandling';
+import useGoogleDriveFileHandling from '~/hooks/Files/useGoogleDriveFileHandling';
 import { SharePointPickerDialog } from '~/components/SharePoint';
+import { GoogleDrivePickerDialog } from '~/components/GoogleDrive';
 import { useGetStartupConfig } from '~/data-provider';
+import { useAuthContext } from '~/hooks/AuthContext';
 import { ephemeralAgentByConvoId } from '~/store';
 import { MenuItemProps } from '~/common';
 import { cn } from '~/utils';
@@ -70,12 +74,17 @@ const AttachFileMenu = ({
   const { handleSharePointFiles, isProcessing, downloadProgress } = useSharePointFileHandling({
     toolResource,
   });
+  const { handleDriveFiles, isProcessing: isDriveProcessing } = useGoogleDriveFileHandling();
 
   const { agentsConfig } = useGetAgentsConfig();
   const { data: startupConfig } = useGetStartupConfig();
+  const { user } = useAuthContext();
   const sharePointEnabled = startupConfig?.sharePointFilePickerEnabled;
+  const googleDriveEnabled = startupConfig?.googleDrivePickerEnabled;
+  const isGoogleUser = user?.provider === 'google';
 
   const [isSharePointDialogOpen, setIsSharePointDialogOpen] = useState(false);
+  const [isDriveDialogOpen, setIsDriveDialogOpen] = useState(false);
 
   /** TODO: Ephemeral Agent Capabilities
    * Allow defining agent capabilities on a per-endpoint basis
@@ -222,7 +231,14 @@ const AttachFileMenu = ({
         icon: <SharePointIcon className="icon-md" />,
         subItems: sharePointItems,
       });
-      return localItems;
+    }
+
+    if (googleDriveEnabled && isGoogleUser) {
+      localItems.push({
+        label: 'Google Drive',
+        onClick: () => setIsDriveDialogOpen(true),
+        icon: <HardDrive className="icon-md" />,
+      });
     }
 
     return localItems;
@@ -236,9 +252,12 @@ const AttachFileMenu = ({
     setToolResource,
     setEphemeralAgent,
     sharePointEnabled,
+    googleDriveEnabled,
+    isGoogleUser,
     codeAllowedByAgent,
     fileSearchAllowedByAgent,
     setIsSharePointDialogOpen,
+    setIsDriveDialogOpen,
   ]);
 
   const menuTrigger = (
@@ -298,6 +317,16 @@ const AttachFileMenu = ({
         onFilesSelected={handleSharePointFilesSelected}
         isDownloading={isProcessing}
         downloadProgress={downloadProgress}
+        maxSelectionCount={endpointFileConfig?.fileLimit}
+      />
+      <GoogleDrivePickerDialog
+        isOpen={isDriveDialogOpen}
+        onOpenChange={setIsDriveDialogOpen}
+        onFilesSelected={async (driveFiles) => {
+          await handleDriveFiles(driveFiles);
+          setIsDriveDialogOpen(false);
+        }}
+        isDownloading={isDriveProcessing}
         maxSelectionCount={endpointFileConfig?.fileLimit}
       />
     </>
