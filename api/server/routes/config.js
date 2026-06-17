@@ -21,6 +21,7 @@ const publicSharedLinksEnabled =
     isEnabled(process.env.ALLOW_SHARED_LINKS_PUBLIC));
 
 const sharePointFilePickerEnabled = isEnabled(process.env.ENABLE_SHAREPOINT_FILEPICKER);
+const googleDrivePickerEnabled = isEnabled(process.env.GOOGLE_DRIVE_ENABLED);
 const openidReuseTokens = isEnabled(process.env.OPENID_REUSE_TOKENS);
 
 router.get('/', async function (req, res) {
@@ -107,6 +108,8 @@ router.get('/', async function (req, res) {
       staticBundlerURL: process.env.SANDPACK_STATIC_BUNDLER_URL,
       sharePointFilePickerEnabled,
       sharePointBaseUrl: process.env.SHAREPOINT_BASE_URL,
+      googleDrivePickerEnabled,
+      googleDriveFolderName: process.env.GOOGLE_DRIVE_FOLDER_NAME || 'EnableNext Outputs',
       sharePointPickerGraphScope: process.env.SHAREPOINT_PICKER_GRAPH_SCOPE,
       sharePointPickerSharePointScope: process.env.SHAREPOINT_PICKER_SHAREPOINT_SCOPE,
       openidReuseTokens,
