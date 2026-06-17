@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
-import { CircleCheckBig } from 'lucide-react';
+import { CircleCheckBig, Loader2 } from 'lucide-react';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react/unstyled';
 import type { Artifact } from '~/common';
 import { Button } from '@librechat/client';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { useCodeState } from '~/Providers/EditorContext';
+import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 
 const LOG = '[DownloadArtifact]';
@@ -241,6 +242,9 @@ const DownloadArtifact = ({
   const { currentCode } = useCodeState();
   const { fileKey: fileName } = useArtifactProps({ artifact });
   const [done, setDone] = useState<string | null>(null);
+  const { data: startupConfig } = useGetStartupConfig();
+  const [driveLink, setDriveLink] = useState<string | null>(null);
+  const [driveSaving, setDriveSaving] = useState<string | null>(null);
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -278,6 +282,34 @@ const DownloadArtifact = ({
   const flash = (key: string) => {
     setDone(key);
     setTimeout(() => setDone(null), 2500);
+  };
+
+  const saveToDrive = (fmt: NativeFormat) => {
+    setDriveSaving(fmt.ext);
+    setDriveLink(null);
+
+    const handler = async (e: MessageEvent) => {
+      if (e.data?.type !== 'artifact-download') return;
+      if (!String(e.data.filename ?? '').endsWith(`.${fmt.ext}`)) return;
+      window.removeEventListener('message', handler);
+      try {
+        const res = await fetch('/api/drive/files/upload', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: e.data.filename, ext: fmt.ext, data: e.data.data }),
+        });
+        if (!res.ok) throw new Error('Upload failed');
+        const { webViewLink } = (await res.json()) as { webViewLink: string };
+        setDriveLink(webViewLink);
+      } catch (err) {
+        console.error('[DownloadArtifact] Drive upload error', err);
+      } finally {
+        setDriveSaving(null);
+      }
+    };
+    window.addEventListener('message', handler);
+    downloadNative(fmt);
   };
 
   /**
@@ -399,17 +431,41 @@ const DownloadArtifact = ({
   return (
     <div className="flex items-center gap-1">
       {nativeFormats.map((fmt) => (
-        <Button
-          key={fmt.ext}
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs font-medium"
-          onClick={() => downloadNative(fmt)}
-          aria-label={`Download as ${fmt.label}`}
-        >
-          {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-          {fmt.label}
-        </Button>
+        <React.Fragment key={fmt.ext}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs font-medium"
+            onClick={() => downloadNative(fmt)}
+            aria-label={`Download as ${fmt.label}`}
+          >
+            {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+            {fmt.label}
+          </Button>
+          {startupConfig?.googleDrivePickerEnabled && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs font-medium"
+              onClick={() => saveToDrive(fmt)}
+              disabled={driveSaving === fmt.ext}
+              aria-label={`Save ${fmt.label} to Google Drive`}
+            >
+              {driveSaving === fmt.ext && <Loader2 size={12} className="mr-1 animate-spin" />}
+              {driveSaving === fmt.ext ? 'Saving...' : 'Drive'}
+            </Button>
+          )}
+          {driveLink && driveSaving === null && (
+            <a
+              href={driveLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-7 items-center px-2 text-xs font-medium text-primary hover:underline"
+            >
+              Open ↗
+            </a>
+          )}
+        </React.Fragment>
       ))}
       {isPresentationArtifact && (
         <Button
