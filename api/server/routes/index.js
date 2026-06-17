@@ -1,5 +1,6 @@
 const accessPermissions = require('./accessPermissions');
 const assistants = require('./assistants');
+const drive = require('./drive');
 const categories = require('./categories');
 const endpoints = require('./endpoints');
 const staticRoute = require('./static');
@@ -28,6 +29,7 @@ const mcp = require('./mcp');
 module.exports = {
   mcp,
   auth,
+  drive,
   keys,
   user,
   tags,
