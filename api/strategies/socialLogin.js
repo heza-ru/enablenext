@@ -43,6 +43,13 @@ const socialLogin =
 
       if (existingUser?.provider === provider) {
         await handleExistingUser(existingUser, avatarUrl, appConfig, email);
+        if (provider === 'google' && accessToken) {
+          const tokenUpdate = { googleAccessToken: accessToken };
+          if (refreshToken) {
+            tokenUpdate.googleRefreshToken = refreshToken;
+          }
+          await existingUser.updateOne(tokenUpdate);
+        }
         return cb(null, existingUser);
       } else if (existingUser) {
         logger.info(
@@ -76,6 +83,13 @@ const socialLogin =
         emailVerified,
         appConfig,
       });
+      if (provider === 'google' && accessToken) {
+        const tokenUpdate = { googleAccessToken: accessToken };
+        if (refreshToken) {
+          tokenUpdate.googleRefreshToken = refreshToken;
+        }
+        await newUser.updateOne(tokenUpdate);
+      }
       return cb(null, newUser);
     } catch (err) {
       logger.error(`[${provider}Login]`, err);

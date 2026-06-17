@@ -82,7 +82,15 @@ router.get('/error', (req, res) => {
 router.get(
   '/google',
   passport.authenticate('google', {
-    scope: ['openid', 'profile', 'email'],
+    scope: [
+      'openid',
+      'profile',
+      'email',
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
+    accessType: 'offline',
+    prompt: 'consent',
     session: false,
   }),
 );
@@ -93,7 +101,13 @@ router.get(
     failureRedirect: `${domains.client}/oauth/error`,
     failureMessage: true,
     session: false,
-    scope: ['openid', 'profile', 'email'],
+    scope: [
+      'openid',
+      'profile',
+      'email',
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
   }),
   setBalanceConfig,
   checkDomainAllowed,
