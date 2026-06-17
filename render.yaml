@@ -23,6 +23,8 @@ services:
       - key: USE_REDIS
         value: false
       # Disable telemetry to avoid OpenTelemetry errors
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=460
       - key: TELEMETRY_ENABLED
         value: false
       - key: LANGFUSE_ENABLED
