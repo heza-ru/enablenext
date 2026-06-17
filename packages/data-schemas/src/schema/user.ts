@@ -106,6 +106,17 @@ const userSchema = new Schema<IUser>(
       unique: true,
       sparse: true,
     },
+    googleAccessToken: {
+      type: String,
+      select: false,
+    },
+    googleRefreshToken: {
+      type: String,
+      select: false,
+    },
+    googleDriveFolderId: {
+      type: String,
+    },
     plugins: {
       type: Array,
     },

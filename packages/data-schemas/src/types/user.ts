@@ -18,6 +18,9 @@ export interface IUser extends Document {
   githubId?: string;
   discordId?: string;
   appleId?: string;
+  googleAccessToken?: string;
+  googleRefreshToken?: string;
+  googleDriveFolderId?: string;
   plugins?: string[];
   twoFactorEnabled?: boolean;
   totpSecret?: string;
