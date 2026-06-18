@@ -3,7 +3,7 @@ const { ErrorTypes } = require('librechat-data-provider');
 const { isEnabled, isEmailDomainAllowed } = require('@librechat/api');
 const { createSocialUser, handleExistingUser } = require('./process');
 const { getAppConfig } = require('~/server/services/Config');
-const { findUser } = require('~/models');
+const { findUser, updateUser } = require('~/models');
 
 const socialLogin =
   (provider, getProfileDetails) => async (accessToken, refreshToken, idToken, profile, cb) => {
@@ -48,7 +48,7 @@ const socialLogin =
           if (refreshToken) {
             tokenUpdate.googleRefreshToken = refreshToken;
           }
-          await existingUser.updateOne(tokenUpdate);
+          await updateUser(existingUser._id.toString(), tokenUpdate);
         }
         return cb(null, existingUser);
       } else if (existingUser) {
@@ -88,7 +88,7 @@ const socialLogin =
         if (refreshToken) {
           tokenUpdate.googleRefreshToken = refreshToken;
         }
-        await newUser.updateOne(tokenUpdate);
+        await updateUser(newUser._id.toString(), tokenUpdate);
       }
       return cb(null, newUser);
     } catch (err) {
