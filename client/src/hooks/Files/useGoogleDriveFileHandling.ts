@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { apiBaseUrl } from 'librechat-data-provider';
 import { useFileHandling } from '~/hooks';
+import { useAuthContext } from '~/hooks/AuthContext';
 
 interface DriveFile {
   id: string;
@@ -9,6 +10,7 @@ interface DriveFile {
 }
 
 export default function useGoogleDriveFileHandling() {
+  const { token } = useAuthContext();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { handleFiles } = useFileHandling();
@@ -20,7 +22,7 @@ export default function useGoogleDriveFileHandling() {
       try {
         for (const driveFile of driveFiles) {
           const res = await fetch(`${apiBaseUrl()}/api/drive/files/${driveFile.id}/content`, {
-            credentials: 'include',
+            headers: { Authorization: `Bearer ${token}` },
           });
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -39,7 +41,7 @@ export default function useGoogleDriveFileHandling() {
         setIsProcessing(false);
       }
     },
-    [handleFiles],
+    [handleFiles, token],
   );
 
   return { handleDriveFiles, isProcessing, error };

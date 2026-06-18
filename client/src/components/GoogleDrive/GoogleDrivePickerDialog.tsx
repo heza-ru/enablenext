@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, FileText, Loader2 } from 'lucide-react';
 import { apiBaseUrl } from 'librechat-data-provider';
+import { useAuthContext } from '~/hooks/AuthContext';
 import {
   OGDialog,
   OGDialogTitle,
@@ -41,6 +42,7 @@ export default function GoogleDrivePickerDialog({
   isDownloading = false,
   maxSelectionCount,
 }: Props) {
+  const { token } = useAuthContext();
   const [query, setQuery] = useState('');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -56,7 +58,9 @@ export default function GoogleDrivePickerDialog({
         const params = new URLSearchParams();
         if (query) params.set('query', query);
         if (pageToken) params.set('pageToken', pageToken);
-        const res = await fetch(`${apiBaseUrl()}/api/drive/files?${params}`, { credentials: 'include' });
+        const res = await fetch(`${apiBaseUrl()}/api/drive/files?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) throw new Error('Failed to load Drive files');
         const data = (await res.json()) as { files?: DriveFile[]; nextPageToken?: string };
         setFiles((prev) => (pageToken ? [...prev, ...(data.files ?? [])] : (data.files ?? [])));
@@ -67,7 +71,7 @@ export default function GoogleDrivePickerDialog({
         setLoading(false);
       }
     },
-    [query],
+    [query, token],
   );
 
   useEffect(() => {

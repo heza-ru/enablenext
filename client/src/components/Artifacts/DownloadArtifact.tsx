@@ -8,6 +8,7 @@ import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { useCodeState } from '~/Providers/EditorContext';
 import { apiBaseUrl } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
+import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
 
 const LOG = '[DownloadArtifact]';
@@ -244,6 +245,7 @@ const DownloadArtifact = ({
   const { fileKey: fileName } = useArtifactProps({ artifact });
   const [done, setDone] = useState<string | null>(null);
   const { data: startupConfig } = useGetStartupConfig();
+  const { token } = useAuthContext();
   const [driveLink, setDriveLink] = useState<string | null>(null);
   const [driveSaving, setDriveSaving] = useState<string | null>(null);
   const [driveError, setDriveError] = useState<string | null>(null);
@@ -302,8 +304,7 @@ const DownloadArtifact = ({
       try {
         const res = await fetch(`${apiBaseUrl()}/api/drive/files/upload`, {
           method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ filename: e.data.filename, ext: fmt.ext, data: e.data.data }),
         });
         if (!res.ok) {
