@@ -1,6 +1,6 @@
 const { Readable } = require('stream');
 const { google } = require('googleapis');
-const { findUser } = require('~/models');
+const { findUser, updateUser } = require('~/models');
 const { logger } = require('@librechat/data-schemas');
 
 function buildOAuthClient() {
@@ -29,7 +29,7 @@ async function getDriveClient(userId) {
 
   oauth2Client.on('tokens', async (tokens) => {
     if (tokens.access_token) {
-      await user.updateOne({ googleAccessToken: tokens.access_token });
+      await updateUser(user._id.toString(), { googleAccessToken: tokens.access_token });
     }
   });
 
@@ -135,7 +135,7 @@ async function ensureOutputFolder(userId, drive) {
   });
 
   const folderId = folder.data.id;
-  await user.updateOne({ googleDriveFolderId: folderId });
+  await updateUser(userId.toString(), { googleDriveFolderId: folderId });
   return folderId;
 }
 
