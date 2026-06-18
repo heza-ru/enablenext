@@ -763,6 +763,8 @@ export type TStartupConfig = {
   bundlerURL?: string;
   staticBundlerURL?: string;
   sharePointFilePickerEnabled?: boolean;
+  googleDrivePickerEnabled?: boolean;
+  googleDriveFolderName?: string;
   sharePointBaseUrl?: string;
   sharePointPickerGraphScope?: string;
   sharePointPickerSharePointScope?: string;
