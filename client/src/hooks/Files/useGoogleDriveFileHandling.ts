@@ -9,11 +9,18 @@ interface DriveFile {
   mimeType: string;
 }
 
-export default function useGoogleDriveFileHandling() {
+interface UseGoogleDriveFileHandlingProps {
+  fileSetter?: any;
+  toolResource?: string;
+  fileFilter?: (file: File) => boolean;
+  additionalMetadata?: Record<string, string | undefined>;
+}
+
+export default function useGoogleDriveFileHandling(props?: UseGoogleDriveFileHandlingProps) {
   const { token } = useAuthContext();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { handleFiles } = useFileHandling();
+  const { handleFiles } = useFileHandling(props);
 
   const handleDriveFiles = useCallback(
     async (driveFiles: DriveFile[]) => {
@@ -33,7 +40,7 @@ export default function useGoogleDriveFileHandling() {
           const match = contentDisposition.match(/filename="([^"]+)"/);
           const filename = match ? decodeURIComponent(match[1]) : driveFile.name;
           const file = new File([blob], filename, { type: blob.type || driveFile.mimeType });
-          await handleFiles([file]);
+          await handleFiles([file], props?.toolResource);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to attach Drive file');
@@ -41,7 +48,7 @@ export default function useGoogleDriveFileHandling() {
         setIsProcessing(false);
       }
     },
-    [handleFiles, token],
+    [handleFiles, props?.toolResource, token],
   );
 
   return { handleDriveFiles, isProcessing, error };

@@ -74,7 +74,9 @@ const AttachFileMenu = ({
   const { handleSharePointFiles, isProcessing, downloadProgress } = useSharePointFileHandling({
     toolResource,
   });
-  const { handleDriveFiles, isProcessing: isDriveProcessing } = useGoogleDriveFileHandling();
+  const { handleDriveFiles, isProcessing: isDriveProcessing } = useGoogleDriveFileHandling({
+    toolResource,
+  });
 
   const { agentsConfig } = useGetAgentsConfig();
   const { data: startupConfig } = useGetStartupConfig();
@@ -236,7 +238,10 @@ const AttachFileMenu = ({
     if (googleDriveEnabled && isGoogleUser) {
       localItems.push({
         label: 'Google Drive',
-        onClick: () => setIsDriveDialogOpen(true),
+        onClick: () => {
+          setToolResource(EToolResources.context);
+          setIsDriveDialogOpen(true);
+        },
         icon: <HardDrive className="icon-md" />,
       });
     }
