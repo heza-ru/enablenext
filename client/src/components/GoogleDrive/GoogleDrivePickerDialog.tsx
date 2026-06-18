@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, FileText, Loader2 } from 'lucide-react';
+import { apiBaseUrl } from 'librechat-data-provider';
 import {
   OGDialog,
   OGDialogTitle,
@@ -55,7 +56,7 @@ export default function GoogleDrivePickerDialog({
         const params = new URLSearchParams();
         if (query) params.set('query', query);
         if (pageToken) params.set('pageToken', pageToken);
-        const res = await fetch(`/api/drive/files?${params}`, { credentials: 'include' });
+        const res = await fetch(`${apiBaseUrl()}/api/drive/files?${params}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to load Drive files');
         const data = (await res.json()) as { files?: DriveFile[]; nextPageToken?: string };
         setFiles((prev) => (pageToken ? [...prev, ...(data.files ?? [])] : (data.files ?? [])));

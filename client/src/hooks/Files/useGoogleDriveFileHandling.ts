@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { apiBaseUrl } from 'librechat-data-provider';
 import { useFileHandling } from '~/hooks';
 
 interface DriveFile {
@@ -18,7 +19,7 @@ export default function useGoogleDriveFileHandling() {
       setError(null);
       try {
         for (const driveFile of driveFiles) {
-          const res = await fetch(`/api/drive/files/${driveFile.id}/content`, {
+          const res = await fetch(`${apiBaseUrl()}/api/drive/files/${driveFile.id}/content`, {
             credentials: 'include',
           });
           if (!res.ok) {

@@ -6,6 +6,7 @@ import type { Artifact } from '~/common';
 import { Button } from '@librechat/client';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { useCodeState } from '~/Providers/EditorContext';
+import { apiBaseUrl } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 
@@ -245,6 +246,7 @@ const DownloadArtifact = ({
   const { data: startupConfig } = useGetStartupConfig();
   const [driveLink, setDriveLink] = useState<string | null>(null);
   const [driveSaving, setDriveSaving] = useState<string | null>(null);
+  const [driveError, setDriveError] = useState<string | null>(null);
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -287,29 +289,40 @@ const DownloadArtifact = ({
   const saveToDrive = (fmt: NativeFormat) => {
     setDriveSaving(fmt.ext);
     setDriveLink(null);
+    setDriveError(null);
+
+    // Cancel any previous in-flight hidden iframe
+    iframeCleanupRef.current?.();
+    iframeCleanupRef.current = null;
 
     const handler = async (e: MessageEvent) => {
       if (e.data?.type !== 'artifact-download') return;
-      if (!String(e.data.filename ?? '').endsWith(`.${fmt.ext}`)) return;
+      if (!String(e.data.filename ?? '').toLowerCase().endsWith(`.${fmt.ext}`)) return;
       window.removeEventListener('message', handler);
       try {
-        const res = await fetch('/api/drive/files/upload', {
+        const res = await fetch(`${apiBaseUrl()}/api/drive/files/upload`, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: e.data.filename, ext: fmt.ext, data: e.data.data }),
         });
-        if (!res.ok) throw new Error('Upload failed');
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error || 'Upload failed');
+        }
         const { webViewLink } = (await res.json()) as { webViewLink: string };
         setDriveLink(webViewLink);
       } catch (err) {
         console.error('[DownloadArtifact] Drive upload error', err);
+        setDriveError(err instanceof Error ? err.message : 'Drive upload failed');
       } finally {
         setDriveSaving(null);
       }
     };
     window.addEventListener('message', handler);
-    downloadNative(fmt);
+    // Use hidden iframe directly so the blob interceptor captures the file
+    // without triggering a local browser download as a side effect
+    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn);
   };
 
   /**
@@ -454,6 +467,11 @@ const DownloadArtifact = ({
               {driveSaving === fmt.ext && <Loader2 size={12} className="mr-1 animate-spin" />}
               {driveSaving === fmt.ext ? 'Saving...' : 'Drive'}
             </Button>
+          )}
+          {driveError && driveSaving === null && (
+            <span className="flex h-7 items-center px-2 text-xs text-red-500" title={driveError}>
+              Drive failed
+            </span>
           )}
           {driveLink && driveSaving === null && (
             <a
