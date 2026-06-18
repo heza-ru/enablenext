@@ -59,4 +59,9 @@ services:
         sync: false
       - key: GOOGLE_CALLBACK_URL
         value: /oauth/google/callback
+      # Google Drive
+      - key: GOOGLE_DRIVE_ENABLED
+        value: true
+      - key: GOOGLE_DRIVE_FOLDER_NAME
+        value: EnableNext Outputs
     healthCheckPath: /api/health
