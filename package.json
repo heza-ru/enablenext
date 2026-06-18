@@ -41,7 +41,7 @@
     "reset-meili-sync": "node config/reset-meili-sync.js",
     "update-banner": "node config/update-banner.js",
     "delete-banner": "node config/delete-banner.js",
-    "backend": "cross-env NODE_ENV=production node --max-old-space-size=460 api/server/index.js",
+    "backend": "cross-env NODE_ENV=production node --max-old-space-size=380 --optimize-for-size api/server/index.js",
     "backend:inspect": "cross-env NODE_ENV=production node --inspect api/server/index.js",
     "backend:dev": "cross-env NODE_ENV=development npx nodemon api/server/index.js",
     "backend:experimental": "cross-env NODE_ENV=production node api/server/experimental.js",

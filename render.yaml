@@ -22,9 +22,21 @@ services:
       # Disable Redis (use in-memory cache for free tier)
       - key: USE_REDIS
         value: false
+      # Disable MeiliSearch (50-100MB savings - not needed on free tier)
+      - key: SEARCH
+        value: false
+      - key: MEILI_NO_SYNC
+        value: true
+      # MongoDB connection pool limits (20-30MB savings)
+      - key: MONGO_MAX_POOL_SIZE
+        value: 5
+      - key: MONGO_MIN_POOL_SIZE
+        value: 1
+      - key: MONGO_MAX_IDLE_TIME_MS
+        value: 30000
       # Disable telemetry to avoid OpenTelemetry errors
       - key: NODE_OPTIONS
-        value: --max-old-space-size=460
+        value: --max-old-space-size=380 --optimize-for-size
       - key: TELEMETRY_ENABLED
         value: false
       - key: LANGFUSE_ENABLED
