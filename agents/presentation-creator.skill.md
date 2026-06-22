@@ -166,21 +166,22 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 
 All graphics are served from `/brand/` (pre-built into the app). Use them on relevant slides — prefer a brand graphic over a blank colored rectangle whenever content matches a product.
 
+**Asset priority: SVG > light PNG > dark PNG.** Dark PNGs have opaque backgrounds that show as a visible box on slides. SVGs are transparent vectors. Light PNGs have transparent/neutral backgrounds.
+
 ### Using in HTML slides
 Use `<img>` with explicit size and `object-fit: contain`. Always set `loading="eager"`.
-**Prefer SVG over PNG** for AI Agent logos — SVGs are vector and render crisply at any size:
 ```html
-<!-- AI Agent logos: use .svg for HTML, .png for PPTX data-brand-image -->
+<!-- Agent logos: always use .svg — transparent background, vector quality -->
 <img src="/brand/authoring-agent-dark.svg" loading="eager"
      style="width:100%;height:100%;object-fit:contain;" alt="">
 
-<!-- Product suite composites (no SVG available): use .png -->
-<img src="/brand/product-suite-dark.png" loading="eager"
+<!-- Suite composites (no SVG): prefer light variant — no opaque background box -->
+<img src="/brand/product-suite-light.png" loading="eager"
      style="width:100%;height:100%;object-fit:contain;" alt="">
 ```
 
 ### Using in PPTX (data-brand-image attribute)
-Add `data-brand-image` to a `<section>` to embed the graphic in the PPTX. Optionally control position/size with `data-bi-x`, `data-bi-y`, `data-bi-w`, `data-bi-h` (all in inches). If omitted, sensible per-type defaults apply.
+Add `data-brand-image` to a `<section>` to embed the graphic in the PPTX. The `_IMG_PATHS` table resolves keys to SVG or light PNG automatically. Optionally control position/size with `data-bi-x`, `data-bi-y`, `data-bi-w`, `data-bi-h` (all in inches).
 
 ```html
 <section class="slide two-col" data-type="two-col"
@@ -191,39 +192,34 @@ Add `data-brand-image` to a `<section>` to embed the graphic in the PPTX. Option
 
 ### Available Files
 
-| File | Contents | Use on |
-|------|----------|--------|
-| `/brand/product-suite-dark.png` | Full product suite diagram | Dark slides, overview/closing |
-| `/brand/ai-agents-suite-dark.png` | Product suite — AI Agents highlight | AI agent slides |
-| `/brand/screensense-suite-dark.png` | Product suite — ScreenSense highlight | ScreenSense slides |
-| `/brand/product-suite-full-dark.png` | Full product suite with all logos | Architecture / product overview |
-| `/brand/product-suite-light.png` | Full product suite (light bg) | Light-background slides |
-| `/brand/ai-agents-suite-light.png` | AI Agents suite (light) | Light-background slides |
-| `/brand/authoring-agent-dark.svg` ✦ | Authoring Agent logo | Authoring Agent slides (HTML) |
-| `/brand/guidance-agent-dark.svg` ✦ | Guidance Agent logo | Guidance Agent slides (HTML) |
-| `/brand/insights-agent-dark.svg` ✦ | Insights Agent logo | Insights Agent slides (HTML) |
-| `/brand/authoring-agent-box-dark.svg` ✦ | Authoring Agent logo in box | Dark card insets (HTML) |
-| `/brand/guidance-agent-box-dark.svg` ✦ | Guidance Agent logo in box | Dark card insets (HTML) |
-| `/brand/insights-agent-box-dark.svg` ✦ | Insights Agent logo in box | Dark card insets (HTML) |
-| `/brand/authoring-agent-light.svg` ✦ | Authoring Agent logo (light) | Light-background slides (HTML) |
-| `/brand/guidance-agent-light.svg` ✦ | Guidance Agent logo (light) | Light-background slides (HTML) |
-| `/brand/insights-agent-light.svg` ✦ | Insights Agent logo (light) | Light-background slides (HTML) |
-| `/brand/authoring-agent-dark.png` | Authoring Agent logo | PPTX data-brand-image only |
-| `/brand/guidance-agent-dark.png` | Guidance Agent logo | PPTX data-brand-image only |
-| `/brand/insights-agent-dark.png` | Insights Agent logo | PPTX data-brand-image only |
-| `/brand/authoring-agent-box-dark.png` | Authoring Agent logo in box | PPTX data-brand-image only |
-| `/brand/guidance-agent-box-dark.png` | Guidance Agent logo in box | PPTX data-brand-image only |
-| `/brand/insights-agent-box-dark.png` | Insights Agent logo in box | PPTX data-brand-image only |
-| `/brand/authoring-agent-light.png` | Authoring Agent logo (light) | PPTX data-brand-image only |
-| `/brand/guidance-agent-light.png` | Guidance Agent logo (light) | PPTX data-brand-image only |
-| `/brand/insights-agent-light.png` | Insights Agent logo (light) | PPTX data-brand-image only |
+Priority: **SVG ✦ > light PNG ◆ > dark PNG** (dark PNGs have opaque backgrounds).
 
-✦ = SVG (vector) — use these in `<img src="...">` tags for pixel-perfect HTML rendering at any size.
-| `/brand/dap-dark.png` | DAP product logo | DAP-focused slides |
-| `/brand/dap-light.png` | DAP product logo (light) | Light-background slides |
-| `/brand/mirror-dark.png` | Mirror product logo | Mirror slides |
-| `/brand/screensense-dark.png` | ScreenSense product logo | ScreenSense slides |
-| `/brand/product-analytics-dark.png` | Product Analytics logo | Analytics slides |
+| File | Contents | Format | Use on |
+|------|----------|--------|--------|
+| `/brand/authoring-agent-dark.svg` | Authoring Agent logo | SVG ✦ | Dark-bg slides |
+| `/brand/authoring-agent-light.svg` | Authoring Agent logo | SVG ✦ | Light-bg slides |
+| `/brand/authoring-agent-box-dark.svg` | Authoring Agent in box | SVG ✦ | Dark card insets |
+| `/brand/guidance-agent-dark.svg` | Guidance Agent logo | SVG ✦ | Dark-bg slides |
+| `/brand/guidance-agent-light.svg` | Guidance Agent logo | SVG ✦ | Light-bg slides |
+| `/brand/guidance-agent-box-dark.svg` | Guidance Agent in box | SVG ✦ | Dark card insets |
+| `/brand/guidance-agent-box-light.svg` | Guidance Agent in box | SVG ✦ | Light card insets |
+| `/brand/insights-agent-dark.svg` | Insights Agent logo | SVG ✦ | Dark-bg slides |
+| `/brand/insights-agent-light.svg` | Insights Agent logo | SVG ✦ | Light-bg slides |
+| `/brand/insights-agent-box-dark.svg` | Insights Agent in box | SVG ✦ | Dark card insets |
+| `/brand/insights-agent-box-light.svg` | Insights Agent in box | SVG ✦ | Light card insets |
+| `/brand/product-suite-light.png` | Full product suite diagram | PNG ◆ | Any slide |
+| `/brand/ai-agents-suite-light.png` | AI Agents suite highlight | PNG ◆ | AI agent slides |
+| `/brand/dap-light.png` | DAP product logo | PNG ◆ | DAP slides |
+| `/brand/authoring-agent-light.png` | Authoring Agent logo | PNG | Fallback only |
+| `/brand/guidance-agent-light.png` | Guidance Agent logo | PNG | Fallback only |
+| `/brand/insights-agent-light.png` | Insights Agent logo | PNG | Fallback only |
+| `/brand/product-suite-full-dark.png` | Full suite with all logos | PNG | Architecture slides (no light alt) |
+| `/brand/screensense-suite-dark.png` | ScreenSense suite highlight | PNG | ScreenSense slides (no light alt) |
+| `/brand/mirror-dark.png` | Mirror product logo | PNG | Mirror slides (no light alt) |
+| `/brand/screensense-dark.png` | ScreenSense product logo | PNG | ScreenSense slides (no light alt) |
+| `/brand/product-analytics-dark.png` | Product Analytics logo | PNG | Analytics slides (no light alt) |
+
+✦ = SVG vector, transparent background — always prefer over PNG.  ◆ = light PNG, neutral background — prefer over dark PNG.
 
 **Rules:**
 - Use dark variants on dark slides (default), light variants on white/gray slides
@@ -657,7 +653,7 @@ h1, h2, h3 { text-wrap: pretty; }
     data-meta="Prepared by Name · Month Year"
     data-brand-image="product-suite-dark">
     <div class="brand-graphic">
-      <img src="/brand/product-suite-dark.png" loading="eager" alt="">
+      <img src="/brand/product-suite-light.png" loading="eager" alt="">
     </div>
     <p class="eyebrow">Whatfix · Department · Month Year</p>
     <h1>Your action title captures the core message</h1>
@@ -718,7 +714,7 @@ h1, h2, h3 { text-wrap: pretty; }
         </ul>
       </div>
       <div class="col-right">
-        <img src="/brand/authoring-agent-dark.png" loading="eager" alt="">
+        <img src="/brand/authoring-agent-dark.svg" loading="eager" alt="">
       </div>
     </div>
   </section>
@@ -889,7 +885,7 @@ h1, h2, h3 { text-wrap: pretty; }
     data-cta="Get in touch"
     data-brand-image="product-suite-dark">
     <div class="closing-bg">
-      <img src="/brand/product-suite-dark.png" loading="eager" alt="">
+      <img src="/brand/product-suite-light.png" loading="eager" alt="">
     </div>
     <h2>Thank you</h2>
     <div class="closing-bar"></div>
@@ -964,24 +960,33 @@ const FONT = 'DM Sans';
 // nw/nh are the image's actual pixel dimensions — required for PptxGenJS sizing.contain
 // to compute the correct crop/letterbox values without distortion.
 var _imgs = {};
+// Priority: SVG > light PNG > dark PNG (dark PNGs have opaque backgrounds)
 var _IMG_PATHS = {
-  'product-suite-dark':      '/brand/product-suite-dark.png',
-  'product-suite-full-dark': '/brand/product-suite-full-dark.png',
-  'product-suite-light':     '/brand/product-suite-light.png',
-  'ai-agents-suite-dark':    '/brand/ai-agents-suite-dark.png',
-  'ai-agents-suite-light':   '/brand/ai-agents-suite-light.png',
-  'screensense-suite-dark':  '/brand/screensense-suite-dark.png',
-  'authoring-agent-dark':    '/brand/authoring-agent-dark.png',
-  'authoring-agent-box-dark':'/brand/authoring-agent-box-dark.png',
-  'guidance-agent-dark':     '/brand/guidance-agent-dark.png',
-  'guidance-agent-box-dark': '/brand/guidance-agent-box-dark.png',
-  'insights-agent-dark':     '/brand/insights-agent-dark.png',
-  'insights-agent-box-dark': '/brand/insights-agent-box-dark.png',
-  'dap-dark':                '/brand/dap-dark.png',
-  'dap-light':               '/brand/dap-light.png',
-  'mirror-dark':             '/brand/mirror-dark.png',
-  'screensense-dark':        '/brand/screensense-dark.png',
-  'product-analytics-dark':  '/brand/product-analytics-dark.png',
+  // Agent logos — SVG preferred (transparent, vector)
+  'authoring-agent-dark':     '/brand/authoring-agent-dark.svg',
+  'authoring-agent-light':    '/brand/authoring-agent-light.svg',
+  'authoring-agent-box-dark': '/brand/authoring-agent-box-dark.svg',
+  'guidance-agent-dark':      '/brand/guidance-agent-dark.svg',
+  'guidance-agent-light':     '/brand/guidance-agent-light.svg',
+  'guidance-agent-box-dark':  '/brand/guidance-agent-box-dark.svg',
+  'guidance-agent-box-light': '/brand/guidance-agent-box-light.svg',
+  'insights-agent-dark':      '/brand/insights-agent-dark.svg',
+  'insights-agent-light':     '/brand/insights-agent-light.svg',
+  'insights-agent-box-dark':  '/brand/insights-agent-box-dark.svg',
+  'insights-agent-box-light': '/brand/insights-agent-box-light.svg',
+  // Suite composites — light PNG preferred (neutral/transparent background)
+  'product-suite-dark':       '/brand/product-suite-light.png',
+  'product-suite-light':      '/brand/product-suite-light.png',
+  'product-suite-full-dark':  '/brand/product-suite-full-dark.png',
+  'ai-agents-suite-dark':     '/brand/ai-agents-suite-light.png',
+  'ai-agents-suite-light':    '/brand/ai-agents-suite-light.png',
+  'screensense-suite-dark':   '/brand/screensense-suite-dark.png',
+  // Product logos — light where available
+  'dap-dark':                 '/brand/dap-light.png',
+  'dap-light':                '/brand/dap-light.png',
+  'mirror-dark':              '/brand/mirror-dark.png',
+  'screensense-dark':         '/brand/screensense-dark.png',
+  'product-analytics-dark':   '/brand/product-analytics-dark.png',
 };
 
 // Detect the app origin so brand asset fetches resolve against the real server.
