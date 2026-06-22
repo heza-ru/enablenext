@@ -360,7 +360,8 @@ const DownloadArtifact = ({
       'print-color-adjust:exact!important;' +
       'color-adjust:exact!important}}';
     document.head.appendChild(s);
-    setTimeout(function () { window.print(); }, 1200);
+    // ponytail: fonts.ready > setTimeout — avoids FOUT in PDF
+    document.fonts.ready.then(function () { window.print(); });
   });
 }());
 </script>`;
@@ -382,6 +383,152 @@ const DownloadArtifact = ({
     // Keep the blob URL alive long enough for the new tab to finish loading
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
     flash('pdf');
+  };
+
+  // Option 3 + 6: flatten unsupported CSS effects so the PDF works in all viewers.
+  // Strips backdrop-filter, mix-blend-mode, SVG filters, masks, and complex transforms
+  // that Chromium renders fine on-screen but that break when re-rendered by PDF viewers.
+  const printPdfCompat = () => {
+    if (!content) return;
+
+    const COMPAT_SETUP_SCRIPT = `<script>
+(function () {
+  window.addEventListener('load', function () {
+    var s = document.createElement('style');
+    // Flatten effects unsupported by most PDF viewers
+    s.textContent =
+      '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}' +
+      '*{mix-blend-mode:normal!important}' +
+      '*{filter:none!important}' +
+      '*{-webkit-mask:none!important;mask:none!important}' +
+      '*{text-shadow:none!important}' +
+      '@media print{' +
+      '@page{size:10in 5.625in;margin:0}' +
+      'html,body{overflow:visible!important}' +
+      '.deck{position:relative!important;height:auto!important;overflow:visible!important}' +
+      '.slide{position:relative!important;inset:auto!important;opacity:1!important;' +
+      'transform:none!important;display:block!important;' +
+      'width:100vw!important;height:100vh!important;' +
+      'page-break-after:always;break-after:page}' +
+      '.slide:last-child{page-break-after:avoid;break-after:avoid}' +
+      '.progress-bar,.progress-fill,.slide-counter,.nav-hint,.notes{display:none!important}' +
+      '*,*::before,*::after{' +
+      '-webkit-print-color-adjust:exact!important;' +
+      'print-color-adjust:exact!important;' +
+      'color-adjust:exact!important}}';
+    document.head.appendChild(s);
+    document.fonts.ready.then(function () { window.print(); });
+  });
+}());
+</script>`;
+
+    const printHtml = patchLibUrls(content)
+      .replace(/<\/head>/i, COMPAT_SETUP_SCRIPT + '</head>');
+    const blob = new Blob([printHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    flash('pdf-compat');
+  };
+
+  // Dynamically load PptxGenJS into the main window (it's bundled at /libs/).
+  // Reuses window.PptxGenJS if already loaded.
+  const loadPptxGen = (): Promise<typeof window.PptxGenJS> =>
+    window.PptxGenJS
+      ? Promise.resolve(window.PptxGenJS)
+      : new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = '/libs/pptxgen.bundle.js';
+          s.onload = () => resolve(window.PptxGenJS);
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+
+  /**
+   * HD PDF via Playwright server-side render.
+   * Sends the patched HTML to /api/artifacts/render?format=pdf and downloads the response.
+   * Preserves backdrop-filter, blend-modes, SVG filters — everything that breaks in print mode.
+   */
+  const downloadPdfHD = async () => {
+    if (!content) return;
+    flash('pdf-hd');
+    try {
+      const res = await fetch(`${apiBaseUrl()}/api/artifacts/render`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ html: patchLibUrls(content), format: 'pdf' }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(error);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName.replace(/\.[^.]+$/, '') + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      flash('pdf-hd');
+    } catch (err) {
+      console.error(`${LOG} HD PDF failed`, err);
+      flash('pdf-hd-err');
+    }
+  };
+
+  /**
+   * HD PPTX: server screenshots each .slide at 2× resolution → client assembles
+   * a full-bleed image PPTX via PptxGenJS. Pixel-perfect visual fidelity.
+   */
+  const downloadPptxHD = async () => {
+    if (!content) return;
+    flash('pptx-hd');
+    try {
+      const res = await fetch(`${apiBaseUrl()}/api/artifacts/render`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ html: patchLibUrls(content), format: 'slides' }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(error);
+      }
+      const { slides } = (await res.json()) as { slides: string[] };
+      const PptxGenJS = await loadPptxGen();
+      const pptx = new PptxGenJS();
+      pptx.layout = 'LAYOUT_WIDE';
+      for (const b64 of slides) {
+        const slide = pptx.addSlide();
+        slide.addImage({ data: `image/png;base64,${b64}`, x: 0, y: 0, w: '100%', h: '100%' });
+      }
+      const blob = (await pptx.write({ outputType: 'blob' })) as Blob;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName.replace(/\.[^.]+$/, '') + '-hd.pptx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      flash('pptx-hd');
+    } catch (err) {
+      console.error(`${LOG} HD PPTX failed`, err);
+      flash('pptx-hd-err');
+    }
   };
 
   const downloadHtml = () => {
@@ -487,17 +634,56 @@ const DownloadArtifact = ({
         </React.Fragment>
       ))}
       {isPresentationArtifact && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs font-medium"
-          onClick={printPdf}
-          aria-label="Export as PDF (opens print dialog)"
-          title="Opens in a new tab — use browser Save as PDF for pixel-perfect output"
-        >
-          {done === 'pdf' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-          PDF
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs font-medium"
+            onClick={printPdf}
+            aria-label="Export as PDF (opens print dialog)"
+            title="Opens in a new tab — use browser Save as PDF for pixel-perfect output"
+          >
+            {done === 'pdf' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+            PDF
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs font-medium"
+            onClick={printPdfCompat}
+            aria-label="Export as PDF (compatibility mode — flattens glass effects)"
+            title="Strips backdrop-filter, blend modes, and SVG filters before printing — more compatible with PDF viewers"
+          >
+            {done === 'pdf-compat' && (
+              <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+            )}
+            PDF (Compat)
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs font-medium"
+            onClick={downloadPdfHD}
+            aria-label="Export as PDF (server-rendered, pixel-perfect)"
+            title="Server-side Playwright render — preserves all CSS effects including backdrop-filter and blend modes"
+          >
+            {done === 'pdf-hd' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+            PDF (HD)
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs font-medium"
+            onClick={downloadPptxHD}
+            aria-label="Export as PPTX (image-based, pixel-perfect)"
+            title="Screenshots each slide at 2× resolution and assembles as a full-bleed image PPTX"
+          >
+            {done === 'pptx-hd' && (
+              <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+            )}
+            PPTX (HD)
+          </Button>
+        </>
       )}
       <Button
         size="sm"
