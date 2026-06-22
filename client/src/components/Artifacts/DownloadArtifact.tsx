@@ -451,35 +451,141 @@ const DownloadArtifact = ({
         });
 
   /**
-   * HD PDF via Playwright server-side render.
-   * Sends the patched HTML to /api/artifacts/render?format=pdf and downloads the response.
-   * Preserves backdrop-filter, blend-modes, SVG filters — everything that breaks in print mode.
+   * Client-side slide capture: loads the artifact in a hidden same-origin iframe
+   * (srcdoc = blob URL → same origin), injects html2canvas, makes every .slide
+   * visible, screenshots each at 2× device scale, returns data URLs.
+   *
+   * No server required. Works in any deployment environment.
+   */
+  const captureSlides = (html: string): Promise<string[]> =>
+    new Promise((resolve, reject) => {
+      const patchedHtml = patchLibUrls(html);
+
+      const iframe = document.createElement('iframe');
+      iframe.setAttribute('aria-hidden', 'true');
+      // Off-screen but real-sized so 100vw/100vh slides render at correct dimensions
+      iframe.style.cssText =
+        'position:fixed;width:1280px;height:720px;border:0;top:-9999px;left:-9999px;pointer-events:none;';
+      document.body.appendChild(iframe);
+
+      const cleanup = () => {
+        try {
+          document.body.removeChild(iframe);
+        } catch {
+          /* already removed */
+        }
+      };
+
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        reject(new Error('Slide capture timed out'));
+      }, 40_000);
+
+      iframe.onload = () => {
+        // Give fonts, brand images, and scripts time to settle
+        setTimeout(async () => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const win = iframe.contentWindow as any;
+            const doc = iframe.contentDocument as Document;
+
+            // Inject html2canvas from cdnjs (reliable, widely cached)
+            await new Promise<void>((res, rej) => {
+              const s = doc.createElement('script');
+              s.src =
+                'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+              s.onload = () => res();
+              s.onerror = () => rej(new Error('html2canvas failed to load from CDN'));
+              doc.head.appendChild(s);
+            });
+
+            const slideEls = [...doc.querySelectorAll<HTMLElement>('.slide')];
+            if (slideEls.length === 0) throw new Error('No .slide elements found in artifact');
+
+            // Reveal all slides flat so html2canvas can see them
+            const FORCE_VISIBLE = `
+              .slide {
+                position: relative !important;
+                inset: auto !important;
+                opacity: 1 !important;
+                transform: none !important;
+                display: block !important;
+                width: 1280px !important;
+                height: 720px !important;
+                pointer-events: none !important;
+              }
+              .deck { position: relative !important; height: auto !important; overflow: visible !important; }
+              .progress-bar, .slide-counter, .nav-hint, .notes { display: none !important; }
+            `;
+            const styleEl = doc.createElement('style');
+            styleEl.textContent = FORCE_VISIBLE;
+            doc.head.appendChild(styleEl);
+
+            const pngs: string[] = [];
+            for (const el of slideEls) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canvas = await (win.html2canvas as any)(el, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#25223B',
+                width: 1280,
+                height: 720,
+                logging: false,
+              });
+              pngs.push(canvas.toDataURL('image/png'));
+            }
+
+            clearTimeout(timeoutId);
+            cleanup();
+            resolve(pngs);
+          } catch (err) {
+            clearTimeout(timeoutId);
+            cleanup();
+            reject(err);
+          }
+        }, 1200);
+      };
+
+      iframe.srcdoc = patchedHtml;
+    });
+
+  /**
+   * HD PDF: captures every slide as a PNG in the browser, builds a printable HTML
+   * (one <img> per page), opens it in a new tab, and auto-triggers the print dialog.
+   * The user saves as PDF — same UX as the normal PDF button but pixel-perfect images.
+   * Zero server calls, zero new production dependencies.
    */
   const downloadPdfHD = async () => {
     if (!content) return;
     flash('pdf-hd');
     try {
-      const res = await fetch(`${apiBaseUrl()}/api/artifacts/render`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ html: patchLibUrls(content), format: 'pdf' }),
-      });
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(error);
-      }
-      const blob = await res.blob();
+      const pngs = await captureSlides(content);
+      const imgTags = pngs.map((src) => `<img src="${src}" alt="">`).join('');
+      const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @page{size:10in 5.625in;margin:0}
+  body{background:#25223B}
+  img{display:block;width:100vw;height:100vh;object-fit:cover;page-break-after:always;break-after:page}
+  img:last-child{page-break-after:avoid;break-after:avoid}
+</style>
+<script>
+  window.addEventListener('load', function () {
+    document.fonts.ready.then(function () { window.print(); });
+  });
+</script>
+</head><body>${imgTags}</body></html>`;
+      const blob = new Blob([printHtml], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName.replace(/\.[^.]+$/, '') + '.pdf';
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setTimeout(() => URL.revokeObjectURL(url), 120_000);
       flash('pdf-hd');
     } catch (err) {
       console.error(`${LOG} HD PDF failed`, err);
@@ -488,32 +594,22 @@ const DownloadArtifact = ({
   };
 
   /**
-   * HD PPTX: server screenshots each .slide at 2× resolution → client assembles
-   * a full-bleed image PPTX via PptxGenJS. Pixel-perfect visual fidelity.
+   * HD PPTX: captures every slide as a PNG then assembles a PPTX with each slide
+   * as a full-bleed image using PptxGenJS (already bundled at /libs/).
+   * Pixel-perfect visual fidelity — no server, no Playwright.
    */
   const downloadPptxHD = async () => {
     if (!content) return;
     flash('pptx-hd');
     try {
-      const res = await fetch(`${apiBaseUrl()}/api/artifacts/render`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ html: patchLibUrls(content), format: 'slides' }),
-      });
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(error);
-      }
-      const { slides } = (await res.json()) as { slides: string[] };
+      const pngs = await captureSlides(content);
       const PptxGenJS = await loadPptxGen();
       const pptx = new PptxGenJS();
       pptx.layout = 'LAYOUT_WIDE';
-      for (const b64 of slides) {
+      for (const png of pngs) {
         const slide = pptx.addSlide();
-        slide.addImage({ data: `image/png;base64,${b64}`, x: 0, y: 0, w: '100%', h: '100%' });
+        // png is a full data URL — PptxGenJS accepts it directly
+        slide.addImage({ data: png, x: 0, y: 0, w: '100%', h: '100%' });
       }
       const blob = (await pptx.write({ outputType: 'blob' })) as Blob;
       const url = URL.createObjectURL(blob);
