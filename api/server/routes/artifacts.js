@@ -10,7 +10,11 @@ router.use(requireJwtAuth);
 let browser = null;
 async function getBrowser() {
   if (!browser || !browser.isConnected()) {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      // Reduce memory footprint for constrained environments (Render free tier)
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
+    });
   }
   return browser;
 }
@@ -97,7 +101,12 @@ router.post('/render', async (req, res) => {
     }
   } catch (err) {
     logger.error('[Artifacts] render error', err);
-    res.status(500).json({ error: 'Render failed: ' + err.message });
+    const msg = err.message || '';
+    // Friendly message when Playwright browsers haven't been installed yet
+    const friendly = msg.includes("Executable doesn't exist") || msg.includes('browserType.launch')
+      ? 'Playwright browsers not installed on this server. Run: npx playwright install chromium'
+      : 'Render failed: ' + msg;
+    res.status(500).json({ error: friendly });
   } finally {
     await context?.close();
   }

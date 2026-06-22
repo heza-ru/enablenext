@@ -113,10 +113,21 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 ### Typography
 - **Primary font: Aeonik** — load via `@font-face` from `/libs/fonts/Aeonik-Medium.ttf` (weight 500), `Aeonik-Regular.ttf` (400), `Aeonik-Bold.ttf` (700), `Aeonik-Light.ttf` (300)
 - **Fallback stack:** `'Aeonik', 'DM Sans', -apple-system, sans-serif`
-- Slide title: `clamp(1.6rem, 3vw, 2.4rem)` medium (500) — sentence case always
-- Body text: `clamp(0.9rem, 1.6vw, 1.1rem)` regular (400)
-- Stat callouts: `clamp(3.5rem, 8vw, 6rem)` bold (700), Orange
-- Captions / metadata: `0.7rem` Ink 300
+
+**Minimum sizes — never go below these (source: Claude PowerPoint official spec)**
+| Role | HTML clamp | PPTX pt | Weight |
+|------|-----------|---------|--------|
+| Title slide hero | `clamp(2.2rem,4.5vw,3.8rem)` | 32–40pt | 500 |
+| Slide headline | `clamp(1.4rem,2.6vw,2.2rem)` | 22–28pt | 500 |
+| Section title | `clamp(1.7rem,3.2vw,2.8rem)` | 26–32pt | 500 |
+| Body / bullets | `clamp(0.85rem,1.5vw,1.05rem)` | 14–16pt | 300–400 |
+| Stat / KPI | `clamp(3rem,8vw,5.5rem)` | 40–52pt | 700 |
+| Caption / label | `0.72rem` | 9–11pt | 400 |
+
+- `text-wrap: pretty` on all `h1`, `h2`, `h3` — prevents orphaned single words at line ends
+- **Sentence case always** — never title-case every word except acronyms or brand names
+- Line height: headlines 1.1–1.15 · body 1.55–1.65
+- Letter spacing: headlines `−0.02em` · body `0` · labels/eyebrows `+0.12–0.18em`
 - **No accent lines under titles** — use whitespace, background color, or brand graphics instead
 
 ### Dark / Light Sandwich
@@ -133,10 +144,14 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 - **`stat`** — 2–3 large KPI numbers centered, each with a one-line label
 - **`quote`** — large quotation mark, italic blockquote, cite attribution
 - **`split`** — full-bleed left panel (dark) with text, right panel (Orange or Crimson) with brand visual
-- **`chart`** — bar chart with value labels, built from inline HTML bars
+- **`chart`** — horizontal bar chart with value labels and percentage bars, built from inline HTML
 - **`agenda`** — numbered list with counter bubbles
 - **`section`** — two-panel layout: left dark with text, right Orange
 - **`closing`** — dark, centered, CTA button
+- **`comparison`** — side-by-side two-column feature/competitor comparison with header row; use for head-to-head evaluations, before/after, or option trade-offs
+- **`process`** — numbered horizontal step flow (3–5 steps) with connector lines; use for workflows, onboarding sequences, implementation phases
+- **`icon-grid`** — 2×2 or 3×2 grid of feature/capability cards, each with an SVG icon, bold label, and one-line descriptor; use for product capabilities, benefits, or team structure
+- **`timeline`** — vertical milestone timeline with alternating left/right entries and date markers; use for roadmaps, history, or project phases
 
 ## Choosing the Right Mode
 
@@ -464,6 +479,147 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
 .notes { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 300; background: rgba(8,6,18,0.95); color: rgba(255,255,255,0.72); padding: 1rem 3rem; font-size: 0.8rem; line-height: 1.65; border-top: 2px solid #FF6B18; }
 .notes.visible { display: block; }
 
+/* ── text-wrap: pretty on all headings ───────────── */
+h1, h2, h3 { text-wrap: pretty; }
+
+/* ── COMPARISON ──────────────────────────────────── */
+.slide.comparison {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: clamp(1.5rem,4vw,3.5rem);
+}
+.slide.comparison h2 {
+  font-size: clamp(1.2rem,2.2vw,1.8rem); font-weight: 500;
+  color: #FF6B18; margin-bottom: 1.25rem; letter-spacing: -0.02em;
+}
+.cmp-table { width: 100%; border-collapse: collapse; }
+.cmp-table thead tr { background: #35324A; }
+.cmp-table thead th {
+  padding: 0.5rem 0.9rem; font-size: clamp(0.7rem,1.1vw,0.85rem);
+  font-weight: 500; color: rgba(255,255,255,0.6); text-align: left;
+  border-bottom: 1px solid rgba(255,107,24,0.3);
+}
+.cmp-table thead th:first-child { color: rgba(255,255,255,0.35); }
+.cmp-table thead th.highlight { color: #FF6B18; }
+.cmp-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.cmp-table tbody td {
+  padding: 0.45rem 0.9rem; font-size: clamp(0.72rem,1.1vw,0.88rem);
+  font-weight: 300; color: rgba(255,255,255,0.78);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+}
+.cmp-table tbody td:first-child { color: rgba(255,255,255,0.45); font-weight: 400; }
+.cmp-tick { color: #72C87B; font-size: 1em; }
+.cmp-cross { color: rgba(255,255,255,0.2); }
+.cmp-table .col-ours { background: rgba(255,107,24,0.05); }
+
+/* ── PROCESS ─────────────────────────────────────── */
+.slide.process {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: clamp(2rem,5vw,4.5rem);
+}
+.slide.process h2 {
+  font-size: clamp(1.2rem,2.2vw,1.8rem); font-weight: 500;
+  color: #FF6B18; margin-bottom: 1.75rem; letter-spacing: -0.02em;
+}
+.process-row {
+  display: flex; align-items: flex-start; gap: 0; justify-content: space-between;
+}
+.process-step {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  position: relative; text-align: center;
+}
+.process-step:not(:last-child)::after {
+  content: ''; position: absolute; top: 1.1rem; left: 60%; width: 80%;
+  height: 1px; background: linear-gradient(90deg, #FF6B18 0%, rgba(255,107,24,0.15) 100%);
+}
+.ps-num {
+  width: 2.2rem; height: 2.2rem; border-radius: 50%; flex-shrink: 0;
+  background: #FF6B18; display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700; color: #fff; margin-bottom: 0.75rem;
+  position: relative; z-index: 1;
+}
+.ps-label {
+  font-size: clamp(0.72rem,1.2vw,0.88rem); font-weight: 500;
+  color: #fff; margin-bottom: 0.3rem; line-height: 1.3;
+}
+.ps-desc {
+  font-size: clamp(0.62rem,0.95vw,0.75rem); font-weight: 300;
+  color: rgba(255,255,255,0.45); line-height: 1.5; max-width: 14ch; margin: 0 auto;
+}
+
+/* ── ICON GRID ───────────────────────────────────── */
+.slide.icon-grid {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: clamp(2rem,5vw,4rem);
+}
+.slide.icon-grid h2 {
+  font-size: clamp(1.2rem,2.2vw,1.8rem); font-weight: 500;
+  color: #FF6B18; margin-bottom: 1.5rem; letter-spacing: -0.02em;
+}
+.ig-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+}
+.ig-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.ig-card {
+  background: #35324A; border-radius: 8px; padding: 1.1rem 1.25rem;
+  display: flex; align-items: flex-start; gap: 0.9rem;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.ig-icon {
+  width: 2rem; height: 2rem; flex-shrink: 0;
+  background: rgba(255,107,24,0.12); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ig-icon svg { width: 1rem; height: 1rem; stroke: #FF6B18; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ig-text .ig-title {
+  font-size: clamp(0.78rem,1.2vw,0.9rem); font-weight: 500; color: #fff; margin-bottom: 0.2rem;
+}
+.ig-text .ig-desc {
+  font-size: clamp(0.65rem,1vw,0.75rem); font-weight: 300; color: rgba(255,255,255,0.45); line-height: 1.5;
+}
+
+/* ── TIMELINE ────────────────────────────────────── */
+.slide.timeline {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: clamp(2rem,5vw,4.5rem);
+}
+.slide.timeline h2 {
+  font-size: clamp(1.2rem,2.2vw,1.8rem); font-weight: 500;
+  color: #FF6B18; margin-bottom: 1.25rem; letter-spacing: -0.02em;
+}
+.tl-track {
+  position: relative; padding-left: 2rem;
+  display: flex; flex-direction: column; gap: 0.75rem;
+}
+.tl-track::before {
+  content: ''; position: absolute; left: 0.55rem; top: 0.4rem; bottom: 0.4rem;
+  width: 1px; background: linear-gradient(180deg, #FF6B18 0%, rgba(255,107,24,0.1) 100%);
+}
+.tl-item { display: flex; align-items: flex-start; gap: 1rem; position: relative; }
+.tl-dot {
+  position: absolute; left: -1.64rem; top: 0.22rem;
+  width: 0.65rem; height: 0.65rem; border-radius: 50%;
+  background: #FF6B18; flex-shrink: 0; z-index: 1;
+  box-shadow: 0 0 0 3px rgba(255,107,24,0.15);
+}
+.tl-date {
+  font-size: 0.65rem; font-weight: 500; color: #FF6B18;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  min-width: 6rem; padding-top: 0.05rem; flex-shrink: 0;
+}
+.tl-content .tl-title {
+  font-size: clamp(0.78rem,1.2vw,0.9rem); font-weight: 500; color: #fff; margin-bottom: 0.15rem;
+}
+.tl-content .tl-body {
+  font-size: clamp(0.65rem,1vw,0.75rem); font-weight: 300; color: rgba(255,255,255,0.45); line-height: 1.5;
+}
+
+/* ── Reduced-motion override ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .slide { transition: none; }
+  * { animation: none !important; transition: none !important; }
+}
+
 /* ── Print / PDF export ─────────────────────────────
    When the PDF button opens this HTML in a new tab, @media print
    stacks all slides as individual landscape pages.                */
@@ -576,6 +732,153 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
       <div class="kpi"><span class="big-num">40%</span><span class="kpi-lbl">Reduction in onboarding time</span></div>
       <div class="kpi"><span class="big-num">3×</span><span class="kpi-lbl">Faster software adoption</span></div>
       <div class="kpi"><span class="big-num">92%</span><span class="kpi-lbl">User satisfaction</span></div>
+    </div>
+  </section>
+
+  <!-- ═══ COMPARISON ══════════════════════════════════ -->
+  <section class="slide comparison" data-type="comparison"
+    data-headline="We out-perform [Competitor] on the metrics that matter"
+    data-headers='["Feature","Whatfix","Competitor A","Competitor B"]'
+    data-highlight-col="1"
+    data-rows='[
+      ["In-app guidance","✓","✓","✗"],
+      ["Self-serve analytics","✓","✗","✗"],
+      ["No-code authoring","✓","✓","✗"],
+      ["Enterprise SSO","✓","✓","✓"],
+      ["AI-powered flows","✓","✗","✗"]
+    ]'>
+    <h2>We out-perform [Competitor] on the metrics that matter</h2>
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="highlight">Whatfix</th>
+          <th>Competitor A</th>
+          <th>Competitor B</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>In-app guidance</td><td class="col-ours"><span class="cmp-tick">✓</span></td><td><span class="cmp-tick">✓</span></td><td><span class="cmp-cross">✗</span></td></tr>
+        <tr><td>Self-serve analytics</td><td class="col-ours"><span class="cmp-tick">✓</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td></tr>
+        <tr><td>No-code authoring</td><td class="col-ours"><span class="cmp-tick">✓</span></td><td><span class="cmp-tick">✓</span></td><td><span class="cmp-cross">✗</span></td></tr>
+        <tr><td>Enterprise SSO</td><td class="col-ours"><span class="cmp-tick">✓</span></td><td><span class="cmp-tick">✓</span></td><td><span class="cmp-tick">✓</span></td></tr>
+        <tr><td>AI-powered flows</td><td class="col-ours"><span class="cmp-tick">✓</span></td><td><span class="cmp-cross">✗</span></td><td><span class="cmp-cross">✗</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ═══ PROCESS ══════════════════════════════════ -->
+  <section class="slide process" data-type="process"
+    data-headline="Four steps from contract to full adoption"
+    data-steps='[
+      {"num":"01","label":"Kickoff","desc":"Stakeholders aligned, scope locked"},
+      {"num":"02","label":"Configure","desc":"Flows built, branding applied"},
+      {"num":"03","label":"Pilot","desc":"50 users, 2-week feedback loop"},
+      {"num":"04","label":"Scale","desc":"Full rollout, analytics live"}
+    ]'>
+    <h2>Four steps from contract to full adoption</h2>
+    <div class="process-row">
+      <div class="process-step">
+        <div class="ps-num">01</div>
+        <div class="ps-label">Kickoff</div>
+        <div class="ps-desc">Stakeholders aligned, scope locked</div>
+      </div>
+      <div class="process-step">
+        <div class="ps-num">02</div>
+        <div class="ps-label">Configure</div>
+        <div class="ps-desc">Flows built, branding applied</div>
+      </div>
+      <div class="process-step">
+        <div class="ps-num">03</div>
+        <div class="ps-label">Pilot</div>
+        <div class="ps-desc">50 users, 2-week feedback loop</div>
+      </div>
+      <div class="process-step">
+        <div class="ps-num">04</div>
+        <div class="ps-label">Scale</div>
+        <div class="ps-desc">Full rollout, analytics live</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ ICON GRID ══════════════════════════════════ -->
+  <section class="slide icon-grid" data-type="icon-grid"
+    data-headline="Three agents, one platform — everything teams need"
+    data-cols="3"
+    data-cards='[
+      {"icon":"edit","title":"Authoring Agent","desc":"Create flows in minutes, no dev needed"},
+      {"icon":"compass","title":"Guidance Agent","desc":"Real-time nudges at the moment of need"},
+      {"icon":"bar-chart-2","title":"Insights Agent","desc":"Usage data that drives adoption decisions"},
+      {"icon":"shield","title":"Enterprise Security","desc":"SSO, RBAC, SOC 2 Type II"},
+      {"icon":"zap","title":"AI Automation","desc":"Predict friction, auto-suggest content"},
+      {"icon":"layers","title":"All Integrations","desc":"Salesforce, SAP, Workday, and 200+ more"}
+    ]'>
+    <h2>Three agents, one platform — everything teams need</h2>
+    <div class="ig-grid">
+      <div class="ig-card">
+        <div class="ig-icon"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+        <div class="ig-text"><div class="ig-title">Authoring Agent</div><div class="ig-desc">Create flows in minutes, no dev needed</div></div>
+      </div>
+      <div class="ig-card">
+        <div class="ig-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></div>
+        <div class="ig-text"><div class="ig-title">Guidance Agent</div><div class="ig-desc">Real-time nudges at the moment of need</div></div>
+      </div>
+      <div class="ig-card">
+        <div class="ig-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+        <div class="ig-text"><div class="ig-title">Insights Agent</div><div class="ig-desc">Usage data that drives adoption decisions</div></div>
+      </div>
+      <div class="ig-card">
+        <div class="ig-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div class="ig-text"><div class="ig-title">Enterprise Security</div><div class="ig-desc">SSO, RBAC, SOC 2 Type II</div></div>
+      </div>
+      <div class="ig-card">
+        <div class="ig-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <div class="ig-text"><div class="ig-title">AI Automation</div><div class="ig-desc">Predict friction, auto-suggest content</div></div>
+      </div>
+      <div class="ig-card">
+        <div class="ig-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
+        <div class="ig-text"><div class="ig-title">All Integrations</div><div class="ig-desc">Salesforce, SAP, Workday, and 200+ more</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ TIMELINE ══════════════════════════════════ -->
+  <section class="slide timeline" data-type="timeline"
+    data-headline="From pilot to enterprise rollout in 90 days"
+    data-milestones='[
+      {"date":"Week 1–2","title":"Kickoff & discovery","body":"Scope agreed, technical access granted"},
+      {"date":"Week 3–4","title":"Build & configure","body":"First 10 flows authored and branded"},
+      {"date":"Week 5–6","title":"Pilot launch","body":"50 users live, feedback captured"},
+      {"date":"Week 7–10","title":"Iterate & expand","body":"Flows refined, rollout to 500 users"},
+      {"date":"Week 11–12","title":"Full deployment","body":"All users live, analytics dashboard active"}
+    ]'>
+    <h2>From pilot to enterprise rollout in 90 days</h2>
+    <div class="tl-track">
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">Week 1–2</div>
+        <div class="tl-content"><div class="tl-title">Kickoff &amp; discovery</div><div class="tl-body">Scope agreed, technical access granted</div></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">Week 3–4</div>
+        <div class="tl-content"><div class="tl-title">Build &amp; configure</div><div class="tl-body">First 10 flows authored and branded</div></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">Week 5–6</div>
+        <div class="tl-content"><div class="tl-title">Pilot launch</div><div class="tl-body">50 users live, feedback captured</div></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">Week 7–10</div>
+        <div class="tl-content"><div class="tl-title">Iterate &amp; expand</div><div class="tl-body">Flows refined, rollout to 500 users</div></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-date">Week 11–12</div>
+        <div class="tl-content"><div class="tl-title">Full deployment</div><div class="tl-body">All users live, analytics dashboard active</div></div>
+      </div>
     </div>
   </section>
 
@@ -889,6 +1192,93 @@ async function downloadPptx() {
       if (cite)
         s.addText('— ' + cite, { x:.5, y:4.2, w:9.3, h:.45, fontSize:10.5, color:C.orange, fontFace:FONT, bold:true, align:'center', charSpacing:2, margin:0 });
 
+    } else if (type === 'comparison') {
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText(slide.dataset.headline || '', { x:.45, y:.2, w:9.2, h:.9, fontSize:20, color:C.orange, fontFace:FONT, bold:false, wrap:true, margin:0 });
+      const cmpHeaders = JSON.parse(slide.dataset.headers || '[]');
+      const cmpRows = JSON.parse(slide.dataset.rows || '[]');
+      const highlightCol = parseInt(slide.dataset.highlightCol || '1', 10);
+      const colW = 9.2 / Math.max(cmpHeaders.length, 1);
+      const tableData = [
+        cmpHeaders.map((h, ci) => ({
+          text: h,
+          options: { bold:true, color: ci === highlightCol ? C.orange : C.ink300, fill:C.ink, fontFace:FONT, fontSize:9, align:'center', valign:'middle' }
+        })),
+        ...cmpRows.map(row => row.map((cell, ci) => ({
+          text: cell === '✓' ? '✓' : cell === '✗' ? '–' : cell,
+          options: {
+            color: cell === '✓' ? '72C87B' : cell === '✗' ? '4a4760' : C.white,
+            fill: ci === highlightCol ? '2e2a46' : C.ink700,
+            fontFace: FONT, fontSize: 10, align: 'center', valign: 'middle',
+            bold: cell === '✓' || cell === '✗'
+          }
+        })))
+      ];
+      if (tableData.length > 1) s.addTable(tableData, { x:.45, y:1.2, w:9.2, colW: cmpHeaders.map(() => colW), border:{ type:'solid', color:'2d2b40', pt:.5 }, rowH:.62 });
+
+    } else if (type === 'process') {
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText(slide.dataset.headline || '', { x:.45, y:.2, w:9.2, h:.9, fontSize:20, color:C.orange, fontFace:FONT, wrap:true, margin:0 });
+      const steps = JSON.parse(slide.dataset.steps || '[]');
+      const nSteps = Math.min(steps.length, 5);
+      const stepW = 9.2 / nSteps;
+      steps.slice(0, nSteps).forEach((st, i) => {
+        const sx = .45 + i * stepW;
+        const cx = sx + stepW / 2;
+        // Connector line
+        if (i < nSteps - 1) s.addShape(pptx.ShapeType.rect, { x:cx + .25, y:2.78, w:stepW - .5, h:.02, fill:{ color: C.orange }, transparency:55 });
+        // Number bubble
+        s.addShape(pptx.ShapeType.ellipse, { x:cx - .28, y:2.52, w:.55, h:.55, fill:{ color: C.orange } });
+        s.addText(st.num || ('0' + (i + 1)), { x:cx - .28, y:2.52, w:.55, h:.55, fontSize:10, color:C.white, fontFace:FONT, bold:true, align:'center', valign:'middle', margin:0 });
+        // Label
+        s.addText(st.label || '', { x:sx, y:3.2, w:stepW, h:.45, fontSize:12, color:C.white, fontFace:FONT, bold:false, align:'center', wrap:true, margin:0 });
+        // Desc
+        s.addText(st.desc || '', { x:sx + .05, y:3.72, w:stepW - .1, h:.7, fontSize:9, color:C.ink300, fontFace:FONT, align:'center', wrap:true, margin:0 });
+      });
+
+    } else if (type === 'icon-grid') {
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText(slide.dataset.headline || '', { x:.45, y:.2, w:9.2, h:.9, fontSize:20, color:C.orange, fontFace:FONT, wrap:true, margin:0 });
+      const cards = JSON.parse(slide.dataset.cards || '[]');
+      const cols = parseInt(slide.dataset.cols || '3', 10);
+      const rows = Math.ceil(cards.slice(0, 6).length / cols);
+      const cardW = (9.2 - (cols - 1) * .18) / cols;
+      const cardH = (3.85 - (rows - 1) * .18) / rows;
+      cards.slice(0, 6).forEach((card, i) => {
+        const col = i % cols; const row = Math.floor(i / cols);
+        const cx = .45 + col * (cardW + .18);
+        const cy = 1.25 + row * (cardH + .18);
+        s.addShape(pptx.ShapeType.roundRect, { x:cx, y:cy, w:cardW, h:cardH, fill:{ color: C.ink }, rectRadius:.06 });
+        // Orange accent dot
+        s.addShape(pptx.ShapeType.rect, { x:cx + .15, y:cy + cardH * .25, w:.06, h:.06, fill:{ color: C.orange } });
+        s.addText(card.title || '', { x:cx + .28, y:cy + .15, w:cardW - .38, h:.38, fontSize:11, color:C.white, fontFace:FONT, bold:false, margin:0 });
+        s.addText(card.desc || '', { x:cx + .15, y:cy + .55, w:cardW - .25, h:cardH - .7, fontSize:9, color:C.ink300, fontFace:FONT, wrap:true, margin:0 });
+      });
+
+    } else if (type === 'timeline') {
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
+      s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:.05, fill:{ color: C.orange } });
+      s.addText(slide.dataset.headline || '', { x:.45, y:.2, w:9.2, h:.9, fontSize:20, color:C.orange, fontFace:FONT, wrap:true, margin:0 });
+      const milestones = JSON.parse(slide.dataset.milestones || '[]');
+      const maxM = Math.min(milestones.length, 5);
+      // Vertical spine
+      s.addShape(pptx.ShapeType.rect, { x:.95, y:1.2, w:.02, h:SH - 1.4, fill:{ color: C.orange }, transparency:55 });
+      const mSpacing = (SH - 1.55) / maxM;
+      milestones.slice(0, maxM).forEach((m, i) => {
+        const my = 1.25 + i * mSpacing;
+        // Dot
+        s.addShape(pptx.ShapeType.ellipse, { x:.78, y:my - .01, w:.18, h:.18, fill:{ color: C.orange } });
+        // Date label
+        s.addText(m.date || '', { x:1.25, y:my - .05, w:2.2, h:.28, fontSize:8, color:C.orange, fontFace:FONT, bold:true, charSpacing:1.5, margin:0 });
+        // Title
+        s.addText(m.title || '', { x:3.6, y:my - .05, w:6.2, h:.28, fontSize:12, color:C.white, fontFace:FONT, bold:false, margin:0 });
+        // Body
+        if (m.body) s.addText(m.body, { x:3.6, y:my + .26, w:6.2, h:.28, fontSize:9, color:C.ink300, fontFace:FONT, margin:0 });
+      });
+
     } else if (type === 'closing') {
       s.addShape(pptx.ShapeType.rect, { x:0, y:0, w:SW, h:SH, fill:{ color: C.ink700 } });
       s.addShape(pptx.ShapeType.rect, { x:0, y:0,          w:SW, h:.05, fill:{ color: C.orange } });
@@ -1168,3 +1558,41 @@ After delivering the artifact, always offer specific iteration options based on 
 - _"Want to switch this to a playbook format for the POC conversation?"_
 
 When the user asks for a change, update the artifact in place using the same identifier — never generate a new artifact for an iteration on the same deck.
+
+---
+
+## Pre-Delivery Quality Checklist (run before every artifact)
+
+Sourced from Claude Design official spec + consulting presentation standards.
+
+**Content**
+- [ ] Ghost deck test: reading only slide titles tells the full story
+- [ ] Every title is an action sentence (states the takeaway, not a topic label)
+- [ ] No slide has more than 3 bullets; no bullet exceeds 10 words
+- [ ] No consecutive slides use the same layout type
+
+**Design**
+- [ ] All colors are from the Whatfix palette — zero invented hex values
+- [ ] No more than 3 colors used on any single slide
+- [ ] Orange is used as an accent only — never as a full slide background
+- [ ] No gradients not in the approved palette recipes
+- [ ] Whitespace is generous: slides feel spacious, not cramped
+
+**Typography**
+- [ ] Slide headlines ≥ `clamp(1.4rem,2.6vw,2.2rem)` in HTML, ≥ 22pt in PPTX
+- [ ] Body text ≥ `clamp(0.85rem,1.5vw,1.05rem)` in HTML, ≥ 14pt in PPTX
+- [ ] `text-wrap: pretty` on all headings
+- [ ] Sentence case throughout (no title-casing every word)
+
+**Brand**
+- [ ] Brand graphic on title slide, closing slide, and all product-specific slides
+- [ ] Dark variant images on dark slides, light variants on light slides
+- [ ] `data-brand-image` and `<img>` are in sync (same key)
+
+**Technical**
+- [ ] `data-*` attributes match visible HTML for every slide (PPTX export parity)
+- [ ] PptxGenJS hex colors have no `#` prefix
+- [ ] `downloadPptx()` is `async` and `await`s `pptx.writeFile()`
+- [ ] No `pptx.addFont()` call (removed in v4)
+- [ ] `prefers-reduced-motion` media query present in `<style>`
+- [ ] `text-wrap: pretty` in `<style>` on `h1, h2, h3`
