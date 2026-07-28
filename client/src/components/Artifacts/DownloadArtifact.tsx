@@ -84,7 +84,49 @@ function triggerViaPreviewIframe(
  *
  * Returns a cleanup function that removes the iframe.
  */
+/**
+ * How long to wait for a 'bridge-ready' signal before assuming the artifact
+ * doesn't support the download-bridge.js protocol at all (e.g. an older
+ * cached artifact) and falling back to the hidden-iframe path. Once
+ * bridge-ready arrives, this is no longer consulted for the current
+ * download — a slow export after that point is not evidence of failure,
+ * just a document that takes a while to build (see bridgeReadyRef).
+ */
 const FALLBACK_MS = 10_000;
+
+/**
+ * Safety-net timeout for captureSlides(), scaled to slide count instead of a
+ * flat ceiling. Still a safety net, not a precise readiness signal — total
+ * capture time is inherently variable — but it scales with the actual
+ * amount of work instead of assuming every deck takes the same time
+ * regardless of size. Base allowance covers html2canvas script load + the
+ * fonts/settle delay; per-slide allowance covers the capture loop itself.
+ */
+export function computeCaptureTimeout(slideCount: number): number {
+  const BASE_MS = 10_000;
+  const PER_SLIDE_MS = 3_000;
+  const MAX_MS = 300_000; // 5 minutes
+  return Math.min(BASE_MS + slideCount * PER_SLIDE_MS, MAX_MS);
+}
+
+/**
+ * Covers the CDN script fetch + fonts/settle delay in captureSlides(), before
+ * slide count is known and the scaled per-slide timeout (computeCaptureTimeout)
+ * can be armed. Generous enough for a slow CDN, but still a real ceiling —
+ * without this, a hung (not failed) html2canvas request would wait forever,
+ * since the script's onerror only fires on an outright failed request, never
+ * on one that simply never resolves.
+ */
+export const EARLY_PHASE_TIMEOUT_MS = 15_000;
+
+/** Splits `items` into groups of at most `size`, preserving order. */
+export function chunk<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+  return result;
+}
 
 /**
  * Patch an HTML string so it works when run outside the Sandpack iframe:
@@ -171,55 +213,24 @@ function runInHiddenIframe(html: string, fnName: string): () => void {
 
       console.log(`${LOG} [hiddenIframe] Injecting blob interceptor then calling ${fnName}()`);
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const IframeFunction = win.Function as any;
-        IframeFunction(`
-          (function () {
-            var B = new Map();
-            var origCreate = URL.createObjectURL.bind(URL);
-            URL.createObjectURL = function (b) {
-              var u = origCreate(b);
-              if (b instanceof Blob) B.set(u, b);
-              return u;
-            };
-            var origRevoke = URL.revokeObjectURL.bind(URL);
-            URL.revokeObjectURL = function (u) {
-              setTimeout(function () { B.delete(u); }, 90000);
-              origRevoke(u);
-            };
-            function intercept(el) {
-              if (!el.download || !el.href || el.href.indexOf('blob:') !== 0) return false;
-              var blob = B.get(el.href);
-              if (!blob) return false;
-              console.log('[hiddenIframe interceptor] Captured blob:', el.download, blob.type, blob.size + ' bytes');
-              var r = new FileReader();
-              r.onload = function () {
-                var b64 = r.result.split(',')[1];
-                window.parent.postMessage(
-                  { type: 'artifact-download', filename: el.download, data: b64, mimeType: blob.type || 'application/octet-stream' },
-                  '*'
-                );
-                URL.createObjectURL = origCreate;
-                HTMLElement.prototype.click = origClick;
-              };
-              r.readAsDataURL(blob);
-              return true;
-            }
-            var origClick = HTMLElement.prototype.click;
-            HTMLElement.prototype.click = function () {
-              if (this.tagName === 'A' && intercept(this)) return;
-              origClick.call(this);
-            };
-            var origDispatch = EventTarget.prototype.dispatchEvent;
-            EventTarget.prototype.dispatchEvent = function (ev) {
-              if (ev && ev.type === 'click' && this.tagName === 'A' && intercept(this)) return true;
-              return origDispatch.call(this, ev);
-            };
-          })();
-        `)();
-
-        win[fnName]();
-        console.log(`${LOG} [hiddenIframe] ${fnName}() invoked — waiting for blob interception`);
+        const bridgeScript = win.document.createElement('script');
+        bridgeScript.src = `${window.location.origin}/libs/download-bridge.js`;
+        let bridgeInvoked = false;
+        const invokeOnce = () => {
+          if (bridgeInvoked) return;
+          bridgeInvoked = true;
+          try {
+            win[fnName]();
+            console.log(`${LOG} [hiddenIframe] ${fnName}() invoked — waiting for blob interception`);
+          } catch (err) {
+            console.error(`${LOG} [hiddenIframe] Error invoking ${fnName}:`, err);
+          }
+        };
+        bridgeScript.onload = invokeOnce;
+        // Fallback in case the bridge script's onload never fires (e.g. blocked
+        // request) — don't hang the whole flow waiting on it forever.
+        setTimeout(invokeOnce, 2000);
+        win.document.head.appendChild(bridgeScript);
       } catch (err) {
         console.error(`${LOG} [hiddenIframe] Error invoking ${fnName}:`, err);
       }
@@ -254,6 +265,15 @@ const DownloadArtifact = ({
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Cleanup fn for any in-flight hidden iframe
   const iframeCleanupRef = useRef<(() => void) | null>(null);
+  // Sticky, one-way flag: set once 'bridge-ready' arrives for this component
+  // instance and never reset back to false. download-bridge.js posts
+  // 'bridge-ready' exactly once, at artifact mount — not per download click —
+  // so this tracks "has this artifact instance ever confirmed it's alive"
+  // for its whole lifetime, not "did this specific click get a fresh
+  // confirmation". Once true, the fallback timer is cancelled outright rather
+  // than just delayed, because we know the artifact is alive and its
+  // listener is armed.
+  const bridgeReadyRef = useRef(false);
 
   const content = currentCode ?? artifact.content ?? '';
   const nativeFormats = detectNativeFormats(content);
@@ -262,6 +282,17 @@ const DownloadArtifact = ({
   // cancel any pending hidden-iframe fallback timer.
   useEffect(() => {
     const handle = (e: MessageEvent) => {
+      if (e.data?.type === 'bridge-ready') {
+        bridgeReadyRef.current = true;
+        if (fallbackTimerRef.current) {
+          console.log(
+            `${LOG} bridge-ready received — artifact is alive, cancelling fallback race`,
+          );
+          clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = null;
+        }
+        return;
+      }
       if (e.data?.type !== 'artifact-download') return;
       if (fallbackTimerRef.current) {
         console.log(
@@ -282,6 +313,34 @@ const DownloadArtifact = ({
       iframeCleanupRef.current?.();
     };
   }, []);
+
+  // Reset bridgeReadyRef when a genuinely different artifact is shown.
+  //
+  // DownloadArtifact does NOT always remount when the artifact changes —
+  // Artifacts.tsx renders it with no key tied to artifact identity, and
+  // switching versions (ArtifactVersion's onVersionChange) just updates
+  // which artifact id is current without remounting this component. Since
+  // bridgeReadyRef is a useRef, it survives across that kind of prop change.
+  // Without this reset, a ref that became `true` for one artifact version
+  // would incorrectly still read `true` after switching to a different
+  // (possibly older/cached, pre-download-bridge.js) version that never sends
+  // its own 'bridge-ready' — causing the fallback-timer check to wrongly
+  // assume the new artifact is alive and skip the fallback it actually needs.
+  //
+  // This only fires when artifact.id actually changes, not on every
+  // render/click — that per-click reset is exactly the bug Finding 1 fixed,
+  // and this effect must not reintroduce it.
+  const artifactId = artifact.id;
+  const isFirstArtifactIdRender = useRef(true);
+  useEffect(() => {
+    if (isFirstArtifactIdRender.current) {
+      isFirstArtifactIdRender.current = false;
+      return;
+    }
+    console.log(`${LOG} artifact.id changed — resetting bridgeReadyRef for new artifact`);
+    bridgeReadyRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artifactId]);
 
   const flash = (key: string) => {
     setDone(key);
@@ -457,7 +516,10 @@ const DownloadArtifact = ({
    *
    * No server required. Works in any deployment environment.
    */
-  const captureSlides = (html: string): Promise<string[]> =>
+  const captureSlides = (
+    html: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<string[]> =>
     new Promise((resolve, reject) => {
       const patchedHtml = patchLibUrls(html);
 
@@ -476,14 +538,36 @@ const DownloadArtifact = ({
         }
       };
 
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(new Error('Slide capture timed out'));
-      }, 40_000);
+      let capturedCount = 0;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      // Guards against continuing async work after the promise has already
+      // settled (e.g. EARLY_PHASE_TIMEOUT_MS fired and rejected while the
+      // CDN script load was still in flight). Without this, a late-arriving
+      // html2canvas load would go on to query the already-removed iframe's
+      // document, re-arm a new timeout, and run the full capture loop against
+      // a promise nothing is listening to anymore.
+      let settled = false;
+
+      const armTimeout = (ms: number, onFire: () => void) => {
+        timeoutId = setTimeout(() => {
+          cleanup();
+          settled = true;
+          onFire();
+        }, ms);
+      };
+
+      const clearArmedTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = null;
+      };
 
       iframe.onload = () => {
         // Give fonts, brand images, and scripts time to settle
         setTimeout(async () => {
+          armTimeout(EARLY_PHASE_TIMEOUT_MS, () => {
+            reject(new Error('Slide capture timed out waiting for html2canvas to load'));
+          });
+
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const win = iframe.contentWindow as any;
@@ -498,9 +582,23 @@ const DownloadArtifact = ({
               s.onerror = () => rej(new Error('html2canvas failed to load from CDN'));
               doc.head.appendChild(s);
             });
+            // The early-phase timeout may have already fired (and rejected)
+            // while the CDN script load above was still in flight. Bail out
+            // rather than continuing to work against an already-removed
+            // iframe and an already-settled promise.
+            if (settled) return;
 
             const slideEls = [...doc.querySelectorAll<HTMLElement>('.slide')];
             if (slideEls.length === 0) throw new Error('No .slide elements found in artifact');
+
+            clearArmedTimeout();
+            armTimeout(computeCaptureTimeout(slideEls.length), () => {
+              reject(
+                new Error(
+                  `Slide capture timed out after capturing ${capturedCount} of ${slideEls.length} slides`,
+                ),
+              );
+            });
 
             // Reveal all slides flat so html2canvas can see them
             const FORCE_VISIBLE = `
@@ -521,27 +619,44 @@ const DownloadArtifact = ({
             styleEl.textContent = FORCE_VISIBLE;
             doc.head.appendChild(styleEl);
 
+            if (settled) return;
             const pngs: string[] = [];
-            for (const el of slideEls) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const canvas = await (win.html2canvas as any)(el, {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#25223B',
-                width: 1280,
-                height: 720,
-                logging: false,
-              });
-              pngs.push(canvas.toDataURL('image/png'));
+            const batches = chunk(slideEls, 4);
+            for (const batch of batches) {
+              // The scaled per-slide timeout armed above is most likely to
+              // actually fire here, mid-loop, on a real large deck (e.g.
+              // after batch 5 of 10). Once that happens the iframe is torn
+              // down and the promise has already rejected — bail out instead
+              // of continuing to await further html2canvas batches against a
+              // removed iframe and eventually calling a no-op resolve().
+              if (settled) return;
+              const batchPngs = await Promise.all(
+                batch.map((el) =>
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (win.html2canvas as any)(el, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#36314C',
+                    width: 1280,
+                    height: 720,
+                    logging: false,
+                  }).then((canvas: HTMLCanvasElement) => canvas.toDataURL('image/png')),
+                ),
+              );
+              pngs.push(...batchPngs);
+              capturedCount = pngs.length;
+              onProgress?.(capturedCount, slideEls.length);
             }
 
-            clearTimeout(timeoutId);
+            clearArmedTimeout();
             cleanup();
+            settled = true;
             resolve(pngs);
           } catch (err) {
-            clearTimeout(timeoutId);
+            clearArmedTimeout();
             cleanup();
+            settled = true;
             reject(err);
           }
         }, 1200);
@@ -560,7 +675,9 @@ const DownloadArtifact = ({
     if (!content) return;
     flash('pdf-hd');
     try {
-      const pngs = await captureSlides(content);
+      const pngs = await captureSlides(content, (doneCount, total) => {
+        console.log(`${LOG} PDF (HD) capture progress: ${doneCount}/${total}`);
+      });
       const imgTags = pngs.map((src) => `<img src="${src}" alt="">`).join('');
       const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
@@ -602,7 +719,9 @@ const DownloadArtifact = ({
     if (!content) return;
     flash('pptx-hd');
     try {
-      const pngs = await captureSlides(content);
+      const pngs = await captureSlides(content, (doneCount, total) => {
+        console.log(`${LOG} PPTX (HD) capture progress: ${doneCount}/${total}`);
+      });
       const PptxGenJS = await loadPptxGen();
       const pptx = new PptxGenJS();
       pptx.layout = 'LAYOUT_WIDE';
@@ -645,7 +764,16 @@ const DownloadArtifact = ({
     console.log(`${LOG} Download requested: ${fmt.label} (triggerFn: ${fmt.triggerFn})`);
     console.log(`${LOG} content length: ${content.length}, has previewRef: ${!!previewRef}`);
 
-    // Cancel any previous in-flight attempt before starting a new one
+    // Cancel any previous in-flight attempt before starting a new one.
+    // NOTE: bridgeReadyRef is intentionally NOT reset here. download-bridge.js
+    // posts 'bridge-ready' exactly once, when the artifact's script first
+    // loads (i.e. when the Sandpack preview iframe mounts) — well before any
+    // download click. The same iframe/artifact instance stays alive across
+    // multiple clicks, so once bridge-ready has arrived for this component
+    // instance it remains valid evidence of liveness for every subsequent
+    // click too. Resetting it per-click would mean no second 'bridge-ready'
+    // ever arrives, and the fallback race would incorrectly trigger on every
+    // click after the first.
     if (fallbackTimerRef.current) {
       clearTimeout(fallbackTimerRef.current);
       fallbackTimerRef.current = null;
@@ -663,9 +791,16 @@ const DownloadArtifact = ({
           `${LOG} postMessage dispatched — hidden-iframe fallback armed for ${FALLBACK_MS} ms`,
         );
         fallbackTimerRef.current = setTimeout(() => {
+          if (bridgeReadyRef.current) {
+            // Artifact is alive and just slow (large document) — do not race
+            // a second export. Let the original run to completion.
+            fallbackTimerRef.current = null;
+            return;
+          }
           console.warn(
-            `${LOG} No artifact-download message after ${FALLBACK_MS} ms. ` +
-              `The artifact may not have the message listener. Running hidden-iframe fallback.`,
+            `${LOG} No bridge-ready after ${FALLBACK_MS} ms. ` +
+              `The artifact may not have the download-bridge.js listener (older artifact). ` +
+              `Running hidden-iframe fallback.`,
           );
           fallbackTimerRef.current = null;
           iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn);
@@ -760,8 +895,8 @@ const DownloadArtifact = ({
             variant="ghost"
             className="h-7 px-2 text-xs font-medium"
             onClick={downloadPdfHD}
-            aria-label="Export as PDF (server-rendered, pixel-perfect)"
-            title="Server-side Playwright render — preserves all CSS effects including backdrop-filter and blend modes"
+            aria-label="Export as PDF (client-rendered, pixel-perfect)"
+            title="Screenshots each slide at 2× resolution in-browser and assembles a printable PDF — preserves visual fidelity but does not support backdrop-filter or blend modes"
           >
             {done === 'pdf-hd' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
             PDF (HD)

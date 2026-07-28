@@ -1,5 +1,4 @@
 const accessPermissions = require('./accessPermissions');
-const artifacts = require('./artifacts');
 const assistants = require('./assistants');
 const drive = require('./drive');
 const categories = require('./categories');
@@ -28,7 +27,6 @@ const user = require('./user');
 const mcp = require('./mcp');
 
 module.exports = {
-  artifacts,
   mcp,
   auth,
   drive,

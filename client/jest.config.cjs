@@ -1,6 +1,6 @@
 /** v0.8.2 */
 module.exports = {
-  roots: ['<rootDir>/src'],
+  roots: ['<rootDir>/src', '<rootDir>/public/libs'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     url: 'http://localhost:3080',

@@ -69,7 +69,9 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 - **NO EMOJIS** — ever. Use inline SVG icons or Unicode symbols (→ ● ◆ ▸) only
 - **ALL colors from Whatfix palette only** — zero invented hex values
 - **Layout must look like PowerPoint slides** — fixed 16:9 viewport, `position:absolute` full-bleed, not a scrolling webpage
-- **Load PptxGenJS from cdnjs only**: `<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/4.0.1/pptxgen.bundle.js"></script>` — use **v4.0.1 exactly**. Never use 3.x, jsdelivr, unpkg, or a local `/libs/` path (the local `/libs/pptxgen.bundle.js` is the fallback and is also v4.0.1)
+- **NEVER use brand images as slide backgrounds** — no `background-image: url('/brand/...')`, no full-bleed `<img>` covering a slide. Brand images live only inside `div.brand-graphic` (title), `div.col-right` (two-col), or `div.closing-bg` (closing, opacity ≤ 0.07). Every other slide type gets no brand image
+- **Brand images are accents, not backgrounds** — in `div.brand-graphic` the container must never exceed 40% of slide width. Use `object-fit: contain`, never `cover`, except inside `.closing-bg`
+- **Load PptxGenJS from the local bundle only**: `<script src="/libs/pptxgen.bundle.js"></script>` — this is the same v4.0.1 build previously loaded from cdnjs, now the sole source (no CDN dependency, no version drift risk)
 - **PptxGenJS v4 has no `addFont()` method** — do NOT call `pptx.addFont()` (removed in v4); font embedding is not supported
 - **`pptx.writeFile()` is async in v4** — `downloadPptx()` must be an `async` function and must `await pptx.writeFile(...)`
 - **PptxGenJS hex colors NEVER use `#` prefix** — `'FF6B18'` not `'#FF6B18'` (causes file corruption)
@@ -87,7 +89,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 4. **Minimum font sizes (never go below these):** PPTX headline 22pt, bullets 15pt, captions 9pt. In HTML: headline `clamp(1.4rem,2.6vw,2.2rem)`, bullets `clamp(0.9rem,1.6vw,1.1rem)`
 5. **Top-down structure** — key message first, supporting evidence below. Never bury the conclusion at the end
 6. **Varied layouts** — never repeat the same layout on consecutive slides. Alternate between: bullets, two-column, stat callout, quote, chart, image+text
-7. **Every content slide needs a visual anchor** — a brand graphic, stat callout, or chart. No text-only slides. If you have no data visual, use a brand graphic in the right column
+7. **Visual anchors** — stat callouts, charts, and comparison tables are the preferred visual anchors. Brand graphics are accent-only and belong only on the title and closing slides; do not add brand images to content, section, agenda, stat, quote, process, or icon-grid slides
 8. **Generous whitespace** — better to have 3 bullets with breathing room than 5 cramped ones. Slide titles should never wrap to 3 lines
 
 ## Design Rules
@@ -166,17 +168,17 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-roadmap`). Reuse the s
 
 All graphics are served from `/brand/` (pre-built into the app). Use them on relevant slides — prefer a brand graphic over a blank colored rectangle whenever content matches a product.
 
-**Asset priority: SVG > light PNG > dark PNG.** Dark PNGs have opaque backgrounds that show as a visible box on slides. SVGs are transparent vectors. Light PNGs have transparent/neutral backgrounds.
+**Asset priority for agent logos: SVG > PNG.** SVGs are transparent vectors — they always render cleanly on any background. For suite composite images (product-suite, ai-agents-suite etc.) use the dark variant on dark slides and the light variant on light slides — they are designed for their respective backgrounds.
 
 ### Using in HTML slides
 Use `<img>` with explicit size and `object-fit: contain`. Always set `loading="eager"`.
 ```html
-<!-- Agent logos: always use .svg — transparent background, vector quality -->
+<!-- Agent logos: always use .svg — transparent, vector quality -->
 <img src="/brand/authoring-agent-dark.svg" loading="eager"
      style="width:100%;height:100%;object-fit:contain;" alt="">
 
-<!-- Suite composites (no SVG): prefer light variant — no opaque background box -->
-<img src="/brand/product-suite-light.png" loading="eager"
+<!-- Suite composites: match variant to slide background -->
+<img src="/brand/product-suite-dark.png" loading="eager"
      style="width:100%;height:100%;object-fit:contain;" alt="">
 ```
 
@@ -241,7 +243,7 @@ Replace ALL_CAPS placeholders. The `data-*` attributes on each `<section>` drive
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PRESENTATION_TITLE</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/4.0.1/pptxgen.bundle.js"></script>
+<script src="/libs/pptxgen.bundle.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap');
 @font-face { font-family:'Aeonik'; src:url('/libs/fonts/Aeonik-Light.ttf') format('truetype'); font-weight:300; font-style:normal; font-display:swap; }
@@ -274,11 +276,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1728; f
   overflow: hidden;
 }
 .slide.title .brand-graphic {
-  position: absolute; top: 0; right: 0; width: 42%; height: 80%;
+  position: absolute; top: 0; right: 0; width: 36%; height: 70%;
   display: flex; align-items: center; justify-content: flex-end;
   padding: clamp(1.5rem,4vh,3.5rem); pointer-events: none;
 }
-.slide.title .brand-graphic img { width: 100%; height: 100%; object-fit: contain; opacity: 0.9; }
+.slide.title .brand-graphic img { width: 100%; height: 100%; object-fit: contain; opacity: 0.55; }
 .slide.title .eyebrow {
   position: relative; z-index: 1;
   font-size: 0.65rem; font-weight: 500; letter-spacing: 0.16em;
@@ -653,7 +655,7 @@ h1, h2, h3 { text-wrap: pretty; }
     data-meta="Prepared by Name · Month Year"
     data-brand-image="product-suite-dark">
     <div class="brand-graphic">
-      <img src="/brand/product-suite-light.png" loading="eager" alt="">
+      <img src="/brand/product-suite-dark.png" loading="eager" alt="">
     </div>
     <p class="eyebrow">Whatfix · Department · Month Year</p>
     <h1>Your action title captures the core message</h1>
@@ -885,7 +887,7 @@ h1, h2, h3 { text-wrap: pretty; }
     data-cta="Get in touch"
     data-brand-image="product-suite-dark">
     <div class="closing-bg">
-      <img src="/brand/product-suite-light.png" loading="eager" alt="">
+      <img src="/brand/product-suite-dark.png" loading="eager" alt="">
     </div>
     <h2>Thank you</h2>
     <div class="closing-bar"></div>
@@ -974,14 +976,14 @@ var _IMG_PATHS = {
   'insights-agent-light':     '/brand/insights-agent-light.svg',
   'insights-agent-box-dark':  '/brand/insights-agent-box-dark.svg',
   'insights-agent-box-light': '/brand/insights-agent-box-light.svg',
-  // Suite composites — light PNG preferred (neutral/transparent background)
-  'product-suite-dark':       '/brand/product-suite-light.png',
+  // Suite composites — dark variants for dark slides (designed for Ink 700 bg), light for light slides
+  'product-suite-dark':       '/brand/product-suite-dark.png',
   'product-suite-light':      '/brand/product-suite-light.png',
   'product-suite-full-dark':  '/brand/product-suite-full-dark.png',
-  'ai-agents-suite-dark':     '/brand/ai-agents-suite-light.png',
+  'ai-agents-suite-dark':     '/brand/ai-agents-suite-dark.png',
   'ai-agents-suite-light':    '/brand/ai-agents-suite-light.png',
   'screensense-suite-dark':   '/brand/screensense-suite-dark.png',
-  // Product logos — light where available
+  // Product logos — light where available, dark as fallback
   'dap-dark':                 '/brand/dap-light.png',
   'dap-light':                '/brand/dap-light.png',
   'mirror-dark':              '/brand/mirror-dark.png',
@@ -1306,34 +1308,8 @@ async function downloadPptx() {
   const slug = (document.title || 'presentation').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   await pptx.writeFile({ fileName: slug + '.pptx' });
 }
-
-// Artifact-panel download bridge — intercepts the blob URL click PptxGenJS emits
-// and relays the file data to the parent frame as a base64 message.
-// downloadPptx() is async, so the bridge awaits the returned Promise before cleanup.
-window.addEventListener('message', function(e) {
-  if (!e.data || e.data.type !== 'artifact-download-request') return;
-  if (typeof window[e.data.fn] !== 'function') return;
-  var src = e.source || window.parent;
-  var blobs = new Map();
-  var origCreate = URL.createObjectURL.bind(URL);
-  URL.createObjectURL = function(b) { var u = origCreate(b); if (b instanceof Blob) blobs.set(u, b); return u; };
-  var origClick = HTMLElement.prototype.click;
-  function restore() { URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; }
-  HTMLElement.prototype.click = function() {
-    if (this.tagName === 'A' && this.download && this.href && this.href.indexOf('blob:') === 0) {
-      var blob = blobs.get(this.href);
-      if (blob) {
-        var fn = this.download; var mime = blob.type || 'application/octet-stream';
-        var r = new FileReader();
-        r.onload = function() { src.postMessage({ type:'artifact-download', filename:fn, data:r.result.split(',')[1], mimeType:mime }, '*'); restore(); };
-        r.readAsDataURL(blob); return;
-      }
-    }
-    origClick.call(this);
-  };
-  Promise.resolve(window[e.data.fn]()).catch(function(err) { console.error('[pptx bridge] error:', err); restore(); });
-});
 </script>
+<script src="/libs/download-bridge.js"></script>
 </body>
 </html>
 ```

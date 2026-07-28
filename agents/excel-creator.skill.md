@@ -30,7 +30,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-pipeline-tracker`). Reuse
 
 - **NO code execution** — everything runs client-side in the HTML artifact
 - **All colors from Whatfix palette only**
-- Load SheetJS from cdnjs only: `<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>` — never use a local `/libs/` path
+- **Load SheetJS from the local bundle only**: `<script src="/libs/xlsx.full.min.js"></script>` — this is the same v0.18.5 build previously loaded from cdnjs, now the sole source (no CDN dependency, no version drift risk)
 - The preview table must be styled with Whatfix brand colors
 - The downloaded `.xlsx` must also have Whatfix brand colors applied to headers
 
@@ -55,7 +55,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-pipeline-tracker`). Reuse
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SPREADSHEET_TITLE</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="/libs/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
 
@@ -267,31 +267,8 @@ function downloadExcel() {
 // Init
 buildTabs();
 renderSheet(0);
-
-// Artifact-panel download bridge
-window.addEventListener('message', function(e) {
-  if (!e.data || e.data.type !== 'artifact-download-request') return;
-  if (typeof window[e.data.fn] !== 'function') return;
-  var src = e.source || window.parent;
-  var blobs = new Map();
-  var origCreate = URL.createObjectURL.bind(URL);
-  URL.createObjectURL = function(b) { var u = origCreate(b); if (b instanceof Blob) blobs.set(u, b); return u; };
-  var origClick = HTMLElement.prototype.click;
-  HTMLElement.prototype.click = function() {
-    if (this.tagName === 'A' && this.download && this.href && this.href.indexOf('blob:') === 0) {
-      var blob = blobs.get(this.href);
-      if (blob) {
-        var fn = this.download; var mime = blob.type || 'application/octet-stream';
-        var r = new FileReader();
-        r.onload = function() { src.postMessage({ type:'artifact-download', filename:fn, data:r.result.split(',')[1], mimeType:mime }, '*'); URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; };
-        r.readAsDataURL(blob); return;
-      }
-    }
-    origClick.call(this);
-  };
-  try { window[e.data.fn](); } catch(err) { URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; }
-});
 </script>
+<script src="/libs/download-bridge.js"></script>
 </body>
 </html>
 ```

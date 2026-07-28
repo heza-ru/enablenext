@@ -30,7 +30,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-report`). Reuse the sa
 
 - **NO code execution** — everything runs client-side in the HTML artifact
 - **All colors from Whatfix palette only**
-- Google Fonts `@import` is allowed. Load docx.js from cdnjs only: `<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>` — never use a local `/libs/` path
+- Google Fonts `@import` is allowed. **Load docx.js from the local bundle only**: `<script src="/libs/docx.iife.js"></script>` — verified compatible with this skill's API usage (see implementation notes); no CDN dependency
 - Sentence case for all headings — never title-case every word
 - No emojis
 
@@ -55,7 +55,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-report`). Reuse the sa
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DOCUMENT_TITLE</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>
+<script src="/libs/docx.iife.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
@@ -314,30 +314,8 @@ async function downloadDocx() {
   URL.revokeObjectURL(url);
 }
 
-// Artifact-panel download bridge
-window.addEventListener('message', function(e) {
-  if (!e.data || e.data.type !== 'artifact-download-request') return;
-  if (typeof window[e.data.fn] !== 'function') return;
-  var src = e.source || window.parent;
-  var blobs = new Map();
-  var origCreate = URL.createObjectURL.bind(URL);
-  URL.createObjectURL = function(b) { var u = origCreate(b); if (b instanceof Blob) blobs.set(u, b); return u; };
-  var origClick = HTMLElement.prototype.click;
-  HTMLElement.prototype.click = function() {
-    if (this.tagName === 'A' && this.download && this.href && this.href.indexOf('blob:') === 0) {
-      var blob = blobs.get(this.href);
-      if (blob) {
-        var fn = this.download; var mime = blob.type || 'application/octet-stream';
-        var r = new FileReader();
-        r.onload = function() { src.postMessage({ type:'artifact-download', filename:fn, data:r.result.split(',')[1], mimeType:mime }, '*'); URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; };
-        r.readAsDataURL(blob); return;
-      }
-    }
-    origClick.call(this);
-  };
-  try { window[e.data.fn](); } catch(err) { URL.createObjectURL = origCreate; HTMLElement.prototype.click = origClick; }
-});
 </script>
+<script src="/libs/download-bridge.js"></script>
 </body>
 </html>
 ```
