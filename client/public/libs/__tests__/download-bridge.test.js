@@ -62,6 +62,40 @@ describe('download-bridge.js', () => {
     expect(downloadMsg.mimeType).toBe('text/plain');
   });
 
+  it('posts artifact-download-error when the message-triggered export function throws', async () => {
+    // An async function whose body throws rejects the returned promise
+    // (rather than throwing synchronously out of the message handler before
+    // the .catch() is even attached) — this is the realistic shape of the
+    // artifact export functions the bridge invokes.
+    window.throwingFn = async () => {
+      throw new Error('export blew up');
+    };
+    try {
+      const posted = loadBridge();
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-download-request', fn: 'throwingFn' },
+        }),
+      );
+
+      const deadline = Date.now() + 2000;
+      while (
+        !posted.some((m) => m.type === 'artifact-download-error') &&
+        Date.now() < deadline
+      ) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      const errorMsg = posted.find((m) => m.type === 'artifact-download-error');
+      expect(errorMsg).toBeDefined();
+      expect(errorMsg.fn).toBe('throwingFn');
+      expect(errorMsg.message).toBe('export blew up');
+    } finally {
+      delete window.throwingFn;
+    }
+  });
+
   it('does not intercept a click on an anchor with no blob: href', () => {
     loadBridge();
     let realClickCalled = false;

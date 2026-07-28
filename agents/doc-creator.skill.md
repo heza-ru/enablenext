@@ -28,305 +28,86 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-q3-report`). Reuse the sa
 
 ## CRITICAL Rules
 
-- **NO code execution** — everything runs client-side in the HTML artifact
-- **All colors from Whatfix palette only**
-- Google Fonts `@import` is allowed. **Load docx.js from the local bundle only**: `<script src="/libs/docx.iife.js"></script>` — verified compatible with this skill's API usage (see implementation notes); no CDN dependency
-- Sentence case for all headings — never title-case every word
-- No emojis
+- **NO code execution** — everything runs client-side in the HTML artifact.
+- **Every document is one object in `DOC.blocks[]`** — never write raw HTML/CSS for document content, only the artifact shape below.
+- **NO EMOJIS** — ever.
+- Sentence case for all headings — never title-case every word.
 
-## Brand Colors
+## Artifact Shape — MANDATORY
 
-```
-#25223B  Ink 700  — dark bg, H1 color in preview
-#35324A  Ink      — body text on light bg
-#FF6B18  Orange   — H1/accent color in DOCX, callout borders
-#8A8A9C  Ink 300  — captions, metadata
-#F9F9F2  Gray 100 — document page bg (warm off-white)
-#FFE9DC  Orange 100 — callout box fill
-#E5E3DC  Gray 300 — dividers, table borders
-```
-
-## HTML Template
+The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this shape:
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DOCUMENT_TITLE</title>
 <script src="/libs/docx.iife.js"></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: #25223B;
-  min-height: 100vh;
-  padding: 2rem;
-}
-
-/* Toolbar */
-.toolbar {
-  display: flex; align-items: center; justify-content: space-between;
-  max-width: 800px; margin: 0 auto 1.5rem;
-}
-.toolbar .doc-meta h1 { font-size: 1rem; font-weight: 600; color: #FFFFFF; }
-.toolbar .doc-meta p  { font-size: .75rem; color: #8A8A9C; margin-top: .15rem; }
-
-
-/* Document page */
-.page {
-  max-width: 800px; margin: 0 auto;
-  background: #F9F9F2; border-radius: 8px;
-  padding: clamp(2rem, 5vw, 4rem);
-  box-shadow: 0 4px 40px rgba(0,0,0,.4);
-  color: #35324A;
-}
-
-/* Typography */
-.page h1 { font-size: 2.2rem; font-weight: 600; color: #FF6B18; line-height: 1.15; margin-bottom: .5rem; }
-.page .doc-subtitle { font-size: 1.05rem; font-weight: 300; color: #8A8A9C; margin-bottom: .5rem; }
-.page .doc-date { font-size: .78rem; color: #8A8A9C; margin-bottom: 2rem; }
-.page hr { border: none; border-top: 2px solid #E5E3DC; margin: 1.75rem 0; }
-.page h2 { font-size: 1.35rem; font-weight: 600; color: #25223B; margin: 1.75rem 0 .6rem; line-height: 1.3; }
-.page h3 { font-size: 1.05rem; font-weight: 600; color: #35324A; margin: 1.25rem 0 .4rem; }
-.page p  { font-size: .95rem; font-weight: 400; line-height: 1.7; color: #35324A; margin-bottom: .9rem; }
-.page ul, .page ol { padding-left: 1.5rem; margin-bottom: .9rem; }
-.page li { font-size: .95rem; line-height: 1.7; color: #35324A; margin-bottom: .3rem; }
-
-/* Callout box */
-.callout {
-  background: #FFE9DC; border-left: 4px solid #FF6B18;
-  border-radius: 0 6px 6px 0; padding: .9rem 1.25rem;
-  margin: 1.25rem 0;
-}
-.callout p { margin: 0; font-size: .9rem; font-style: italic; color: #35324A; }
-
-/* Table */
-.page table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: .88rem; }
-.page thead th { background: #FF6B18; color: #FFFFFF; font-weight: 600; padding: .55rem .85rem; text-align: left; }
-.page tbody td { padding: .5rem .85rem; border-bottom: 1px solid #E5E3DC; color: #35324A; }
-.page tbody tr:nth-child(even) td { background: #F9F9F2; }
-
-/* Cover page accent bar */
-.accent-bar { width: 48px; height: 4px; background: #FF6B18; border-radius: 2px; margin: 1rem 0 1.75rem; }
-</style>
+<script src="/libs/download-bridge.js"></script>
+<script src="/libs/doc-renderer.js"></script>
 </head>
 <body>
-
-<div class="toolbar">
-  <div class="doc-meta">
-    <h1>DOCUMENT TITLE</h1>
-    <p>Whatfix · June 2026</p>
-  </div>
-</div>
-
-<!-- ═══ DOCUMENT PREVIEW ════════════════════════════════ -->
-<div class="page" id="doc-preview">
-
-  <!-- Cover -->
-  <h1>Document Title Here</h1>
-  <p class="doc-subtitle">Subtitle or document type</p>
-  <p class="doc-date">Prepared by Name &nbsp;·&nbsp; Whatfix &nbsp;·&nbsp; June 2026</p>
-  <div class="accent-bar"></div>
-
-  <hr>
-
-  <!-- Body sections — add as many h2/h3/p/ul blocks as needed -->
-  <h2>Executive summary</h2>
-  <p>Opening paragraph that summarises the key point of this document in two to three sentences. Lead with the outcome, not the process.</p>
-
-  <div class="callout">
-    <p>Key insight or important callout that deserves special attention from the reader.</p>
-  </div>
-
-  <h2>Section heading in sentence case</h2>
-  <p>Body copy goes here. Keep paragraphs short — three to five sentences maximum. Use Aeonik Light weight for longer reads.</p>
-  <ul>
-    <li>First bullet point — outcome oriented</li>
-    <li>Second bullet point — specific and measurable</li>
-    <li>Third bullet point — actionable</li>
-  </ul>
-
-  <h2>Next steps</h2>
-  <p>Clear action items with owners and dates.</p>
-
-</div>
-
+<div id="doc-root"></div>
 <script>
-// ══════════════════════════════════════════════════════
-// DOCUMENT DATA — mirrors the HTML preview above.
-// Edit both the HTML and this data object together.
-// ══════════════════════════════════════════════════════
-const DOC = {
-  title:    "Document Title Here",
-  subtitle: "Subtitle or document type",
-  author:   "Name",
-  date:     "June 2026",
-  sections: [
-    {
-      type: "heading1",
-      text: "Executive summary"
-    },
-    {
-      type: "paragraph",
-      text: "Opening paragraph that summarises the key point of this document in two to three sentences. Lead with the outcome, not the process."
-    },
-    {
-      type: "callout",
-      text: "Key insight or important callout that deserves special attention from the reader."
-    },
-    {
-      type: "heading1",
-      text: "Section heading in sentence case"
-    },
-    {
-      type: "paragraph",
-      text: "Body copy goes here. Keep paragraphs short — three to five sentences maximum."
-    },
-    {
-      type: "bullets",
-      items: [
-        "First bullet point — outcome oriented",
-        "Second bullet point — specific and measurable",
-        "Third bullet point — actionable",
-      ]
-    },
-    {
-      type: "heading1",
-      text: "Next steps"
-    },
-    {
-      type: "paragraph",
-      text: "Clear action items with owners and dates."
-    },
+window.DOC = {
+  "title": "DOCUMENT_TITLE",
+  "subtitle": "Subtitle or document type",
+  "author": "Name",
+  "date": "Month Year",
+  "blocks": [
+    { "type": "heading1", "text": "Executive summary" },
+    { "type": "paragraph", "text": "Opening paragraph summarizing the key point in two to three sentences." }
+    /* ...one entry per block... */
   ]
 };
-
-// ── DOCX export ───────────────────────────────────────
-async function downloadDocx() {
-  const {
-    Document, Packer, Paragraph, TextRun, HeadingLevel,
-    AlignmentType, BorderStyle, ShadingType,
-    TableRow, TableCell, Table, WidthType,
-  } = docx;
-
-  // Whatfix colors (ARGB — alpha + RGB)
-  const ORANGE  = 'FFFF6B18';
-  const INK700  = 'FF25223B';
-  const INK     = 'FF35324A';
-  const GRAY100 = 'FFF9F9F2';
-  const ORANGE100 = 'FFFFE9DC';
-  const GRAY300 = 'FFE5E3DC';
-
-  const FONT = 'Calibri';  // closest system font to DM Sans
-
-  const children = [];
-
-  // Cover
-  children.push(
-    new Paragraph({
-      children: [new TextRun({ text: DOC.title, bold: true, size: 56, color: 'FF6B18', font: FONT })],
-      spacing: { after: 120 },
-    }),
-    new Paragraph({
-      children: [new TextRun({ text: DOC.subtitle, size: 24, color: '8A8A9C', font: FONT })],
-      spacing: { after: 80 },
-    }),
-    new Paragraph({
-      children: [new TextRun({ text: `Prepared by ${DOC.author}  ·  Whatfix  ·  ${DOC.date}`, size: 18, color: '8A8A9C', font: FONT })],
-      spacing: { after: 300 },
-      border: { bottom: { color: 'FF6B18', size: 12, style: BorderStyle.SINGLE, space: 8 } }
-    })
-  );
-
-  // Sections
-  DOC.sections.forEach(sec => {
-    if (sec.type === 'heading1') {
-      children.push(new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: sec.text, bold: true, size: 32, color: '25223B', font: FONT })],
-        spacing: { before: 360, after: 120 },
-      }));
-
-    } else if (sec.type === 'heading2') {
-      children.push(new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: sec.text, bold: true, size: 24, color: '35324A', font: FONT })],
-        spacing: { before: 240, after: 80 },
-      }));
-
-    } else if (sec.type === 'paragraph') {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: sec.text, size: 22, color: '35324A', font: FONT })],
-        spacing: { after: 160 },
-      }));
-
-    } else if (sec.type === 'callout') {
-      children.push(new Paragraph({
-        children: [new TextRun({ text: sec.text, italics: true, size: 21, color: '35324A', font: FONT })],
-        spacing: { after: 160, before: 80 },
-        shading: { type: ShadingType.CLEAR, fill: 'FFE9DC' },
-        border: { left: { color: 'FF6B18', size: 16, style: BorderStyle.SINGLE, space: 8 } },
-        indent: { left: 240 },
-      }));
-
-    } else if (sec.type === 'bullets') {
-      (sec.items || []).forEach(item => {
-        children.push(new Paragraph({
-          bullet: { level: 0 },
-          children: [new TextRun({ text: item, size: 22, color: '35324A', font: FONT })],
-          spacing: { after: 80 },
-        }));
-      });
-
-    } else if (sec.type === 'divider') {
-      children.push(new Paragraph({
-        border: { bottom: { color: 'E5E3DC', size: 6, style: BorderStyle.SINGLE, space: 4 } },
-        spacing: { before: 200, after: 200 },
-        children: [],
-      }));
-    }
-  });
-
-  const doc = new Document({
-    creator: 'Whatfix',
-    title: DOC.title,
-    description: DOC.subtitle,
-    styles: {
-      default: {
-        document: {
-          run: { font: FONT, size: 22, color: '35324A' },
-          paragraph: { spacing: { line: 360 } },
-        }
-      }
-    },
-    sections: [{ children }],
-  });
-
-  const blob = await Packer.toBlob(doc);
-  const slug = (DOC.title || 'document').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href: url, download: slug + '.docx' });
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
+DocRenderer.renderDoc(window.DOC, document.getElementById('doc-root'));
+// window.downloadDocx() (exposed by doc-renderer.js) generates the native .docx export
 </script>
-<script src="/libs/download-bridge.js"></script>
 </body>
 </html>
 ```
 
-## Rules for Populating DOC
+**Never write CSS, positioning, or duplicated content in the artifact.** Every section of the document is one object in `blocks[]` with a `type` field (from the table below) and that block's content fields — nothing else. `doc-renderer.js` (loaded from `/libs/`, never regenerated) owns every visual decision.
 
-- The HTML `<div class="page">` is the visual preview — write it as clean HTML
-- The `DOC.sections` array drives the `.docx` export — keep them in sync with the HTML
-- Section types: `heading1`, `heading2`, `paragraph`, `callout`, `bullets`, `divider`
-- For `bullets` use `{ type: "bullets", items: ["...", "..."] }`
-- Filename is derived from `DOC.title`
+## Block Reference
+
+| `type` | Fields | Use for |
+|---|---|---|
+| `heading1` | `text` | Top-level section heading |
+| `heading2` | `text` | Sub-section heading |
+| `heading3` | `text` | Minor heading |
+| `paragraph` | `text` | Body copy |
+| `bullets` | `items` (string array, any length) | Unordered list |
+| `numbered` | `items` (string array, any length) | Ordered/numbered list |
+| `callout` | `text` | Orange-accent callout box for a key insight |
+| `table` | `headers` (up to 6 columns), `rows` (array of string arrays, any number of rows, each sliced to match `headers`) | Structured/tabular data |
+| `image` | `brandImage` (asset key, e.g. `"dap-dark"`), `caption?` | A brand logo or product graphic |
+| `divider` | — | Horizontal rule between sections |
+| `pageBreak` | — | Force a new page at this point |
+
+Lists and table rows are never capped in length — a document can be as long as it needs to be. Table columns ARE capped at 6 by construction (a real Word rendering constraint, not a content-length one) — if you need more than 6 columns, that's two tables or a restructured table, not one wide one.
+
+## Using brand images
+
+Pass the asset key (filename without extension, e.g. `"dap-dark"`) as `image.brandImage`. `doc-renderer.js` resolves the key against `/brand/` and handles sizing — you never specify coordinates or dimensions.
+
+Only PNG-only brand assets (the ones with no `.svg` version under `/brand/` — e.g. `dap-dark`, `mirror-dark`; see `PNG_ONLY_BRAND_IMAGES` in `doc-renderer.js` for the full list) can be embedded in the exported `.docx`. Exporting a document whose `image` block uses a non-PNG (SVG-resolved) key throws a clear error at export time instead of producing a file. The live HTML preview supports both PNG and SVG keys; only the `.docx` export path is restricted.
+
+## Document metadata
+
+`title`, `subtitle`, `author`, and `date` are front-matter, not visible content — none of them are printed on the page itself. They only populate the exported `.docx` file's properties (visible via Word's File > Info panel, not in the document body) and the downloaded filename:
+
+- `title` → the `.docx` Title property and the download filename (slugified)
+- `subtitle` → the `.docx` Description property
+- `author` → the `.docx` Author property (defaults to "Whatfix" if omitted)
+- `date` → the `.docx` Subject property
+
+If the document itself needs a visible title on the page, add a `heading1` block for it — the top-level `title` field alone will not appear anywhere in the preview or the printed page.
+
+## Page size
+
+Every generated document is A4 (210mm × 297mm) by default — this is set once, centrally, in `doc-renderer.js`; you never configure it per document.
 
 ## After Generating
 

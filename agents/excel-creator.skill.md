@@ -1,6 +1,6 @@
 ---
 name: excel-creator
-description: Use when the user asks to create a spreadsheet, Excel file, CSV, table, data tracker, report template, dashboard, or any structured data output. Generates an interactive HTML preview with a one-click .xlsx download using SheetJS — no code execution or API keys required.
+description: Use when the user asks to create a spreadsheet, Excel file, CSV, table, data tracker, report template, dashboard, or any structured data output. Generates an interactive HTML preview with a one-click .xlsx download using ExcelJS — no code execution or API keys required.
 user-invocable: true
 allowed-tools: ["artifacts"]
 ---
@@ -9,7 +9,7 @@ allowed-tools: ["artifacts"]
 
 Generate a single self-contained HTML artifact that:
 1. **Renders a styled table preview** of the spreadsheet data
-2. **Includes a "Download Excel" button** that generates a real `.xlsx` file using SheetJS (runs in the browser, no server needed)
+2. **Includes a "Download Excel" button** that generates a real `.xlsx` file using ExcelJS (runs in the browser, no server needed)
 
 ## Output Format — MANDATORY
 
@@ -30,7 +30,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-pipeline-tracker`). Reuse
 
 - **NO code execution** — everything runs client-side in the HTML artifact
 - **All colors from Whatfix palette only**
-- **Load SheetJS from the local bundle only**: `<script src="/libs/xlsx.full.min.js"></script>` — this is the same v0.18.5 build previously loaded from cdnjs, now the sole source (no CDN dependency, no version drift risk)
+- **Load ExcelJS from the local bundle only**: `<script src="/libs/exceljs.bare.min.js"></script>` — replaces SheetJS Community Edition, which could only read cell styles, not write them (writing styles is a paid-only SheetJS feature); ExcelJS genuinely writes styling/freeze panes into the exported file.
 - The preview table must be styled with Whatfix brand colors
 - The downloaded `.xlsx` must also have Whatfix brand colors applied to headers
 
@@ -55,7 +55,7 @@ Use a descriptive kebab-case identifier (e.g. `whatfix-pipeline-tracker`). Reuse
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SPREADSHEET_TITLE</title>
-<script src="/libs/xlsx.full.min.js"></script>
+<script src="/libs/exceljs.bare.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
 
@@ -207,61 +207,71 @@ function buildTabs() {
 }
 
 // ── Excel export ──────────────────────────────────────
-function downloadExcel() {
-  const wb = XLSX.utils.book_new();
+async function downloadExcel() {
+  const wb = new ExcelJS.Workbook();
 
   SHEETS.forEach(sh => {
-    const wsData = [sh.headers, ...sh.rows];
-    if (sh.summaryRow) wsData.push(sh.summaryRow);
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const ws = wb.addWorksheet(sh.name);
+    const numeric = new Set(sh.numericCols || []);
 
-    // Column widths
-    ws['!cols'] = sh.headers.map((h, i) => {
-      const maxLen = Math.max(
-        h.length,
-        ...sh.rows.map(r => String(r[i] ?? '').length),
-        sh.summaryRow ? String(sh.summaryRow[i] ?? '').length : 0
-      );
-      return { wch: Math.min(maxLen + 4, 40) };
+    // Header row
+    const headerRow = ws.addRow(sh.headers);
+    headerRow.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF6B18' } };
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Calibri', size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+        right:  { style: 'thin', color: { argb: 'FFFFFFFF' } },
+      };
     });
 
-    // Freeze header row
-    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-
-    // Header cell styles (orange fill, white bold text)
-    sh.headers.forEach((_, ci) => {
-      const cellRef = XLSX.utils.encode_cell({ r: 0, c: ci });
-      if (!ws[cellRef]) return;
-      ws[cellRef].s = {
-        fill: { fgColor: { rgb: 'FF6B18' } },
-        font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Calibri', sz: 11 },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-        border: {
-          bottom: { style: 'thin', color: { rgb: 'FFFFFF' } },
-          right:  { style: 'thin', color: { rgb: 'FFFFFF' } },
-        }
-      };
+    // Data rows (right-align numeric columns to match preview)
+    sh.rows.forEach(row => {
+      const dataRow = ws.addRow(row);
+      numeric.forEach(ci => {
+        const cell = dataRow.getCell(ci + 1);
+        cell.alignment = { horizontal: 'right' };
+      });
     });
 
     // Summary row style (orange text, subtle fill)
     if (sh.summaryRow) {
-      const lastRow = sh.rows.length + 1;
-      sh.summaryRow.forEach((_, ci) => {
-        const cellRef = XLSX.utils.encode_cell({ r: lastRow, c: ci });
-        if (!ws[cellRef]) return;
-        ws[cellRef].s = {
-          fill: { fgColor: { rgb: 'FFE9DC' } },
-          font: { bold: true, color: { rgb: 'FF6B18' }, name: 'Calibri', sz: 11 },
-          border: { top: { style: 'medium', color: { rgb: 'FF6B18' } } }
-        };
+      const summaryRow = ws.addRow(sh.summaryRow);
+      summaryRow.eachCell({ includeEmpty: true }, cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE9DC' } };
+        cell.font = { bold: true, color: { argb: 'FFFF6B18' }, name: 'Calibri', size: 11 };
+        cell.border = { top: { style: 'medium', color: { argb: 'FFFF6B18' } } };
+      });
+      numeric.forEach(ci => {
+        summaryRow.getCell(ci + 1).alignment = { horizontal: 'right' };
       });
     }
 
-    XLSX.utils.book_append_sheet(wb, ws, sh.name);
+    // Column widths (set after rows are added — only affects width, not content)
+    ws.columns = sh.headers.map((h, i) => ({
+      width: Math.min(Math.max(
+        h.length,
+        ...sh.rows.map(r => String(r[i] ?? '').length),
+        sh.summaryRow ? String(sh.summaryRow[i] ?? '').length : 0
+      ) + 4, 40)
+    }));
+
+    // Freeze header row
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
   });
 
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
   const slug = document.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  XLSX.writeFile(wb, slug + '.xlsx', { bookType: 'xlsx', cellStyles: true });
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = slug + '.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // Init

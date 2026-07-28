@@ -1,10 +1,18 @@
-import { render, fireEvent } from '@testing-library/react';
-import DownloadArtifact from '../DownloadArtifact';
+import { render, fireEvent, act } from '@testing-library/react';
+import DownloadArtifact, { runInHiddenIframe } from '../DownloadArtifact';
+
+// Mutable so individual tests can flip googleDrivePickerEnabled on to
+// exercise the Drive button without affecting the other describe blocks.
+let mockStartupConfigData: Record<string, unknown> = {};
+// Mutable so a test can exercise more than one native format (e.g. the
+// multi-format Drive-save regression test) without affecting other tests
+// that assume only the PPTX format is detected.
+let mockCurrentCode = '<html>...downloadPptx()...</html>';
 
 // Mock heavy provider hooks this component depends on so the test can focus
 // on the timing logic under test.
 jest.mock('~/data-provider', () => ({
-  useGetStartupConfig: () => ({ data: {} }),
+  useGetStartupConfig: () => ({ data: mockStartupConfigData }),
 }));
 jest.mock('~/hooks/AuthContext', () => ({
   useAuthContext: () => ({ token: 'test-token' }),
@@ -14,7 +22,7 @@ jest.mock('~/hooks/Artifacts/useArtifactProps', () => ({
   default: () => ({ fileKey: 'test.pptx' }),
 }));
 jest.mock('~/Providers/EditorContext', () => ({
-  useCodeState: () => ({ currentCode: '<html>...downloadPptx()...</html>' }),
+  useCodeState: () => ({ currentCode: mockCurrentCode }),
 }));
 jest.mock('~/hooks', () => ({ useLocalize: () => (s: string) => s }));
 
@@ -32,6 +40,11 @@ const fakePreviewRef = {
     }),
   },
 } as never;
+
+beforeEach(() => {
+  mockStartupConfigData = {};
+  mockCurrentCode = '<html>...downloadPptx()...</html>';
+});
 
 describe('DownloadArtifact — PDF (HD) button tooltip copy', () => {
   it('PDF (HD) button tooltip describes the client-side capture approach', () => {
@@ -137,5 +150,174 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
     // The stale ready-flag from artifact-v1 must not suppress the fallback
     // that this new, non-bridge-ready artifact actually needs.
     expect(document.querySelectorAll('iframe').length).toBeGreaterThan(0);
+  });
+});
+
+describe('DownloadArtifact — saveToDrive timeout (Bug 1)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // Enable the Drive button for this describe block only.
+    mockStartupConfigData = { googleDrivePickerEnabled: true };
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  it('clears driveSaving and sets driveError if no artifact-download message ever arrives (export hung/failed silently)', () => {
+    const { getByLabelText, queryByLabelText, getByTitle } = render(
+      <DownloadArtifact artifact={{ content: '' } as never} />,
+    );
+
+    fireEvent.click(getByLabelText('Save PPTX to Google Drive'));
+
+    // Still saving — no message has arrived, no time has passed yet.
+    expect(getByLabelText('Save PPTX to Google Drive')).toHaveTextContent('Saving...');
+
+    // Advance past the 20s saveToDrive safety-net timeout without ever
+    // dispatching an 'artifact-download' message — this simulates the
+    // export throwing/hanging inside the hidden iframe with nothing ever
+    // coming back, which is exactly the stuck-forever bug being fixed.
+    act(() => {
+      jest.advanceTimersByTime(20_000);
+    });
+
+    expect(getByLabelText('Save PPTX to Google Drive')).not.toHaveTextContent('Saving...');
+    expect(getByTitle(/Export timed out/i)).toBeDefined();
+    // The listener must also have been cleaned up — a late, spurious message
+    // must not resurrect Drive state after the timeout has already fired.
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-download', filename: 'deck.pptx', data: '', mimeType: '' },
+        }),
+      );
+    });
+    expect(queryByLabelText('Open ↗')).toBeNull();
+  });
+
+  it('does not let an earlier, superseded saveToDrive call\'s stale timeout clobber a later call\'s successful state', async () => {
+    // driveSaving/driveError/driveLink are component-wide state, not
+    // per-format — starting a second Drive save for a different format
+    // before the first's 20s timeout fires must not let that first call's
+    // now-abandoned timeout reach back in and stomp on the second call's
+    // (successful) result once it lands.
+    mockCurrentCode = '<html>...downloadPptx()...downloadDocx()...</html>';
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ webViewLink: 'https://drive.example/docx' }),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).fetch = fetchMock;
+
+    const { getByLabelText, getAllByText, queryByTitle } = render(
+      <DownloadArtifact artifact={{ content: '' } as never} />,
+    );
+
+    // Start the PPTX save first (arms its own 20s timeout at t=0)...
+    fireEvent.click(getByLabelText('Save PPTX to Google Drive'));
+
+    act(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+
+    // ...then, before it resolves or times out, start a DOCX save. This
+    // supersedes PPTX as "current" — the PPTX call's handler/timeout are
+    // independent closures that keep running regardless.
+    fireEvent.click(getByLabelText('Save DOCX to Google Drive'));
+
+    // The DOCX save succeeds via a real 'artifact-download' message + fetch.
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-download',
+            filename: 'deck.docx',
+            data: 'ZGF0YQ==',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          },
+        }),
+      );
+      // Flush the microtask chain (fetch().then(res.json()).then(setDriveLink)).
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getAllByText('Open ↗').length).toBeGreaterThan(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Advance to t=20_000 — the PPTX call's stale 20s timeout (armed at t=0)
+    // fires now. Before this fix, it would unconditionally call
+    // setDriveSaving(null)/setDriveError(...), clobbering the DOCX success
+    // that just landed with a spurious "Export timed out" banner.
+    act(() => {
+      jest.advanceTimersByTime(15_000);
+    });
+
+    expect(getAllByText('Open ↗').length).toBeGreaterThan(0);
+    expect(queryByTitle(/Export timed out/i)).toBeNull();
+
+    delete (global as any).fetch;
+  });
+});
+
+describe('runInHiddenIframe — onError callback (Bug 2)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  it('calls onError when the named function is not defined on the iframe window', () => {
+    const onError = jest.fn();
+    const cleanup = runInHiddenIframe('<html></html>', 'doesNotExist', onError);
+
+    const iframe = document.querySelector('iframe') as HTMLIFrameElement;
+    expect(iframe).not.toBeNull();
+
+    act(() => {
+      iframe.dispatchEvent(new Event('load'));
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toMatch(/not a function/);
+    cleanup();
+  });
+
+  it('calls onError when the invoked function throws synchronously', () => {
+    const onError = jest.fn();
+    const cleanup = runInHiddenIframe('<html></html>', 'throwingFn', onError);
+
+    const iframe = document.querySelector('iframe') as HTMLIFrameElement;
+    expect(iframe).not.toBeNull();
+
+    // The srcdoc content never actually executes in this jsdom setup (jsdom
+    // doesn't run scripts from `srcdoc` navigations without `runScripts`
+    // configured), so define the throwing function directly on the iframe's
+    // window — from runInHiddenIframe's point of view this is
+    // indistinguishable from the artifact HTML itself having defined it.
+    (iframe.contentWindow as unknown as Record<string, unknown>).throwingFn = () => {
+      throw new Error('synchronous export failure');
+    };
+
+    act(() => {
+      iframe.dispatchEvent(new Event('load'));
+      jest.advanceTimersByTime(800);
+    });
+
+    // The bridge script's own onload never fires in this environment (no
+    // real network request happens), so the 2s fallback in runInHiddenIframe
+    // is what actually invokes the function.
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toMatch(/synchronous export failure/);
+    cleanup();
   });
 });

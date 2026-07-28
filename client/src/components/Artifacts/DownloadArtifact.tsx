@@ -74,17 +74,6 @@ function triggerViaPreviewIframe(
 }
 
 /**
- * Fallback: load the artifact HTML in a zero-size hidden iframe, inject a blob
- * interceptor after all scripts have loaded, then call the named function.
- *
- * Used when:
- *   (a) previewRef / SandpackClient / iframe is unavailable, OR
- *   (b) the primary postMessage received no artifact-download response within FALLBACK_MS
- *       (older artifacts without the built-in message listener).
- *
- * Returns a cleanup function that removes the iframe.
- */
-/**
  * How long to wait for a 'bridge-ready' signal before assuming the artifact
  * doesn't support the download-bridge.js protocol at all (e.g. an older
  * cached artifact) and falling back to the hidden-iframe path. Once
@@ -93,6 +82,15 @@ function triggerViaPreviewIframe(
  * just a document that takes a while to build (see bridgeReadyRef).
  */
 const FALLBACK_MS = 10_000;
+
+/**
+ * Safety-net timeout for saveToDrive(): if the export throws inside the
+ * hidden iframe (or otherwise never completes), no 'artifact-download'
+ * message ever arrives and the message listener would wait forever,
+ * leaving driveSaving stuck truthy. Generous enough to cover a real native
+ * export plus the subsequent network upload.
+ */
+const DRIVE_SAVE_TIMEOUT_MS = 20_000;
 
 /**
  * Safety-net timeout for captureSlides(), scaled to slide count instead of a
@@ -161,7 +159,22 @@ function patchLibUrls(html: string): string {
   return patched;
 }
 
-function runInHiddenIframe(html: string, fnName: string): () => void {
+/**
+ * Fallback: load the artifact HTML in a zero-size hidden iframe, inject a blob
+ * interceptor after all scripts have loaded, then call the named function.
+ *
+ * Used when:
+ *   (a) previewRef / SandpackClient / iframe is unavailable, OR
+ *   (b) the primary postMessage received no artifact-download response within FALLBACK_MS
+ *       (older artifacts without the built-in message listener).
+ *
+ * Returns a cleanup function that removes the iframe.
+ */
+export function runInHiddenIframe(
+  html: string,
+  fnName: string,
+  onError?: (message: string) => void,
+): () => void {
   const patchedHtml = patchLibUrls(html);
   console.log(`${LOG} [hiddenIframe] Creating hidden iframe to run ${fnName}`);
 
@@ -203,10 +216,9 @@ function runInHiddenIframe(html: string, fnName: string): () => void {
       );
 
       if (typeof win[fnName] !== 'function') {
-        console.error(
-          `${LOG} [hiddenIframe] '${fnName}' is not a function. ` +
-            `Ensure the artifact HTML defines this function in a <script> block.`,
-        );
+        const message = `'${fnName}' is not a function. Ensure the artifact HTML defines this function in a <script> block.`;
+        console.error(`${LOG} [hiddenIframe] ${message}`);
+        onError?.(message);
         cleanup();
         return;
       }
@@ -224,6 +236,7 @@ function runInHiddenIframe(html: string, fnName: string): () => void {
             console.log(`${LOG} [hiddenIframe] ${fnName}() invoked — waiting for blob interception`);
           } catch (err) {
             console.error(`${LOG} [hiddenIframe] Error invoking ${fnName}:`, err);
+            onError?.(err instanceof Error ? err.message : String(err));
           }
         };
         bridgeScript.onload = invokeOnce;
@@ -260,6 +273,7 @@ const DownloadArtifact = ({
   const [driveLink, setDriveLink] = useState<string | null>(null);
   const [driveSaving, setDriveSaving] = useState<string | null>(null);
   const [driveError, setDriveError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,6 +288,21 @@ const DownloadArtifact = ({
   // than just delayed, because we know the artifact is alive and its
   // listener is armed.
   const bridgeReadyRef = useRef(false);
+  // triggerFn of the download currently in flight via the postMessage path
+  // (set right before dispatching in downloadNative), so an
+  // 'artifact-download-error' message can be matched to the click that
+  // caused it instead of reacting to a stale/unrelated one.
+  const currentDownloadFnRef = useRef<string | null>(null);
+  const downloadErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ext of the Drive save currently considered "current" (set at the start of
+  // every saveToDrive call). driveSaving/driveError/driveLink are component-
+  // wide, not per-format, state — if a second saveToDrive(fmt2) call starts
+  // before the first's (fmt1) message/timeout resolves, the first call's
+  // handler and timeout are independent closures that keep running even
+  // after iframeCleanupRef tears down its iframe. Without this guard, the
+  // first call's abandoned timeout/handler would still fire ~20s later and
+  // clobber whatever state the second (current) call had already set.
+  const currentDriveExtRef = useRef<string | null>(null);
 
   const content = currentCode ?? artifact.content ?? '';
   const nativeFormats = detectNativeFormats(content);
@@ -293,7 +322,29 @@ const DownloadArtifact = ({
         }
         return;
       }
+      if (e.data?.type === 'artifact-download-error') {
+        if (!currentDownloadFnRef.current || e.data.fn !== currentDownloadFnRef.current) return;
+        console.error(`${LOG} artifact-download-error received:`, e.data.message);
+        if (fallbackTimerRef.current) {
+          clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = null;
+        }
+        currentDownloadFnRef.current = null;
+        showDownloadError(String(e.data.message ?? 'Export failed'));
+        return;
+      }
       if (e.data?.type !== 'artifact-download') return;
+      // 'artifact-download' carries a filename, not the triggerFn — match by
+      // extension so a success for one concurrently-in-flight native format
+      // doesn't clear the "current download" marker for a different format
+      // that's still running (and may yet fail).
+      if (currentDownloadFnRef.current) {
+        const activeFmt = NATIVE_FORMATS.find((f) => f.triggerFn === currentDownloadFnRef.current);
+        const filename = String(e.data.filename ?? '').toLowerCase();
+        if (!activeFmt || filename.endsWith(`.${activeFmt.ext}`)) {
+          currentDownloadFnRef.current = null;
+        }
+      }
       if (fallbackTimerRef.current) {
         console.log(
           `${LOG} artifact-download received — postMessage succeeded, cancelling fallback timer`,
@@ -310,6 +361,7 @@ const DownloadArtifact = ({
   useEffect(() => {
     return () => {
       if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+      if (downloadErrorTimerRef.current) clearTimeout(downloadErrorTimerRef.current);
       iframeCleanupRef.current?.();
     };
   }, []);
@@ -347,7 +399,20 @@ const DownloadArtifact = ({
     setTimeout(() => setDone(null), 2500);
   };
 
+  const showDownloadError = (message: string) => {
+    if (downloadErrorTimerRef.current) clearTimeout(downloadErrorTimerRef.current);
+    setDownloadError(message);
+    downloadErrorTimerRef.current = setTimeout(() => setDownloadError(null), 4000);
+  };
+
   const saveToDrive = (fmt: NativeFormat) => {
+    // Mark this call as the "current" one. driveSaving/driveError/driveLink
+    // are component-wide state, not per-format — every state-mutating
+    // callback below (timeout, message handler, onError) checks this before
+    // touching that state, so an earlier, superseded saveToDrive call's
+    // late-firing timeout or late message can't clobber a newer call's
+    // result once the user has moved on to a different format.
+    currentDriveExtRef.current = fmt.ext;
     setDriveSaving(fmt.ext);
     setDriveLink(null);
     setDriveError(null);
@@ -356,9 +421,14 @@ const DownloadArtifact = ({
     iframeCleanupRef.current?.();
     iframeCleanupRef.current = null;
 
+    // Local to this call so concurrent/rapid saveToDrive clicks each own
+    // their own timer instead of clobbering one another via a shared ref.
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const handler = async (e: MessageEvent) => {
       if (e.data?.type !== 'artifact-download') return;
       if (!String(e.data.filename ?? '').toLowerCase().endsWith(`.${fmt.ext}`)) return;
+      if (timeoutId) clearTimeout(timeoutId);
       window.removeEventListener('message', handler);
       try {
         const res = await fetch(`${apiBaseUrl()}/api/drive/files/upload`, {
@@ -371,18 +441,32 @@ const DownloadArtifact = ({
           throw new Error((body as { error?: string }).error || 'Upload failed');
         }
         const { webViewLink } = (await res.json()) as { webViewLink: string };
+        if (currentDriveExtRef.current !== fmt.ext) return;
         setDriveLink(webViewLink);
       } catch (err) {
         console.error('[DownloadArtifact] Drive upload error', err);
+        if (currentDriveExtRef.current !== fmt.ext) return;
         setDriveError(err instanceof Error ? err.message : 'Drive upload failed');
       } finally {
-        setDriveSaving(null);
+        if (currentDriveExtRef.current === fmt.ext) setDriveSaving(null);
       }
     };
     window.addEventListener('message', handler);
+    timeoutId = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      if (currentDriveExtRef.current !== fmt.ext) return;
+      setDriveSaving(null);
+      setDriveError('Export timed out — the file may have failed to generate.');
+    }, DRIVE_SAVE_TIMEOUT_MS);
     // Use hidden iframe directly so the blob interceptor captures the file
     // without triggering a local browser download as a side effect
-    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn);
+    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn, (message) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('message', handler);
+      if (currentDriveExtRef.current !== fmt.ext) return;
+      setDriveSaving(null);
+      setDriveError(message);
+    });
   };
 
   /**
@@ -790,6 +874,7 @@ const DownloadArtifact = ({
         console.log(
           `${LOG} postMessage dispatched — hidden-iframe fallback armed for ${FALLBACK_MS} ms`,
         );
+        currentDownloadFnRef.current = fmt.triggerFn;
         fallbackTimerRef.current = setTimeout(() => {
           if (bridgeReadyRef.current) {
             // Artifact is alive and just slow (large document) — do not race
@@ -803,7 +888,7 @@ const DownloadArtifact = ({
               `Running hidden-iframe fallback.`,
           );
           fallbackTimerRef.current = null;
-          iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn);
+          iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn, showDownloadError);
         }, FALLBACK_MS);
         flash(fmt.ext);
         return;
@@ -813,7 +898,7 @@ const DownloadArtifact = ({
       console.log(`${LOG} No previewRef provided — using hidden iframe`);
     }
 
-    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn);
+    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn, showDownloadError);
     flash(fmt.ext);
   };
 
@@ -861,6 +946,14 @@ const DownloadArtifact = ({
             >
               Open ↗
             </a>
+          )}
+          {downloadError && (
+            <span
+              className="flex h-7 items-center px-2 text-xs text-red-500"
+              title={downloadError}
+            >
+              Download failed
+            </span>
           )}
         </React.Fragment>
       ))}

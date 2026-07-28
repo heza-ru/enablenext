@@ -19,6 +19,11 @@
 (function () {
   var blobs = new Map();
 
+  // Window to post the captured 'artifact-download' message to. Defaults to
+  // window.parent (direct-invoke path); updated to the requesting window's
+  // source right before running the export fn on message-triggered calls.
+  var currentTarget = window.parent;
+
   var origCreate = URL.createObjectURL.bind(URL);
   URL.createObjectURL = function (b) {
     var u = origCreate(b);
@@ -32,7 +37,7 @@
     origRevoke(u);
   };
 
-  function intercept(el, targetWindow) {
+  function intercept(el) {
     if (!el.download || !el.href || el.href.indexOf('blob:') !== 0) return false;
     var blob = blobs.get(el.href);
     if (!blob) return false;
@@ -41,7 +46,7 @@
     var reader = new FileReader();
     reader.onload = function () {
       var data = String(reader.result).split(',')[1];
-      targetWindow.postMessage(
+      currentTarget.postMessage(
         { type: 'artifact-download', filename: filename, data: data, mimeType: mimeType },
         '*',
       );
@@ -52,13 +57,13 @@
 
   var origClick = HTMLElement.prototype.click;
   HTMLElement.prototype.click = function () {
-    if (this.tagName === 'A' && intercept(this, window.parent)) return;
+    if (this.tagName === 'A' && intercept(this)) return;
     origClick.call(this);
   };
 
   var origDispatch = EventTarget.prototype.dispatchEvent;
   EventTarget.prototype.dispatchEvent = function (ev) {
-    if (ev && ev.type === 'click' && this.tagName === 'A' && intercept(this, window.parent)) {
+    if (ev && ev.type === 'click' && this.tagName === 'A' && intercept(this)) {
       return true;
     }
     return origDispatch.call(this, ev);
@@ -68,17 +73,16 @@
     if (!e.data || e.data.type !== 'artifact-download-request') return;
     var fn = e.data.fn;
     if (typeof window[fn] !== 'function') return;
-    var target = e.source || window.parent;
-    // Re-run intercept() against the message's source window for this call,
-    // since the global patches above default to window.parent.
-    var origClickForRequest = HTMLElement.prototype.click;
-    HTMLElement.prototype.click = function () {
-      if (this.tagName === 'A' && intercept(this, target)) return;
-      origClickForRequest.call(this);
-    };
+    // Point the single global click/dispatch patch at this request's source
+    // window for the duration of this call.
+    currentTarget = e.source || window.parent;
     Promise.resolve(window[fn]()).catch(function (err) {
       // eslint-disable-next-line no-console
       console.error('[download-bridge] error running ' + fn + ':', err);
+      currentTarget.postMessage(
+        { type: 'artifact-download-error', fn: fn, message: String(err && err.message || err) },
+        '*',
+      );
     });
   });
 
