@@ -1,7 +1,7 @@
 # Presentation Generation Redesign — Design Spec
 
 **Date:** 2026-07-28
-**Status:** Core direction approved by user, pending full spec review
+**Status:** Fully drafted, including master-deck-verified design-system corrections and expanded layout catalog — pending final user review before an implementation plan is written
 **Scope:** Sub-project **A** of the three-part export effort (see `2026-07-28-export-pipeline-cleanup-design.md` for sub-project **C**, already approved/implemented in parallel). Covers the presentation/slide generator only. Sub-project **B** (doc generator redesign) is a follow-up, informed by this spec's outcome, and gets its own design.
 
 ## Background
@@ -85,7 +85,7 @@ The skill file (`agents/presentation-creator.skill.md`) is rewritten around this
 
 `client/public/libs/deck-renderer.js`: a single, hand-engineered (not LLM-generated) vanilla-JS file, following the same pattern as `download-bridge.js` from the cleanup spec — one canonical implementation, loaded via `<script src>`, not regenerated per artifact. It owns:
 
-- **The layout template library** — one render function per layout type, with hard-coded grid, spacing, and typography matching the Whatfix design system (Ink 800 `#36314C` dark background, DM Sans/IBM Plex Sans font stack, dark/light sandwich rules — per the master-deck-verified corrections above) — moved from "CSS the LLM must reproduce correctly every time" to "CSS that exists exactly once and is always correct." The enum, expanded from the current skill's 13 types using `brand/master-deck-layouts.md` as the source catalog:
+- **The layout template library** — one render function per layout type, with hard-coded grid, spacing, and typography matching the Whatfix design system (Ink 800 `#36314C` dark background, DM Sans/IBM Plex Sans font stack, dark/light sandwich rules — per the master-deck-verified corrections above) — moved from "CSS the LLM must reproduce correctly every time" to "CSS that exists exactly once and is always correct." The enum, expanded from the current skill's 14 types (13 in its "Layout Variety" list plus the separately-defined `title` cover slide) using `brand/master-deck-layouts.md` as the source catalog:
 
   | Layout | Source | Notes |
   |---|---|---|
@@ -94,7 +94,9 @@ The skill file (`agents/presentation-creator.skill.md`) is rewritten around this
   | `mockup` | Master deck, slides 93–95 | Device-frame screenshot placeholder (desktop/mobile) — new |
   | `matrix_2x2` | Master deck, slide 68 | Strategic quadrant matrix (e.g. frequency × complexity) — new |
   | `event_speaker` | Master deck, slides 11–16 | Event cover, named speaker/panel cards — new |
-  | `objective` | Master deck, slides 31–37 | Large single-paragraph content block, several width variants — new |
+  | `objective` | Master deck, slides 31–33 | Large single-paragraph content block, several width variants — new |
+
+  Two existing types get their parameter *ranges* widened to match the master deck rather than becoming new layout names: `agenda` should support session+time-slot pairs at up to 12 items (master deck slides 17–19), not just a plain numbered list; `icon_grid` should support variable card counts from 2–6 (master deck slides 58–67), not a fixed 2×2/3×2 grid.
 
   Layouts recommended **not** to add automatically: the master deck's full-bleed `multi_product_graphic` category (slides 84–92) directly conflicts with the current skill's "never use brand images as backgrounds" rule — worth a deliberate decision (see Design System below) rather than folding in silently.
 - **Structural enforcement of the design rules** — e.g. the stat layout caps at 3 KPI entries by construction, the content layout caps at 3 bullets by construction, whitespace ratios are baked into the grid rather than left to LLM discretion. Rules that used to be prose instructions the model might drift from become impossible to violate.
