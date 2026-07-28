@@ -1,0 +1,832 @@
+2026 Whatfix
+Master PPT Deck
+
+The icons and Whatfix logos are available at the link below.
+https://docs.google.com/drawings/d/1LmM_A75c9hoNpjcjAP3GdHU8fHEdO3p1mrUqLU3OqZM/copy
+
+
+Best practices for using this deck 
+
+
+Text
+Keep your message crisp and to the point with minimum number of slides 
+Don’t overcrowd the slides with text 
+Only use  brand-approved fonts (IBM Plex Mono or DM Sans )
+Graphics
+Don’t add low resolution images 
+Don’t add non-brand approved graphics or icons (available in this deck)
+Don’t use non-brand approved colours or any other design elements 
+Use numbers and data to present your points 
+Structure 
+Organize your slides in a logical order, using headings and sections to provide guidance
+Ask questions and engage the audience, instead of having a monologue
+Consider what needs to be on the slide for a presentation vs a leave-behind asset
+Feedback 
+Share your feedback to help us improve this template: https://forms.gle/oZVAddxnjWhjWnA89
+Please refer the Whatfix Brand Guidelines from Brand Marketing for any needed clarity, and as always feel free to reach out to brandmarketing@whatfix.com with any questions or needed support. 
+
+
+
+01. Align the shapes properly. Hold SHIFT button while moving any object. 
+TITLE
+TITLE
+TITLE
+This is sample text.
+This is sample text.
+This is sample text.
+TITLE
+TITLE
+TITLE
+This is sample text.
+This is sample text.
+This is sample text.
+02. Resize shapes and images properly. Hold SHIFT key or SHIFT + OPTION keys while resizing any object. 
+Quick Tips
+Correct- 
+Incorrect- 
+Correct- 
+Incorrect- 
+
+Title slides
+
+Design Presentation Whatfix
+The icons and Whatfix logos are available at the link below.
+https://docs.google.com/drawings/d/1LmM_A75c9hoNpjcjAP3GdHU8fHEdO3p1mrUqLU3OqZM/copy
+
+
+Lorem Ipsum
+Pitch deck
+Subtitle
+Subtitle
+Subtitle
+
+Lorem Ipsum
+Powered by Whatfix
+
+Lorem ipsum dolor sit amet
+
+
+
+Lorem Ipsum
+Pitch deck
+Subtitle
+
+Powered by Whatfix
+
+Lorem Ipsum
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua
+
+
+
+Event Name
+Date: Time: 
+Location: 
+
+Event Name
+Date | Time | Location
+
+Speaker/Attendees
+
+Khadim Batti 
+Meet
+From Adoption to Intelligence: Understanding the 2026 Blueprint
+From the Founders’ Desk 
+
+KhadimBatti
+Vara
+Kumar
+COO-Whatfix
+CEO-Whatfix
+From Adoption to Intelligence: Understanding the 2026 Blueprint
+From the Founders’ Desk
+
+Vara Kumar
+Khadim Batti
+From Adoption to Intelligence: Understanding the 2026 Blueprint
+From the Founders’ Desk
+
+Panel Discussion:
+Name
+Designation
+Company
+Name
+Designation
+Company
+Name
+Designation
+Company
+Name
+Designation
+Company
+
+Agenda
+
+Agenda
+Session 1
+8:00 AM 
+Session 2
+9:00 AM 
+Session 3
+10:00 AM
+Session 4
+11:00 AM 
+Session 5
+12:00 NOON 
+Session 6
+1:00 PM 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+Session 7
+2:00 PM
+Session 8
+3:00 PM
+Session 9
+4:00 PM
+Session 10
+5:00 PM
+Session 11
+6:00 PM
+Session 12
+7:00 PM
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+
+Agenda
+Session 1
+8:00 AM 
+Session 2
+9:00 AM 
+Session 3
+10:00 AM
+Session 4
+11:00 AM 
+Session 5
+12:00 NOON 
+Session 6
+1:00 PM 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  
+
+Section Slides
+
+Session
+
+
+Lorem ipsum dolor sit
+
+Lorem ipsum dolor sit
+
+Session 
+
+
+Lorem ipsum dolor sit
+
+
+
+Lorem ipsum dolor sit
+
+Lorem ipsum dolor sit dolor sit
+
+
+
+Subhead 
+
+
+
+
+Content
+
+How AI Makes Simulation- based Roleplay and Scenario Training Smarter
+AI uses institutional data and training content to build relevant, realistic learning environments. By reflecting actual challenges, processes, and customer interactions, these simulations keep learners engaged and ensure that skills transfer directly to the job.
+Creates Contextual Scenarios from Organizational Knowledge
+By embedding AI-driven assessments, simulations can evaluate learner performance, confidence, and readiness levels. These insights help managers and L&D teams identify strengths, close skill gaps, and track overall competency growth.
+Measures Readiness
+and Skill Proficiency
+AI collects behavioral and performance data from every session, helping L&D teams refine training content and focus on the most impactful skills. This continuous feedback loop ensures learning programs stay relevant and aligned with evolving team needs.
+Captures Data to Improve Future Training
+AI continuously analyzes how learners interact with scenarios and adjusts them accordingly—altering difficulty, pacing, or branching options. This keeps learners in the optimal challenge zone, reinforcing areas that need practice and encouraging deeper skill development.
+Adapts to Each Learner 
+in Real Time
+
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Key Takeaways
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+
+How AI Makes Simulation- based Roleplay and Scenario Training Smarter
+AI uses institutional data and training content to build relevant, realistic learning environments. By reflecting actual challenges, processes, and customer interactions, these simulations keep learners engaged and ensure that skills transfer directly to the job.
+Creates Contextual Scenarios from Organizational Knowledge
+By embedding AI-driven assessments, simulations can evaluate learner performance, confidence, and readiness levels. These insights help managers and L&D teams identify strengths, close skill gaps, and track overall competency growth.
+Measures Readiness
+and Skill Proficiency
+AI collects behavioral and performance data from every session, helping L&D teams refine training content and focus on the most impactful skills. This continuous feedback loop ensures learning programs stay relevant and aligned with evolving team needs.
+Captures Data to Improve Future Training
+AI continuously analyzes how learners interact with scenarios and adjusts them accordingly—altering difficulty, pacing, or branching options. This keeps learners in the optimal challenge zone, reinforcing areas that need practice and encouraging deeper skill development.
+Adapts to Each Learner 
+in Real Time
+
+Lorem
+Ipsum
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+Lorem ipsum 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+Lorem ipsum 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+Lorem ipsum 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+Lorem ipsum 
+
+Objective
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore 
+Lorem Ipsum
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore 
+Lorem Ipsum
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, 
+Lorem Ipsum
+
+Objective
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
+Lorem Ipsum
+
+Objective
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
+Lorem Ipsum
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
+Lorem Ipsum
+
+Lorem Ipsum
+
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam
+Problem
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam
+Solution
+
+AI agent performing operations on behalf of the users
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam
+Problem
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam
+Solution
+
+Lorem Ipsum
+Lorem Ipsum
+Lorem Ipsum
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Key Takeaways
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+
+Lorem ipsum dolor sit amet
+
+Lorem ipsum
+Lorem ipsum
+Lorem ipsum
+Lorem ipsum
+01: Lorem ipsum
+02: Lorem ipsum
+03: Lorem ipsum
+04: Lorem ipsum
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+GxP Validated: Every interaction logged — immutable audit trail, compliance without interruption
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+
+Case Study
+
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+THE CHALLENGE
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+THE SOLUTION
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+KEY RESULTS WITH WHATFIX
+Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+Lorem ipsum dolor sit amet, consectetur adipiscing elit
+READY TO LEARN MORE?
+Connect with us
+→ whatfix.com
+→ sales@whatfix.com
+→ 1800-549-7089
+CASE STUDY
+Industry
+→ Lorem ipsum
+
+
+
+Region
+→ Lorem ipsum 
+Whatfix Solutions
+→Lorem ipsum
+
+
+
+
+“GxP Validated: Every interaction logged — immutable audit trail, compliance without interruption”
+
+Customer testimonial
+DesignationCompany
+Application
+→  Lorem ipsum
+Summary: Established in 1998, FOX Rehabilitation provides elderly healthcare services. Some of the services they provide include physical therapy, speech therapy, occupational therapy, and more. This company is headquartered in Cherry Hill, New Jersey. FOX Rehab uses Whatfix on their EHR system, Raintree. FOX Rehab faced challenges with clinician adoption and support on their EHR system, leading to a high volume of support tickets and resource management issues. To address this, personalized, real-time guidance was implemented through interactive walkthroughs, tracking clinician engagement and adjusting content accordingly. Additionally, process-related queries were monitored to develop self-service support options. With Whatfix, an average of 30 queries a day were resolved, reclaiming 113 support hours weekly and reducing content creation and maintenance time by 50%, resulting in significant cost savings of $17,753 over 5 months.
+
+Published Date: September 2024
+
+
+
+Plain Text and
+Simple Image Slides
+
+Title
+
+Title
+
+
+
+Title
+
+Title
+
+Text
+
+Text
+
+Text
+
+Text
+
+
+Text
+
+Text
+
+Text
+
+Text
+
+
+
+
+Click to add title
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Click to add title
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Click to add title
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Click to add title
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+LOREM IPSUM
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Heading 
+
+
+Infographics
+
+Lorem ipsum
+Lorem ipsum
+
+Lorem ipsum
+
+
+
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+Lorem ipsum 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+Lorem ipsum 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit,
+Lorem ipsum 
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+Ideation 
+List the content you want to create.Scope it with the whatfix features
+Review/ Feedback
+
+1 week from golive monitor the whatfix analytics. Collect user feedback Reach out to your customer success manager for analysing the usage, best practises and recommendation on usage
+Push to production 
+
+Translate the content in the desired language
+Once the testing is complete push the content to production
+You can also selectively push the content to production
+Creation 
+Create the whatfix content Place all the content in draft once creation is complete send it to ready stage
+Testing 
+
+Test the content using preview mode Add it in the relevant folder Check all the relevant  tags are added 
+If the testing fails reach out to whatfix chat support to get it fixed 
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+ADD TITLE
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.
+
+Lorem ipsum dolor sit amet consectetur 
+Execute
+Create
+Quick Win
+Migrate
+As PDF and Videos in the Self Help
+Optimize Efforts
+Analyze
+Business Decisions based on (SEN + Whatfix Analytics) 
+Candidates for Interactive Flows
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Candidates for 
+Smart Tips
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Retained as PDF or videos
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+Candidates for Task List
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor 
+
+  Frequency  
+  Complexity  
+Low
+High
+High
+Categorize
+Improve  Effectiveness
+
+“
+“Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do”
+Lorem Ipsum
+Company 
+
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Lorem Ipsum
+Lorem Ipsum
+
+Lorem Ipsum
+
+Lorem Ipsum
+
+
+Founded in 2014, Whatfix is advancing the "userization" of application technology with its AI-first platform, empowering companies to maximize the ROI of digital investments across the application lifecycle. Powered by AI, Whatfix’s product suite includes a Digital Adoption Platform (DAP), simulated application environments for hands-on training, and no-code analytics for applications and enterprises.
+Numbers
+45%
+Reduction in 
+support queries
+84%
+Reduction in training
+content creation cost
+3x
+Faster time to proficiency for a 
+new employee
+10+
+Years Global
+leader in DAP
+
+Cause- Effect
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+
+Lorem ipsum dolor sit amet
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+1.
+2.
+3.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+
+Recognition
+Recognized as the Only Customer Choice in 2024 Gartner® Voice of the Customer Report for DAP
+Explore more > 
+“From the beginning, the Whatfix team has been responsive and easy to work with, Resource savings worth about $950,000 can be used now for profit-generating activities from the couple of different deployments that we have done with Whatfix.”
+Amy Boldt
+Learning LeaderSentry
+Awards & Recognition
+
+From Detecting Risk and Quality issues to Preventing it
+
+Execution model          
+              Outcomes
+Guide users in-app
+Prevent errors 
+Reduce deviation creation
+Workflow success rates
+Step-level friction points
+Role-based confusion hotspots
+Region-wise execution variance
+
+How do you ensure SOPs are followed in day-to-day execution?
+Are errors driven by intent OR by usability and system complexity?
+How do you ensure consistent execution across sites, CROs, and regions?
+Lorem ipsum 
+How do you measure and validate execution quality?
+
+Partners
+125+
+Global Systems Integrators &  Independent Software Vendors
+Patents Granted
+12
+And 16 Pending, Whatfix fuels innovation that drives the category 
+Customers
+750+
+80+ Fortune 500 Accounts
+Customers in 30+ Countries
+Whatfix is the leader in the DAP category
+
+Tables
+
+Text
+Text
+Text
+Text
+
+Text
+Text
+Text
+
+Text
+text
+text
+Text
+Add
+Text
+
+text
+text
+text
+text
+text
+text
+text
+text
+
+Text
+Text
+Text
+Text
+Text
+Text
+Text
+Text
+Text
+Text
+
+Multi product Graphic
+
+Click to add title
+
+Product Suite Graphic Light mode
+
+Click to add title
+
+Product Suite Graphic Dark mode
+
+
+
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Click to add title
+
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Click to add title
+
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+Click to add title
+
+Improve productivity & reduce costs by guiding users in the flow of work
+Digital Adoption Platform
+Whatfix Product Suite
+Whatfix’s AI Engine
+Understands Context and  Intent 
+ProductAnalytics
+Understand user behavior across applications to identify adoption gaps
+Mirror
+(Roleplay)
+Achieve faster go-lives & better user competency for new applications
+
+Mockups
+
+Desktop/Laptop
+
+You can replace the image on the screen with your own work
+
+
+Mobile/Tablet
+
+You can replace the image on the screen with your own work
+
+
+Thank you Slides
+
+Thank you!
+
+Thank you!
+
+Thank you!
+
+Thank you!
+
+*Resize shapes and images properly. Hold SHIFT key or SHIFT + OPTION keys while resizing any object. 
+Correct
+Incorrect
+
+*Resize shapes and images properly. Hold SHIFT key or SHIFT + OPTION keys while resizing any object. 
+Correct
+Incorrect
+
+*Resize shapes and images properly. Hold SHIFT key or SHIFT + OPTION keys while resizing any object. 
+Correct
+Incorrect
+
+*Resize shapes and images properly. Hold SHIFT key or SHIFT + OPTION keys while resizing any object. 
+Correct
+Incorrect
