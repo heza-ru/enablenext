@@ -16,6 +16,11 @@ An architecture scan surfaced several issues unrelated to the eventual methodolo
 4. Stale UI copy: the "PDF (HD)" button tooltip still describes the abandoned server-side Playwright approach, not the current client-side html2canvas approach.
 5. Version drift: skill templates hardcode CDN library versions (PptxGenJS 4.0.1, docx.js 8.5.0) that diverge from `client/package.json` (`pptxgenjs ^4.0.1`, `docx ^9.7.1`). `client/public/libs/` already contains bundled `pptxgen.bundle.js`, `docx.iife.js`, and `xlsx.full.min.js` — largely unused by the skill templates, which mostly load from CDN instead.
 
+**Confirmed via code-level root-cause investigation (added after initial spec approval), two additional failure modes reported by the user:**
+
+6. **DOCX export fails intermittently, worse on larger documents.** Root cause: `FALLBACK_MS = 10_000` in `DownloadArtifact.tsx` arms a 10-second timer (line ~665) that, if no `artifact-download` response arrives, starts a **second, fully independent** hidden-iframe run of the same export function (line ~671) — while the first run may still be in progress in the live artifact. `docx.js`'s `Packer.toBlob()` (and PptxGenJS's `writeFile()`, which fetches brand images) is genuinely async and takes longer as documents grow. Once generation exceeds 10s, both runs execute concurrently, competing for the same resources — producing duplicate downloads, resource contention, or an outright failure on one or both attempts. This is the same underlying "guessed timeout" pattern as item 3 above, now confirmed with a concrete reproduction mechanism.
+7. **All exports fail once slide count is high enough, every time (not intermittent).** Root cause: `captureSlides()` (backing the "HD" PPTX/PDF buttons) has a **fixed 40-second timeout** wrapping a loop that screenshots every slide **sequentially, one at a time**, with no scaling by slide count. Per-slide capture time is roughly fixed; past a deck-size threshold, total capture time always exceeds 40 seconds, and the whole operation rejects with "Slide capture timed out" — both `downloadPdfHD` and `downloadPptxHD` then fail outright with no partial output. This is a hard, deterministic ceiling distinct from item 3's race condition — a readiness-signal fix alone does not address it, since the problem isn't "we don't know when it's ready," it's "the total work genuinely exceeds a fixed, non-scaling budget done serially."
+
 ## Decisions
 
 ### 1. Remove the dead Playwright render path entirely
@@ -42,11 +47,22 @@ This is a single point of maintenance for a security/reliability-sensitive piece
 
 `FALLBACK_MS` (10s trigger-to-fallback) and the 40s hard cap in `captureSlides()` remain as true last-resort safety nets — they stop the flow from hanging forever if a signal never arrives — but are no longer the primary mechanism deciding when to proceed.
 
-### 4. Fix stale UI copy
+**Readiness vs. liveness (closes the duplicate-run race described in Background item 6):** the current design conflates two different questions — "is the artifact's bridge listening" (readiness) and "is the export still in progress" (liveness) — into one timer. Once `bridge-ready` fires, we know the artifact is alive and its listener is armed; a slow export after that point is not evidence the postMessage protocol failed, it's just a document that takes a while to build. The fallback-to-hidden-iframe path must only trigger when `bridge-ready` itself never arrives (the artifact genuinely doesn't support the protocol, e.g. an older cached artifact) — once we've confirmed the artifact is alive, we wait for the `artifact-download` response with a much longer, generous safety-net timeout (see item 4's scaled-budget approach for the same principle applied to slide capture) instead of racing a second concurrent run.
+
+### 4. Fix the hard-capped, non-scaling slide-capture timeout for large decks
+
+Replace `captureSlides()`'s fixed 40-second timeout and fully-sequential capture loop with an approach that scales with actual slide count:
+
+- **Scale the safety-net timeout to slide count**: a base allowance plus a per-slide allowance (e.g. `10_000 + slideCount * 3_000`, capped at a sane absolute maximum like 5 minutes) instead of a flat 40 seconds. This is still a safety net, not a precise readiness signal — total capture time is inherently variable — but it scales with the actual amount of work instead of assuming a fixed ceiling regardless of deck size.
+- **Process slides in small concurrent batches** (e.g. 3–4 at a time via `Promise.all` chunks) rather than one at a time, to overlap the async portions of each `html2canvas()` call (image decode, layout) instead of paying that cost fully serially for every slide.
+- **Surface progress to the user** (e.g. "Capturing slide 12/40…") instead of a silent spinner — for large decks this is a genuinely long-running operation, and visible progress turns what currently looks like a hang/failure into a legible wait.
+- **Fail gracefully with partial context**: if capture still times out on an extreme deck, the error surfaced to the user should say how many slides were captured before timing out, not just "Slide capture timed out" — actionable information, and useful signal if this needs raising again later.
+
+### 5. Fix stale UI copy
 
 Update the "PDF (HD)" button's tooltip in `DownloadArtifact.tsx` (currently: *"Server-side Playwright render — preserves all CSS effects including backdrop-filter and blend modes"*) to accurately describe the current client-side html2canvas screenshot approach, including the real limitation that html2canvas does not reliably support `backdrop-filter`/blend-modes (the opposite of what the stale copy claims).
 
-### 5. Eliminate CDN version drift by loading from already-bundled local libraries
+### 6. Eliminate CDN version drift by loading from already-bundled local libraries
 
 `client/public/libs/` already contains `pptxgen.bundle.js` (confirmed v4.0.1, matches skill assumption), `xlsx.full.min.js` (confirmed v0.18.5, matches skill assumption), and `docx.iife.js` (version unconfirmed by static inspection — see Risk below). Repoint all three skill templates (`presentation-creator.skill.md`, `doc-creator.skill.md`, `excel-creator.skill.md`) to load their respective library from the local `/libs/` bundle as the sole source, dropping the CDN load entirely. This removes both the version-drift risk and a runtime dependency on a third-party CDN being reachable.
 
@@ -61,4 +77,5 @@ Update the "PDF (HD)" button's tooltip in `DownloadArtifact.tsx` (currently: *"S
 
 - Manual smoke test of all three export paths (PPTX vector, PPTX HD, PDF, PDF Compat, DOCX, XLSX) after the local-lib repointing, to catch the docx version-compatibility risk and confirm nothing regressed.
 - Confirm the dead route's removal doesn't break `render.yaml` deploys (i.e. nothing else depends on the Playwright install step).
-- Confirm `bridge-ready` signaling doesn't introduce a new hang if an artifact's script fails to load at all (the existing `FALLBACK_MS`/40s safety nets must still fire in that case).
+- Confirm `bridge-ready` signaling doesn't introduce a new hang if an artifact's script fails to load at all (the existing `FALLBACK_MS`/large-doc safety nets must still fire in that case).
+- **Scale-specific regression tests for items 6/7 in Background:** generate and export a large document (many pages/sections, enough to have previously exceeded 10s of build time) and confirm exactly one download fires, not two. Generate and export a deck with a slide count well past the old 40-second ceiling (e.g. 40–60 slides) via both "HD" buttons and confirm capture completes (with visible progress) rather than timing out.
