@@ -82,17 +82,17 @@ background: linear-gradient(135deg, #FF6B18 0%, #872345 100%);
 background: linear-gradient(135deg, #F9F9F2 0%, #FFE9DC 100%);
 ```
 
-## ⚠️ Resolved: dark background for generated presentations is `#36314C`, not Ink 700
+## ⚠️ Historical measurement: `#36314C` was the dominant color in the approved master deck — now overridden, see below
 
-This palette is sourced from *Typography and colour '26.pdf* — but `brand/master-deck-layouts.md` documents a direct measurement of the actual approved presentation template (`Copy of Master Deck 2026.pptx`, 104 slides): **`#36314C`** is the single most-used color in the entire deck (1,154 occurrences — more than white or black), used as the dominant dark slide background. `#25223B` (Ink 700, 38 uses) and `#35324A` (Ink, 78 uses combined with its `#34324A` variant) do both appear, just far less often.
+This palette is sourced from *Typography and colour '26.pdf* — but `brand/master-deck-layouts.md` documents a direct measurement of the actual approved presentation template (`Copy of Master Deck 2026.pptx`, 104 slides): **`#36314C`** is the single most-used color in the entire deck (1,154 occurrences — more than white or black), used as the dominant dark slide background. `#25223B` (Ink 700, 38 uses) and `#35324A` (Ink, 78 uses combined with its `#34324A` variant) do both appear, just far less often. This measurement is real and stays documented as useful historical context.
 
-**For presentation generation specifically** (this repo's slide/deck generator, and its planned redesign — see `docs/superpowers/specs/2026-07-28-presentation-generation-redesign-design.md`): use **Ink 800 `#36314C`** as the default dark slide background, matching the verified template. Ink 700 and Ink remain documented above and may still be correct for other brand contexts outside generated decks — reconciling the PDF guideline against the deck's actual practice is a brand-marketing question this doc can't fully resolve, but for this system's actual output, match the verified template.
+**However, this has been explicitly overridden.** Based on this measurement, an earlier version of this doc directed the generator to use `#36314C` ("Ink 800, deck-verified") as the default dark slide background for generated presentations. The project owner was shown this exact data (1,154 vs 38 occurrences) and, with full knowledge of it, explicitly instructed that the default generated-presentation background be `#25223B` (Ink 700) going forward instead. That is a deliberate, informed decision to prioritize the brand-guideline color over the deck-measured one for this system's output — **it is final and should not be re-litigated or "corrected back" to `#36314C` by a future reader of this doc**, however compelling the measurement above looks in isolation. Ink 700 and Ink remain documented above and may still be correct for other, non-generated-deck brand contexts per the source PDF.
 
 ## Rules
 
 - **Use only these colors — never invent arbitrary hex values**
 - **Max 3 colors per slide**
 - **Orange `#FF6B18` is an ACCENT only** — use for headlines, KPI numbers, CTAs, underlines, progress bars. Never as a full slide background — it reads as unprofessional and overpowering.
-- **Default slide bg for generated presentations: Ink 800 `#36314C`** (deck-verified — see note above); Ink 700 `#25223B` for other/non-deck dark contexts per the source PDF
+- **Default slide bg for generated presentations: Ink 700 `#25223B`** (explicit project-owner override of the deck-measured `#36314C` — see note above; do not change without a new explicit instruction)
 - Ink 800 / Ink 700 / Ink for all dark backgrounds — not pure black `#000000`
 - Gray 100 `#F9F9F2` is the correct light background — warm off-white, not pure white `#FFFFFF`

@@ -39,7 +39,9 @@ describe('renderDoc', () => {
     const mount = document.createElement('div');
     document.body.appendChild(mount);
 
-    DocRenderer.renderDoc({ title: 'Test Doc', blocks: [{ type: 'heading1', text: 'Hello' }] }, mount);
+    // No top-level `title` here — this test is about generic block mounting/ordering, not the
+    // cover section (covered separately below), and a title would add its own h1 ahead of this one.
+    DocRenderer.renderDoc({ blocks: [{ type: 'heading1', text: 'Hello' }] }, mount);
 
     const page = mount.querySelector('.doc-page');
     expect(page).not.toBeNull();
@@ -203,6 +205,45 @@ describe('injected base styles: table/lists/divider/image CSS (final-review fix)
   });
 });
 
+describe('injected base styles: print stylesheet (print magnified-card bug fix)', () => {
+  it('injects an @media print block', () => {
+    const DocRenderer = loadDocRenderer();
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    DocRenderer.renderDoc({ blocks: [{ type: 'divider' }] }, mount);
+
+    const styleText = document.getElementById('doc-renderer-base-styles').textContent;
+
+    expect(styleText).toMatch(/@media print\s*\{/);
+  });
+
+  it('flattens .doc-page back to a plain flowing document for print, removing the screen-only card chrome', () => {
+    const DocRenderer = loadDocRenderer();
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    DocRenderer.renderDoc({ blocks: [{ type: 'divider' }] }, mount);
+
+    const styleText = document.getElementById('doc-renderer-base-styles').textContent;
+    const printBlockMatch = styleText.match(/@media print\s*\{([\s\S]*)\}\s*$/);
+    expect(printBlockMatch).not.toBeNull();
+    const printBlock = printBlockMatch[1];
+
+    expect(printBlock).toMatch(/\.doc-page\s*\{[^}]*box-shadow:none/);
+    expect(printBlock).toMatch(/\.doc-page\s*\{[^}]*border-radius:0/);
+  });
+
+  it('adds a standalone @page rule sizing printed pages to A4', () => {
+    const DocRenderer = loadDocRenderer();
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    DocRenderer.renderDoc({ blocks: [{ type: 'divider' }] }, mount);
+
+    const styleText = document.getElementById('doc-renderer-base-styles').textContent;
+
+    expect(styleText).toMatch(/@page\s*\{size:A4/);
+  });
+});
+
 describe('block: table', () => {
   it('renders a header row and one row per data row, uncapped rows', () => {
     const DocRenderer = loadDocRenderer();
@@ -334,6 +375,42 @@ describe('block: image', () => {
     expect(imageRun.imageData.type).toBe('png');
     delete global.fetch;
   });
+
+  describe('window._BRAND_ORIGIN (Sandpack iframe origin patching)', () => {
+    afterEach(() => {
+      delete window._BRAND_ORIGIN;
+    });
+
+    it('prefixes the rendered <img src> with the injected brand origin when window._BRAND_ORIGIN is set', () => {
+      window._BRAND_ORIGIN = 'https://example-app.com';
+      const DocRenderer = loadDocRenderer();
+      const containerEl = document.createElement('div');
+      DocRenderer.getBlock('image').render({ type: 'image', brandImage: 'dap-dark' }, containerEl);
+      expect(containerEl.querySelector('img').src).toBe('https://example-app.com/brand/dap-dark.png');
+    });
+
+    it('falls back to a plain relative /brand/ path when window._BRAND_ORIGIN is not set', () => {
+      const DocRenderer = loadDocRenderer();
+      const containerEl = document.createElement('div');
+      DocRenderer.getBlock('image').render({ type: 'image', brandImage: 'dap-dark' }, containerEl);
+      expect(containerEl.querySelector('img').src).toContain('/brand/dap-dark.png');
+      expect(containerEl.querySelector('img').src).not.toContain('example-app.com');
+    });
+
+    it('fetches from the origin-prefixed URL for docx export when window._BRAND_ORIGIN is set', async () => {
+      window._BRAND_ORIGIN = 'https://example-app.com';
+      const DocRenderer = loadDocRenderer();
+      const { helpers } = makeDocxHelpers();
+      class ImageRun { constructor(opts) { Object.assign(this, opts); } }
+      helpers.ImageRun = ImageRun;
+      global.fetch = jest.fn().mockResolvedValue({ arrayBuffer: async () => new ArrayBuffer(4) });
+
+      await DocRenderer.getBlock('image').exportDocx({ type: 'image', brandImage: 'dap-dark' }, helpers);
+
+      expect(global.fetch).toHaveBeenCalledWith('https://example-app.com/brand/dap-dark.png');
+      delete global.fetch;
+    });
+  });
 });
 
 describe('block: pageBreak', () => {
@@ -400,8 +477,9 @@ describe('downloadDocx', () => {
     document.body.appendChild = jest.fn();
     document.body.removeChild = jest.fn();
 
+    // No title here on purpose — this test is about block iteration/A4/numbering wiring in
+    // isolation. Cover-section behavior (title present/absent) is covered separately below.
     window.DOC = {
-      title: 'Test Doc', subtitle: 'Sub', author: 'Author', date: 'Jan 2026',
       blocks: [{ type: 'test_export_block', text: 'A' }, { type: 'test_export_block', text: 'B' }],
     };
 
@@ -413,6 +491,180 @@ describe('downloadDocx', () => {
     expect(capturedDocumentOpts.numbering.config[0].reference).toBe('default-numbering'); // numbering config wired correctly
 
     // Cleanup
+    document.createElement = originalCreateElement;
+  });
+});
+
+describe('renderDoc: automatic cover section (restores pre-redesign visible title/subtitle/author/date)', () => {
+  it('renders h1/.doc-subtitle/.doc-date/.accent-bar before the first content block when title is present', () => {
+    const DocRenderer = loadDocRenderer();
+    DocRenderer.registerBlock('marker_block', {
+      render: (spec, containerEl) => {
+        const div = document.createElement('div');
+        div.className = 'marker-block';
+        containerEl.appendChild(div);
+      },
+      exportDocx: () => [],
+    });
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+
+    DocRenderer.renderDoc({
+      title: 'Q3 Report',
+      subtitle: 'Quarterly business review',
+      author: 'Jane Doe',
+      date: 'July 2026',
+      blocks: [{ type: 'marker_block' }],
+    }, mount);
+
+    const page = mount.querySelector('.doc-page');
+    const h1 = page.querySelector('h1');
+    const subtitle = page.querySelector('.doc-subtitle');
+    const dateEl = page.querySelector('.doc-date');
+    const accentBar = page.querySelector('.accent-bar');
+    expect(h1.textContent).toBe('Q3 Report');
+    expect(subtitle.textContent).toBe('Quarterly business review');
+    expect(dateEl.textContent).toContain('Jane Doe');
+    expect(dateEl.textContent).toContain('July 2026');
+    expect(accentBar).not.toBeNull();
+
+    // All cover elements must precede the first real content block in DOM order.
+    const marker = page.querySelector('.marker-block');
+    const all = Array.from(page.children);
+    expect(all.indexOf(h1)).toBeLessThan(all.indexOf(marker));
+    expect(all.indexOf(subtitle)).toBeLessThan(all.indexOf(marker));
+    expect(all.indexOf(dateEl)).toBeLessThan(all.indexOf(marker));
+    expect(all.indexOf(accentBar)).toBeLessThan(all.indexOf(marker));
+  });
+
+  it('renders no cover section at all when title is absent (standalone spec with only blocks)', () => {
+    const DocRenderer = loadDocRenderer();
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+
+    DocRenderer.renderDoc({ blocks: [{ type: 'divider' }] }, mount);
+
+    const page = mount.querySelector('.doc-page');
+    expect(page.querySelector('h1')).toBeNull();
+    expect(page.querySelector('.doc-subtitle')).toBeNull();
+    expect(page.querySelector('.doc-date')).toBeNull();
+    expect(page.querySelector('.accent-bar')).toBeNull();
+  });
+
+  it('does not throw and does not render a malformed/empty date line when only title is present', () => {
+    const DocRenderer = loadDocRenderer();
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+
+    expect(() => {
+      DocRenderer.renderDoc({ title: 'Solo Title', blocks: [] }, mount);
+    }).not.toThrow();
+
+    const page = mount.querySelector('.doc-page');
+    expect(page.querySelector('h1').textContent).toBe('Solo Title');
+    expect(page.querySelector('.doc-subtitle')).toBeNull();
+    const dateEl = page.querySelector('.doc-date');
+    expect(dateEl).not.toBeNull();
+    expect(dateEl.textContent.trim().length).toBeGreaterThan(0);
+    expect(dateEl.textContent).not.toMatch(/^\s*·|·\s*$/); // no dangling separator from a missing segment
+  });
+});
+
+describe('downloadDocx: automatic cover section', () => {
+  function setupDownloadDocxHarness() {
+    class FakeDocument { constructor(opts) { this.__opts = opts; } }
+    class FakePacker { static toBlob() { return Promise.resolve(new Blob(['fake docx bytes'])); } }
+    global.docx = {
+      Document: FakeDocument, Packer: FakePacker, Paragraph: class Paragraph { constructor(opts) { Object.assign(this, opts); } },
+      TextRun: class TextRun { constructor(opts) { Object.assign(this, opts); } },
+      HeadingLevel: {}, TableRow: class {}, TableCell: class {}, Table: class {}, WidthType: {},
+      PageBreak: class {}, ImageRun: class {},
+    };
+    window.docx = global.docx;
+    global.URL = { createObjectURL: jest.fn().mockReturnValue('blob:fake-url') };
+    const mockLink = { href: '', download: '', click: jest.fn() };
+    const originalCreateElement = document.createElement;
+    document.createElement = jest.fn((tag) => (tag === 'a' ? mockLink : originalCreateElement.call(document, tag)));
+    document.body.appendChild = jest.fn();
+    document.body.removeChild = jest.fn();
+    return { originalCreateElement };
+  }
+
+  it('puts the cover Paragraphs (title/subtitle/date-line) first, before any block-derived Paragraphs, when title is present', async () => {
+    const DocRenderer = loadDocRenderer();
+    const { originalCreateElement } = setupDownloadDocxHarness();
+    DocRenderer.registerBlock('marker_block2', {
+      render: () => {},
+      exportDocx: () => [new window.docx.Paragraph({ __marker: 'block' })],
+    });
+
+    let capturedOpts;
+    const OrigDocument = window.docx.Document;
+    window.docx.Document = class extends OrigDocument { constructor(opts) { super(opts); capturedOpts = opts; } };
+
+    window.DOC = {
+      title: 'Q3 Report', subtitle: 'Quarterly review', author: 'Jane Doe', date: 'July 2026',
+      blocks: [{ type: 'marker_block2' }],
+    };
+
+    await DocRenderer.downloadDocx();
+
+    const children = capturedOpts.sections[0].children;
+    expect(children.length).toBe(4); // title + subtitle + date-line + 1 block paragraph
+    expect(children[0].children[0].text).toBe('Q3 Report');
+    expect(children[0].children[0].bold).toBe(true);
+    expect(children[1].children[0].text).toBe('Quarterly review');
+    expect(children[2].children[0].text).toContain('Jane Doe');
+    expect(children[2].children[0].text).toContain('July 2026');
+    expect(children[2].border.bottom).toBeDefined();
+    expect(children[3].__marker).toBe('block'); // block-derived paragraph comes after the cover
+
+    document.createElement = originalCreateElement;
+  });
+
+  it('does not throw and skips the cover entirely when title is absent', async () => {
+    const DocRenderer = loadDocRenderer();
+    const { originalCreateElement } = setupDownloadDocxHarness();
+    DocRenderer.registerBlock('marker_block3', {
+      render: () => {},
+      exportDocx: () => [new window.docx.Paragraph({ __marker: 'onlyblock' })],
+    });
+
+    let capturedOpts;
+    const OrigDocument = window.docx.Document;
+    window.docx.Document = class extends OrigDocument { constructor(opts) { super(opts); capturedOpts = opts; } };
+
+    window.DOC = { blocks: [{ type: 'marker_block3' }] };
+
+    await expect(DocRenderer.downloadDocx()).resolves.not.toThrow();
+
+    const children = capturedOpts.sections[0].children;
+    expect(children.length).toBe(1);
+    expect(children[0].__marker).toBe('onlyblock');
+
+    document.createElement = originalCreateElement;
+  });
+
+  it('does not throw and produces no malformed date-line paragraph when title is present but subtitle/author/date are absent', async () => {
+    const DocRenderer = loadDocRenderer();
+    const { originalCreateElement } = setupDownloadDocxHarness();
+
+    let capturedOpts;
+    const OrigDocument = window.docx.Document;
+    window.docx.Document = class extends OrigDocument { constructor(opts) { super(opts); capturedOpts = opts; } };
+
+    window.DOC = { title: 'Solo Title', blocks: [] };
+
+    await expect(DocRenderer.downloadDocx()).resolves.not.toThrow();
+
+    const children = capturedOpts.sections[0].children;
+    // title paragraph + date-line paragraph only (no subtitle paragraph since subtitle is absent)
+    expect(children.length).toBe(2);
+    expect(children[0].children[0].text).toBe('Solo Title');
+    const dateLineText = children[1].children[0].text;
+    expect(dateLineText.trim().length).toBeGreaterThan(0);
+    expect(dateLineText).not.toMatch(/^\s*·|·\s*$/);
+
     document.createElement = originalCreateElement;
   });
 });

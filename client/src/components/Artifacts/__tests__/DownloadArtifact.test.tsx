@@ -1,5 +1,9 @@
 import { render, fireEvent, act } from '@testing-library/react';
-import DownloadArtifact, { runInHiddenIframe } from '../DownloadArtifact';
+import DownloadArtifact, {
+  runInHiddenIframe,
+  detectNativeFormats,
+  NATIVE_FORMATS,
+} from '../DownloadArtifact';
 
 // Mutable so individual tests can flip googleDrivePickerEnabled on to
 // exercise the Drive button without affecting the other describe blocks.
@@ -319,5 +323,51 @@ describe('runInHiddenIframe — onError callback (Bug 2)', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toMatch(/synchronous export failure/);
     cleanup();
+  });
+});
+
+describe('detectNativeFormats — lib-hint fallback (dropped-comment regression)', () => {
+  it('detects PPTX via the deck-renderer script tag even with no downloadPptx string anywhere', () => {
+    const content =
+      '<html><head>' +
+      '<script src="/libs/deck-renderer.js"></script>' +
+      '</head><body><script>window.DECK = { slides: [] };</script></body></html>';
+
+    expect(content).not.toContain('downloadPptx');
+
+    const formats = detectNativeFormats(content);
+    expect(formats.some((f) => f.label === 'PPTX')).toBe(true);
+  });
+
+  it('detects DOCX via the doc-renderer script tag even with no downloadDocx string anywhere', () => {
+    const content =
+      '<html><head>' +
+      '<script src="/libs/doc-renderer.js"></script>' +
+      '</head><body><script>window.DOC = { sections: [] };</script></body></html>';
+
+    expect(content).not.toContain('downloadDocx');
+
+    const formats = detectNativeFormats(content);
+    expect(formats.some((f) => f.label === 'DOCX')).toBe(true);
+  });
+
+  it('does not detect a format when neither the trigger string nor the lib hint is present', () => {
+    const content = '<html><body><h1>Just a plain artifact</h1></body></html>';
+
+    const formats = detectNativeFormats(content);
+    expect(formats.some((f) => f.label === 'PPTX')).toBe(false);
+    expect(formats.some((f) => f.label === 'DOCX')).toBe(false);
+    expect(formats.some((f) => f.label === 'XLSX')).toBe(false);
+  });
+
+  it('still requires the literal downloadExcel string for XLSX — no lib hint exists for it', () => {
+    const pptxOnlyContent = '<script src="/libs/deck-renderer.js"></script>';
+    expect(detectNativeFormats(pptxOnlyContent).some((f) => f.label === 'XLSX')).toBe(false);
+
+    const excelEntry = NATIVE_FORMATS.find((f) => f.label === 'XLSX');
+    expect(excelEntry?.libHint).toBeUndefined();
+
+    const withExcelFn = '<script>function downloadExcel() {}</script>';
+    expect(detectNativeFormats(withExcelFn).some((f) => f.label === 'XLSX')).toBe(true);
   });
 });

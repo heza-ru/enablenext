@@ -402,6 +402,52 @@ describe('layout: split', () => {
     });
     expect(calls[0].path).toBe('/brand/product-suite-light.png');
   });
+
+  describe('window._BRAND_ORIGIN (Sandpack iframe origin patching)', () => {
+    afterEach(() => {
+      delete window._BRAND_ORIGIN;
+    });
+
+    it('prefixes the rendered <img src> with the injected brand origin when window._BRAND_ORIGIN is set', () => {
+      window._BRAND_ORIGIN = 'https://example-app.com';
+      const DeckRenderer = loadDeckRenderer();
+      const slideEl = document.createElement('section');
+      DeckRenderer.getLayout('split').render(
+        { layout: 'split', title: 'Built for scale', rightBrandImage: 'dap-dark' },
+        slideEl,
+      );
+      expect(slideEl.querySelector('.split-right img').src).toBe('https://example-app.com/brand/dap-dark.png');
+    });
+
+    it('falls back to a plain relative /brand/ path when window._BRAND_ORIGIN is not set', () => {
+      const DeckRenderer = loadDeckRenderer();
+      const slideEl = document.createElement('section');
+      DeckRenderer.getLayout('split').render(
+        { layout: 'split', title: 'Built for scale', rightBrandImage: 'dap-dark' },
+        slideEl,
+      );
+      const src = slideEl.querySelector('.split-right img').src;
+      expect(src).toContain('/brand/dap-dark.png');
+      expect(src).not.toContain('example-app.com');
+    });
+
+    it('prefixes the PPTX exportPptx() addImage path with the injected brand origin when window._BRAND_ORIGIN is set', () => {
+      window._BRAND_ORIGIN = 'https://example-app.com';
+      const DeckRenderer = loadDeckRenderer();
+      const calls = [];
+      const mockSlide = {
+        addText: () => {},
+        addShape: () => {},
+        addImage: (opts) => calls.push(opts),
+      };
+      DeckRenderer.getLayout('split').exportPptx(mockSlide, {
+        layout: 'split',
+        title: 'Built for scale',
+        rightBrandImage: 'dap-dark',
+      });
+      expect(calls[0].path).toBe('https://example-app.com/brand/dap-dark.png');
+    });
+  });
 });
 
 describe('layout: chart', () => {
@@ -974,10 +1020,10 @@ describe('downloadPptx', () => {
 
     expect(addedSlides.length).toBe(2);
     addedSlides.forEach((slide) => {
-      expect(slide.background).toEqual({ color: '36314C' });
+      expect(slide.background).toEqual({ color: '25223B' });
     });
     // Background must be set BEFORE exportPptx runs, so the layout sees it too.
-    expect(backgroundAtExportTime).toEqual([{ color: '36314C' }, { color: '36314C' }]);
+    expect(backgroundAtExportTime).toEqual([{ color: '25223B' }, { color: '25223B' }]);
   });
 });
 

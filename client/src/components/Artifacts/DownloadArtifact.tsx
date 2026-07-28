@@ -17,16 +17,25 @@ type NativeFormat = {
   label: string;
   ext: string;
   triggerFn: string;
+  /**
+   * Optional load-bearing script-tag hint. Unlike `triggerFn` (which may be a
+   * documentation comment the LLM can drop without breaking the artifact),
+   * this is a `<script src="...">` the artifact needs to render at all, so
+   * its presence is a much more reliable signal of format support.
+   */
+  libHint?: string;
 };
 
-const NATIVE_FORMATS: NativeFormat[] = [
-  { label: 'PPTX', ext: 'pptx', triggerFn: 'downloadPptx' },
+export const NATIVE_FORMATS: NativeFormat[] = [
+  { label: 'PPTX', ext: 'pptx', triggerFn: 'downloadPptx', libHint: '/libs/deck-renderer.js' },
   { label: 'XLSX', ext: 'xlsx', triggerFn: 'downloadExcel' },
-  { label: 'DOCX', ext: 'docx', triggerFn: 'downloadDocx' },
+  { label: 'DOCX', ext: 'docx', triggerFn: 'downloadDocx', libHint: '/libs/doc-renderer.js' },
 ];
 
-function detectNativeFormats(content: string): NativeFormat[] {
-  return NATIVE_FORMATS.filter((f) => content.includes(f.triggerFn));
+export function detectNativeFormats(content: string): NativeFormat[] {
+  return NATIVE_FORMATS.filter(
+    (f) => content.includes(f.triggerFn) || (f.libHint != null && content.includes(f.libHint)),
+  );
 }
 
 /**
@@ -721,7 +730,7 @@ const DownloadArtifact = ({
                     scale: 2,
                     useCORS: true,
                     allowTaint: true,
-                    backgroundColor: '#36314C',
+                    backgroundColor: '#25223B',
                     width: 1280,
                     height: 720,
                     logging: false,

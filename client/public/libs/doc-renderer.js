@@ -57,14 +57,56 @@
       '.doc-page tbody tr:nth-child(even) td{background:#F9F9F2}' +
       '.doc-page figure{margin:1.25rem 0}' +
       '.doc-page figure img{max-width:100%;height:auto;display:block}' +
-      '.doc-page figcaption{font-size:.8rem;color:#8A8A9C;margin-top:.4rem}';
+      '.doc-page figcaption{font-size:.8rem;color:#' + GRAY500 + ';margin-top:.4rem}' +
+      '.doc-page .doc-subtitle{font-size:1.1rem;font-weight:500;color:#' + GRAY500 + ';margin-bottom:.5rem}' +
+      '.doc-page .doc-date{font-size:.8rem;color:#' + GRAY500 + ';margin-bottom:0}' +
+      '.doc-page .accent-bar{width:48px;height:4px;background:#' + ORANGE + ';border-radius:2px;margin:1rem 0 1.75rem}' +
+      '@page{size:A4;margin:20mm}' +
+      '@media print{' +
+      'body{background:#FFFFFF;padding:0}' +
+      '.doc-page{width:auto;max-width:none;aspect-ratio:none;margin:0;' +
+      'background:#FFFFFF;border-radius:0;box-shadow:none;padding:0;overflow:visible}' +
+      '.page-break{border-top:none;margin:0;page-break-after:always}' +
+      '}';
     document.head.appendChild(style);
+  }
+
+  // Shared by renderDoc (preview) and downloadDocx (export) so the visible cover line reads
+  // identically in both places: "Prepared by {author}  ·  Whatfix  ·  {date}", gracefully
+  // dropping the author/date segments when absent instead of rendering an empty/malformed line.
+  function buildCoverDateLine(docSpec) {
+    var parts = [];
+    if (docSpec.author) parts.push('Prepared by ' + docSpec.author);
+    parts.push('Whatfix');
+    if (docSpec.date) parts.push(docSpec.date);
+    return parts.join('  ·  ');
   }
 
   function renderDoc(docSpec, mountEl) {
     injectBaseStyles();
     var pageEl = document.createElement('div');
     pageEl.className = 'doc-page';
+    if (docSpec.title) {
+      // Cover section is automatic/structural — generated from title/subtitle/author/date, not
+      // dependent on the LLM remembering to add its own heading1 block (restores pre-redesign behavior).
+      var h1 = document.createElement('h1');
+      h1.textContent = docSpec.title;
+      pageEl.appendChild(h1);
+      if (docSpec.subtitle) {
+        var subtitleEl = document.createElement('p');
+        subtitleEl.className = 'doc-subtitle';
+        subtitleEl.textContent = docSpec.subtitle;
+        pageEl.appendChild(subtitleEl);
+      }
+      var dateEl = document.createElement('p');
+      dateEl.className = 'doc-date';
+      dateEl.textContent = buildCoverDateLine(docSpec);
+      pageEl.appendChild(dateEl);
+      var accentBar = document.createElement('div');
+      accentBar.className = 'accent-bar';
+      pageEl.appendChild(accentBar);
+      pageEl.appendChild(document.createElement('hr'));
+    }
     (docSpec.blocks || []).forEach(function (spec) {
       var block = getBlock(spec.type); // throws if unregistered — fail loudly, not silently
       block.render(spec, pageEl);
@@ -75,7 +117,7 @@
 
   var FONT = 'Calibri'; // closest system font to DM Sans, matching the current skill's accepted convention
   var INK700 = '25223B', INK = '35324A', ORANGE = 'FF6B18';
-  var GRAY300 = 'E5E3DC', ORANGE100 = 'FFE9DC';
+  var GRAY300 = 'E5E3DC', ORANGE100 = 'FFE9DC', GRAY500 = '8A8A9C'; // GRAY500: existing muted caption gray, now named + reused for the cover's subtitle/date-line
 
   registerBlock('heading1', {
     render: function (spec, containerEl) {
@@ -291,7 +333,15 @@
 
   function brandImagePath(key) {
     var ext = PNG_ONLY_BRAND_IMAGES[key] ? 'png' : 'svg';
-    return '/brand/' + key + '.' + ext;
+    // The live preview renders inside a Sandpack iframe on a different origin
+    // than the app, so a bare relative path 404s there. patchHtmlForSandpack()
+    // (client/src/hooks/Artifacts/useArtifactProps.ts) injects
+    // window._BRAND_ORIGIN with the app's real origin for exactly this case;
+    // prepend it when present. Falls back to a bare relative path for
+    // standalone/local contexts (e.g. tests, a plain HTML file with no
+    // Sandpack wrapper) where no such origin is injected.
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    return origin + '/brand/' + key + '.' + ext;
   }
 
   registerBlock('image', {
@@ -356,6 +406,25 @@
     };
 
     var children = [];
+    if (doc.title) {
+      // Mirrors renderDoc's cover section — same title/subtitle/author/date fields, automatic
+      // and structural, matching the pre-redesign visible cover (not just invisible file metadata).
+      children.push(new helpers.Paragraph({
+        children: [new helpers.TextRun({ text: doc.title, bold: true, size: 56, color: ORANGE, font: FONT })],
+        spacing: { after: 120 },
+      }));
+      if (doc.subtitle) {
+        children.push(new helpers.Paragraph({
+          children: [new helpers.TextRun({ text: doc.subtitle, size: 24, color: GRAY500, font: FONT })],
+          spacing: { after: 80 },
+        }));
+      }
+      children.push(new helpers.Paragraph({
+        children: [new helpers.TextRun({ text: buildCoverDateLine(doc), size: 18, color: GRAY500, font: FONT })],
+        spacing: { after: 300 },
+        border: { bottom: { color: ORANGE, size: 12, style: 'single', space: 8 } }, // 'single', matching divider/callout's existing string-literal border style convention
+      }));
+    }
     for (var i = 0; i < (doc.blocks || []).length; i++) {
       var spec = doc.blocks[i];
       var block = getBlock(spec.type);

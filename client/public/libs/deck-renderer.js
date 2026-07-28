@@ -54,7 +54,15 @@
 
   function brandImagePath(key) {
     var ext = PNG_ONLY_BRAND_IMAGES[key] ? 'png' : 'svg';
-    return '/brand/' + key + '.' + ext;
+    // The live preview renders inside a Sandpack iframe on a different origin
+    // than the app, so a bare relative path 404s there. patchHtmlForSandpack()
+    // (client/src/hooks/Artifacts/useArtifactProps.ts) injects
+    // window._BRAND_ORIGIN with the app's real origin for exactly this case;
+    // prepend it when present. Falls back to a bare relative path for
+    // standalone/local contexts (e.g. tests, a plain HTML file with no
+    // Sandpack wrapper) where no such origin is injected.
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    return origin + '/brand/' + key + '.' + ext;
   }
 
   function inchesToPercent(rect) {
@@ -75,7 +83,7 @@
       'html,body{width:100%;height:100%;overflow:hidden;background:#1a1728;' +
       "font-family:'DM Sans','IBM Plex Sans',-apple-system,sans-serif}" +
       '.deck{width:100vw;height:100vh;position:relative;overflow:hidden}' +
-      '.slide{position:absolute;inset:0;opacity:0;background:#36314C;' +
+      '.slide{position:absolute;inset:0;opacity:0;background:#25223B;' +
       'content-visibility:auto;contain:layout style paint}' +
       '.slide.active{opacity:1;content-visibility:visible}';
     document.head.appendChild(style);
@@ -135,7 +143,7 @@
       slideEl.style.cssText =
         'display:flex;flex-direction:column;justify-content:flex-end;' +
         'padding:2.5rem 3rem 3rem;' +
-        'background:linear-gradient(150deg,#36314C 0%,#3f3a56 60%,#48425f 100%);';
+        'background:linear-gradient(150deg,#25223B 0%,#3f3a56 60%,#48425f 100%);';
       var eyebrow = document.createElement('p');
       eyebrow.className = 'eyebrow';
       eyebrow.style.cssText = "font-size:.65rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#FF6B18;margin-bottom:.85rem;font-family:'DM Sans',sans-serif;";
@@ -1368,7 +1376,7 @@
     (deck.slides || []).forEach(function (spec) {
       var layout = getLayout(spec.layout);
       var pptxSlide = pptx.addSlide();
-      pptxSlide.background = { color: '36314C' };
+      pptxSlide.background = { color: '25223B' };
       layout.exportPptx(pptxSlide, spec);
     });
     var blob = await pptx.write({ outputType: 'blob' });

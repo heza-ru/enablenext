@@ -96,14 +96,16 @@ Only PNG-only brand assets (the ones with no `.svg` version under `/brand/` — 
 
 ## Document metadata
 
-`title`, `subtitle`, `author`, and `date` are front-matter, not visible content — none of them are printed on the page itself. They only populate the exported `.docx` file's properties (visible via Word's File > Info panel, not in the document body) and the downloaded filename:
+`title`, `subtitle`, `author`, and `date` automatically produce a visible cover section at the very top of the document — a title, subtitle, and a "Prepared by {author} · Whatfix · {date}" line with an accent bar — in both the live preview and the exported `.docx`. This is structural: `doc-renderer.js` builds it directly from these fields, so you never write a `heading1` (or any other block) for the title yourself.
 
-- `title` → the `.docx` Title property and the download filename (slugified)
-- `subtitle` → the `.docx` Description property
-- `author` → the `.docx` Author property (defaults to "Whatfix" if omitted)
-- `date` → the `.docx` Subject property
+The same fields also populate the exported `.docx` file's invisible properties (visible via Word's File > Info panel) and the downloaded filename:
 
-If the document itself needs a visible title on the page, add a `heading1` block for it — the top-level `title` field alone will not appear anywhere in the preview or the printed page.
+- `title` → the visible cover heading, the `.docx` Title property, and the download filename (slugified)
+- `subtitle` → the visible cover subtitle line, and the `.docx` Description property
+- `author` → the visible "Prepared by {author}" segment, and the `.docx` Author property (defaults to "Whatfix" if omitted)
+- `date` → the visible date segment, and the `.docx` Subject property
+
+`subtitle`, `author`, and `date` are all optional — the cover degrades gracefully (e.g. omitting "Prepared by" if `author` is absent) rather than rendering blank or malformed text. Only `title` gates whether a cover renders at all; omit it and no cover section appears.
 
 ## Page size
 
