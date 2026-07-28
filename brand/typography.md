@@ -62,6 +62,12 @@ font-family: 'Aeonik', 'DM Sans', -apple-system, sans-serif;
 
 > **For self-contained HTML artifacts** (slides rendered in browser): Aeonik cannot load from local paths in a sandboxed iframe. Use DM Sans as the primary font — this is explicitly endorsed in the brand guidelines as the correct substitute for web contexts.
 
+## ⚠️ Resolved: font for generated presentations is DM Sans, not Aeonik
+
+`brand/master-deck-layouts.md` documents a direct measurement of the actual approved presentation template (`Copy of Master Deck 2026.pptx`, 104 slides): **DM Sans** (1,224 instances across Regular/Medium/SemiBold/Light) and **IBM Plex Sans** (235 instances) are the only fonts used — **zero** Aeonik. This lines up with this file's own web-context exception above (DM Sans is "explicitly endorsed... for web contexts") and is the strongest available evidence for what generated decks should actually use, since it's measured from the real production template rather than inferred from general brand guidance.
+
+**For presentation generation specifically** (this repo's slide/deck generator, and its planned redesign — see `docs/superpowers/specs/2026-07-28-presentation-generation-redesign-design.md`): treat **DM Sans as primary, IBM Plex Sans as secondary**. Aeonik remains documented above as the org-wide brand typeface for contexts outside generated decks (it's unclear whether the master deck predates an Aeonik adoption, or Aeonik was never intended for decks specifically — that's a brand-marketing question, not one this doc can resolve) — but for this system's actual output, match the verified template, not the general guideline.
+
 ## Type Scale
 
 ### Slides / Presentation

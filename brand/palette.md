@@ -13,6 +13,7 @@ description: Official Whatfix brand color palette sourced from Typography and co
 | Orange 100 | `#FFE9DC` | 255 233 220 | Tints, backgrounds, soft highlights |
 | **Ink 700** | `#25223B` | 37 34 59 | Darkest bg, dark slide backgrounds, hero fills |
 | **Ink** | `#35324A` | 53 50 74 | Dark surfaces, secondary dark bg |
+| **Ink 800 (deck-verified)** | `#36314C` | 54 49 76 | See note below — the dark background actually used in the approved master deck template |
 | **Crimson** | `#872345` | 135 35 69 | Complimentary accent, alerts, emphasis |
 | Crimson 300 | `#FAB4B8` | 250 180 184 | Soft crimson tint |
 | **Bright Blue** | `#AED2F3` | 174 210 243 | Supporting accent, data viz |
@@ -81,11 +82,17 @@ background: linear-gradient(135deg, #FF6B18 0%, #872345 100%);
 background: linear-gradient(135deg, #F9F9F2 0%, #FFE9DC 100%);
 ```
 
+## ⚠️ Resolved: dark background for generated presentations is `#36314C`, not Ink 700
+
+This palette is sourced from *Typography and colour '26.pdf* — but `brand/master-deck-layouts.md` documents a direct measurement of the actual approved presentation template (`Copy of Master Deck 2026.pptx`, 104 slides): **`#36314C`** is the single most-used color in the entire deck (1,154 occurrences — more than white or black), used as the dominant dark slide background. `#25223B` (Ink 700, 38 uses) and `#35324A` (Ink, 78 uses combined with its `#34324A` variant) do both appear, just far less often.
+
+**For presentation generation specifically** (this repo's slide/deck generator, and its planned redesign — see `docs/superpowers/specs/2026-07-28-presentation-generation-redesign-design.md`): use **Ink 800 `#36314C`** as the default dark slide background, matching the verified template. Ink 700 and Ink remain documented above and may still be correct for other brand contexts outside generated decks — reconciling the PDF guideline against the deck's actual practice is a brand-marketing question this doc can't fully resolve, but for this system's actual output, match the verified template.
+
 ## Rules
 
 - **Use only these colors — never invent arbitrary hex values**
 - **Max 3 colors per slide**
 - **Orange `#FF6B18` is an ACCENT only** — use for headlines, KPI numbers, CTAs, underlines, progress bars. Never as a full slide background — it reads as unprofessional and overpowering.
-- **Default slide bg: Ink 700 `#25223B`** — dark, professional, makes orange pop
-- Ink 700 / Ink for all dark backgrounds — not pure black `#000000`
+- **Default slide bg for generated presentations: Ink 800 `#36314C`** (deck-verified — see note above); Ink 700 `#25223B` for other/non-deck dark contexts per the source PDF
+- Ink 800 / Ink 700 / Ink for all dark backgrounds — not pure black `#000000`
 - Gray 100 `#F9F9F2` is the correct light background — warm off-white, not pure white `#FFFFFF`
