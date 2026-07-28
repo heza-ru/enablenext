@@ -27,11 +27,11 @@ An architecture scan surfaced several issues unrelated to the eventual methodolo
 
 Delete rather than fix-and-keep. If the future presentation redesign (sub-project A) needs server-side rendering for fidelity measurement, it should be built fresh against that project's actual requirements rather than resurrecting untested, already-abandoned code.
 
-**Changes:**
-- Delete `api/server/routes/artifacts.js`
-- Remove its route registration from `api/server/routes/index.js` and `api/server/index.js`
-- Remove the `npx playwright install chromium` build step from `render.yaml`
-- Remove any `vite-env.d.ts` type additions that exist solely to support this route (verify during implementation whether they're solely for this or shared with other code)
+**Changes (verified against the actual files, correcting two inaccuracies from the initial architecture scan):**
+- Delete `api/server/routes/artifacts.js` (confirmed: `require('playwright-core')` at line 2, with no `playwright-core` entry in any `package.json` — it only exists in `node_modules` today as a transitive dependency of the `@playwright/test` devDependency. A production install that omits devDependencies would make this route throw `MODULE_NOT_FOUND` if ever hit — the deletion rationale holds.)
+- Remove its route registration: `api/server/routes/index.js` line 2 (`const artifacts = require('./artifacts');`) and line 31 (`artifacts,` in the exports object), and `api/server/index.js` line 170 (`app.use('/api/artifacts', routes.artifacts);`)
+- ~~Remove the `npx playwright install chromium` build step from `render.yaml`~~ — **correction: no such step exists in `render.yaml`.** The only `npx playwright install chromium` reference in the repo is in `.github/playwright.yml`, and that entire workflow file is already commented out end-to-end — nothing to remove there. No `render.yaml` change is needed for this item.
+- ~~Remove any `vite-env.d.ts` type additions that exist solely to support this route~~ — **correction: `client/src/vite-env.d.ts` contains no Playwright-related additions** (only a `window.PptxGenJS` type for the unrelated PptxGenJS CDN-loading code). No change needed here either.
 
 ### 2. Consolidate the download-bridge logic into one shared file
 
