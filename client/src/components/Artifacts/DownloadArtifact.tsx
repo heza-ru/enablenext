@@ -1092,7 +1092,10 @@ const DownloadArtifact = ({
               aria-label="DOCX page size"
               className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
             >
-              <div className="mb-2 font-medium">Page size</div>
+              <div className="mb-2 font-medium">{localize('com_ui_page_size')}</div>
+              {/* A4/Letter are format-name proper nouns, not UI verbs — left as
+                  literal strings, matching how PPTX/XLSX/DOCX (fmt.label) are
+                  already handled as literal, unlocalized labels in this file. */}
               <label className="mb-1 flex items-center gap-2">
                 <input
                   type="radio"
@@ -1115,7 +1118,7 @@ const DownloadArtifact = ({
               </label>
               <div className="flex gap-2">
                 <Button size="sm" className="h-6 px-2 text-xs" onClick={confirmDocxDownload}>
-                  Download
+                  {localize('com_ui_download')}
                 </Button>
                 <Button
                   size="sm"
@@ -1123,7 +1126,7 @@ const DownloadArtifact = ({
                   className="h-6 px-2 text-xs"
                   onClick={() => setDocxPicker(null)}
                 >
-                  Cancel
+                  {localize('com_ui_cancel')}
                 </Button>
               </div>
             </div>
@@ -1134,7 +1137,7 @@ const DownloadArtifact = ({
               aria-label="XLSX sheet selection"
               className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
             >
-              <div className="mb-2 font-medium">Sheets to export</div>
+              <div className="mb-2 font-medium">{localize('com_ui_sheets_to_export')}</div>
               {xlsxPicker.sheetNames.map((name) => (
                 <label key={name} className="mb-1 flex items-center gap-2">
                   <input
@@ -1153,7 +1156,7 @@ const DownloadArtifact = ({
                   onClick={confirmXlsxDownload}
                   disabled={selectedSheets.size === 0}
                 >
-                  Download
+                  {localize('com_ui_download')}
                 </Button>
                 <Button
                   size="sm"
@@ -1161,7 +1164,7 @@ const DownloadArtifact = ({
                   className="h-6 px-2 text-xs"
                   onClick={() => setXlsxPicker(null)}
                 >
-                  Cancel
+                  {localize('com_ui_cancel')}
                 </Button>
               </div>
             </div>

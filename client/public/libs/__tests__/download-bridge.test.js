@@ -42,7 +42,6 @@ describe('download-bridge.js', () => {
     // Minimal window.parent stub to capture postMessage calls.
     window.parent = { postMessage: (msg) => posted.push(msg) };
     const origAddEventListener = window.addEventListener.bind(window);
-    // eslint-disable-next-line no-unused-vars
     const spy = jest.spyOn(window, 'addEventListener').mockImplementation((type, listener, opts) => {
       registeredListeners.push({ type, listener });
       origAddEventListener(type, listener, opts);

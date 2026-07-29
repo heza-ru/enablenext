@@ -482,7 +482,7 @@ describe('DownloadArtifact — export options picker (Task 14)', () => {
     );
     fireEvent.click(getByRole('button', { name: /docx/i }));
     fireEvent.click(getByRole('radio', { name: /letter/i }));
-    fireEvent.click(getByRole('button', { name: /^download$/i }));
+    fireEvent.click(getByRole('button', { name: /^com_ui_download$/i }));
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'artifact-download-request',
@@ -505,7 +505,7 @@ describe('DownloadArtifact — export options picker (Task 14)', () => {
     );
     fireEvent.click(getByRole('button', { name: /xlsx/i }));
     fireEvent.click(getByRole('checkbox', { name: /detail/i })); // deselect Detail
-    fireEvent.click(getByRole('button', { name: /^download$/i }));
+    fireEvent.click(getByRole('button', { name: /^com_ui_download$/i }));
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'artifact-download-request',
