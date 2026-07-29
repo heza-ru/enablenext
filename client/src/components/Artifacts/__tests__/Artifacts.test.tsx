@@ -11,6 +11,12 @@ const mockSetActiveTab = jest.fn((tab: string) => {
   mockActiveTab = tab;
 });
 
+// Most tests only need a single version, but the compare-mode tests below
+// need a second artifact id present so ArtifactVersion's "Compare with
+// version 2" entry (rendered by our ArtifactVersion mock below) resolves to
+// a real id that the recoil-store mock can look up.
+let mockOrderedArtifactIds = ['artifact-1'];
+
 jest.mock('~/hooks/Artifacts/useArtifacts', () => ({
   __esModule: true,
   default: () => ({
@@ -18,7 +24,7 @@ jest.mock('~/hooks/Artifacts/useArtifacts', () => ({
     setActiveTab: mockSetActiveTab,
     currentIndex: 0,
     currentArtifact: { id: 'artifact-1', content: '<html></html>' },
-    orderedArtifactIds: ['artifact-1'],
+    orderedArtifactIds: mockOrderedArtifactIds,
     setCurrentArtifactId: jest.fn(),
   }),
 }));
@@ -48,10 +54,20 @@ jest.mock('@librechat/client', () => ({
   ),
 }));
 
+// artifactsState holds every artifact keyed by id (the same recoil atom
+// useArtifacts.ts reads from). Artifacts.tsx reads it directly via
+// useRecoilValue to look up the non-current artifact selected for
+// comparison, since useArtifacts() only exposes the current artifact.
+const mockArtifactsById: Record<string, { id: string; content: string }> = {
+  'artifact-1': { id: 'artifact-1', content: '<html>v1</html>' },
+  'artifact-2': { id: 'artifact-2', content: '<html>v2</html>' },
+};
+
 jest.mock('recoil', () => ({
   __esModule: true,
   useSetRecoilState: () => jest.fn(),
   useResetRecoilState: () => jest.fn(),
+  useRecoilValue: () => mockArtifactsById,
 }));
 
 jest.mock('~/store', () => ({
@@ -59,6 +75,7 @@ jest.mock('~/store', () => ({
   default: {
     artifactsVisibility: 'artifactsVisibility',
     currentArtifactId: 'currentArtifactId',
+    artifactsState: 'artifactsState',
   },
 }));
 
@@ -81,6 +98,7 @@ const LOCALIZED_STRINGS: Record<string, string> = {
   com_ui_zoom_in: 'Zoom in',
   com_ui_zoom_out: 'Zoom out',
   com_ui_reset_zoom: 'Reset Zoom',
+  com_ui_stop_comparing: 'Stop comparing',
 };
 
 jest.mock('~/hooks', () => ({
@@ -93,9 +111,18 @@ jest.mock('../DownloadArtifact', () => ({
   default: () => <div data-testid="download-artifact" />,
 }));
 
+// The real ArtifactVersion opens an Ariakit dropdown menu, which needs a
+// full menu context to interact with in jsdom. We stand in a minimal version
+// that exposes its onCompareVersion prop as a plain button, so tests can
+// trigger the "compare with version 2" flow the same way a user would click
+// through the real dropdown, without needing to drive Ariakit's popover.
 jest.mock('../ArtifactVersion', () => ({
   __esModule: true,
-  default: () => <div data-testid="artifact-version" />,
+  default: ({ onCompareVersion }: any) => (
+    <div data-testid="artifact-version">
+      <button onClick={() => onCompareVersion(1)}>Compare with version 2</button>
+    </div>
+  ),
 }));
 
 jest.mock('../ArtifactTabs', () => ({
@@ -116,7 +143,34 @@ function renderArtifacts(overrides: { activeTab?: string } = {}) {
 beforeEach(() => {
   mockIsMobile = false;
   mockActiveTab = 'preview';
+  mockOrderedArtifactIds = ['artifact-1'];
   jest.clearAllMocks();
+});
+
+describe('Artifacts — version compare', () => {
+  it('renders a second read-only preview pane when a comparison version is selected', () => {
+    mockOrderedArtifactIds = ['artifact-1', 'artifact-2'];
+    const { container, getByText } = renderArtifacts();
+
+    expect(container.querySelectorAll('[data-testid="artifact-preview-pane"]').length).toBe(1);
+
+    fireEvent.click(getByText('Compare with version 2'));
+
+    expect(container.querySelectorAll('[data-testid="artifact-preview-pane"]').length).toBe(2);
+  });
+
+  it('clears the comparison pane when "Stop comparing" is clicked', () => {
+    mockOrderedArtifactIds = ['artifact-1', 'artifact-2'];
+    const { container, getByText, getByRole, queryAllByTestId } = renderArtifacts();
+
+    fireEvent.click(getByText('Compare with version 2'));
+    expect(queryAllByTestId('artifact-preview-pane').length).toBe(2);
+
+    fireEvent.click(getByRole('button', { name: /stop comparing/i }));
+
+    expect(queryAllByTestId('artifact-preview-pane').length).toBe(1);
+    expect(container.querySelector('[data-testid="artifact-preview-pane"]')).not.toBeNull();
+  });
 });
 
 describe('Artifacts — fullscreen toggle', () => {

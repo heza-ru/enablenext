@@ -8,12 +8,14 @@ interface ArtifactVersionProps {
   currentIndex: number;
   totalVersions: number;
   onVersionChange: (index: number) => void;
+  onCompareVersion: (index: number) => void;
 }
 
 export default function ArtifactVersion({
   currentIndex,
   totalVersions,
   onVersionChange,
+  onCompareVersion,
 }: ArtifactVersionProps) {
   const localize = useLocalize();
   const [isPopoverActive, setIsPopoverActive] = useState(false);
@@ -35,6 +37,12 @@ export default function ArtifactVersion({
     label: localize('com_ui_version_var', { 0: String(index + 1) }),
   }));
 
+  const handleCompareClick = (value: string) => {
+    const index = parseInt(value, 10);
+    onCompareVersion(index);
+    setIsPopoverActive(false);
+  };
+
   const dropdownItems = options.map((option) => {
     const isSelected = option.value === String(currentIndex);
     return {
@@ -46,6 +54,16 @@ export default function ArtifactVersion({
       ) : undefined,
     };
   });
+
+  const compareItems = options
+    .filter((option) => option.value !== String(currentIndex))
+    .map((option) => ({
+      label: localize('com_ui_compare_version_var', {
+        0: String(parseInt(option.value, 10) + 1),
+      }),
+      onClick: () => handleCompareClick(option.value),
+      value: `compare-${option.value}`,
+    }));
 
   return (
     <DropdownPopup
@@ -77,7 +95,7 @@ export default function ArtifactVersion({
           }
         />
       }
-      items={dropdownItems}
+      items={[...dropdownItems, ...compareItems]}
       className={isSmallScreen ? '' : 'absolute right-0 top-0 mt-2'}
     />
   );
