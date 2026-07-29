@@ -125,9 +125,12 @@ jest.mock('../ArtifactVersion', () => ({
   ),
 }));
 
+// Renders the artifact's id so tests can distinguish which artifact a given
+// pane actually received — a plain count-only assertion wouldn't catch a
+// regression that accidentally passed the same artifact to both panes.
 jest.mock('../ArtifactTabs', () => ({
   __esModule: true,
-  default: () => <div data-testid="artifact-tabs" />,
+  default: ({ artifact }: any) => <div data-testid="artifact-tabs">{artifact?.id}</div>,
 }));
 
 jest.mock('../Code', () => ({
@@ -157,19 +160,25 @@ describe('Artifacts — version compare', () => {
     fireEvent.click(getByText('Compare with version 2'));
 
     expect(container.querySelectorAll('[data-testid="artifact-preview-pane"]').length).toBe(2);
+    // Not just two panes — two *different* artifacts, one per pane, so a
+    // regression that fed currentArtifact to both panes would fail this.
+    expect(getByText('artifact-1')).toBeInTheDocument();
+    expect(getByText('artifact-2')).toBeInTheDocument();
   });
 
   it('clears the comparison pane when "Stop comparing" is clicked', () => {
     mockOrderedArtifactIds = ['artifact-1', 'artifact-2'];
-    const { container, getByText, getByRole, queryAllByTestId } = renderArtifacts();
+    const { getByText, getByRole, queryAllByTestId, queryByText } = renderArtifacts();
 
     fireEvent.click(getByText('Compare with version 2'));
     expect(queryAllByTestId('artifact-preview-pane').length).toBe(2);
+    expect(getByText('artifact-2')).toBeInTheDocument();
 
     fireEvent.click(getByRole('button', { name: /stop comparing/i }));
 
     expect(queryAllByTestId('artifact-preview-pane').length).toBe(1);
-    expect(container.querySelector('[data-testid="artifact-preview-pane"]')).not.toBeNull();
+    expect(getByText('artifact-1')).toBeInTheDocument();
+    expect(queryByText('artifact-2')).not.toBeInTheDocument();
   });
 });
 
