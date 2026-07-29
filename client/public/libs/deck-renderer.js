@@ -1500,9 +1500,20 @@
     // generated XML and in the master deck's own saved XML -- there is no literal "</p:notesSz>"
     // closing-tag substring anywhere to match against), so the insertion point must be matched
     // against the self-closing form "<p:notesSz .../>" instead.
+    //
+    // embedTrueTypeFonts and saveSubsetFonts are checked and inserted INDEPENDENTLY of each
+    // other -- real PptxGenJS 4.0.1 output already emits saveSubsetFonts="1" on <p:presentation>
+    // by default in every export (confirmed against a real pptx.write() blob), so gating both
+    // attributes on a single check (e.g. "if embedTrueTypeFonts is missing, insert both") would
+    // insert a second, duplicate saveSubsetFonts="1" into the same start tag -- which violates
+    // XML's Unique Att Spec constraint and produces malformed XML in every real export, not just
+    // an edge case.
     var presentationXml = await zip.file('ppt/presentation.xml').async('string');
-    if (presentationXml.indexOf('embedTrueTypeFonts') === -1) {
-      presentationXml = presentationXml.replace('<p:presentation ', '<p:presentation embedTrueTypeFonts="1" saveSubsetFonts="1" ');
+    if (presentationXml.indexOf('embedTrueTypeFonts=') === -1) {
+      presentationXml = presentationXml.replace('<p:presentation ', '<p:presentation embedTrueTypeFonts="1" ');
+    }
+    if (presentationXml.indexOf('saveSubsetFonts=') === -1) {
+      presentationXml = presentationXml.replace('<p:presentation ', '<p:presentation saveSubsetFonts="1" ');
     }
     if (presentationXml.indexOf('<p:embeddedFontLst>') === -1) {
       presentationXml = presentationXml.replace(/(<p:notesSz\b[^>]*\/>)/, '$1<p:embeddedFontLst>' + embeddedFontXml + '</p:embeddedFontLst>');

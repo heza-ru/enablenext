@@ -28,7 +28,13 @@ async function buildFakePptxBlob() {
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
-      'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+      // Real PptxGenJS 4.0.1 output already emits saveSubsetFonts="1" (and
+      // autoCompressPictures="0") on <p:presentation> by default, in every export --
+      // confirmed against a real pptx.write() blob. Included here so this fixture matches
+      // reality closely enough to catch the exact duplicate-attribute bug that a naive
+      // "insert both embedTrueTypeFonts and saveSubsetFonts together" guard produces.
+      'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" ' +
+      'saveSubsetFonts="1" autoCompressPictures="0">' +
       '<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>' +
       '<p:sldSz cx="9144000" cy="5143500"/><p:notesSz cx="6858000" cy="9144000"/>' +
       '<p:defaultTextStyle><a:defPPr/></p:defaultTextStyle>' +
@@ -1223,6 +1229,11 @@ describe('embedFontsInPptx', () => {
     expect((presentationXml.match(/<\/p:presentation>/g) || []).length).toBe(1);
     expect((presentationXml.match(/embedTrueTypeFonts="1"/g) || []).length).toBe(1);
     expect(presentationXml.endsWith('</p:presentation>')).toBe(true);
+    // saveSubsetFonts is already present in the fixture (matching real PptxGenJS output, which
+    // emits it by default in every export) -- embedFontsInPptx must not add a second one, since
+    // two saveSubsetFonts attributes on the same start tag violates XML's Unique Att Spec
+    // constraint and is rejected by strict XML parsers.
+    expect((presentationXml.match(/saveSubsetFonts="1"/g) || []).length).toBe(1);
 
     const contentTypes = await resultZip.file('[Content_Types].xml').async('string');
     expect((contentTypes.match(/Extension="fntdata"/g) || []).length).toBe(1);
