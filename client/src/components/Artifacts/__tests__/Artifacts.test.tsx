@@ -68,9 +68,24 @@ jest.mock('~/Providers', () => ({
   useMutationState: () => ({ isMutating: false }),
 }));
 
+// Mirrors the real English strings for the keys this component actually
+// uses (from src/locales/en/translation.json), so assertions here exercise
+// the same visible copy a user would see rather than raw i18n keys — this
+// matters now that the fullscreen/zoom aria-labels go through localize()
+// instead of being hardcoded.
+const LOCALIZED_STRINGS: Record<string, string> = {
+  com_ui_close: 'Close',
+  com_ui_refresh: 'Refresh',
+  com_ui_fullscreen: 'Fullscreen',
+  com_ui_fullscreen_exit: 'Exit fullscreen',
+  com_ui_zoom_in: 'Zoom in',
+  com_ui_zoom_out: 'Zoom out',
+  com_ui_reset_zoom: 'Reset Zoom',
+};
+
 jest.mock('~/hooks', () => ({
   __esModule: true,
-  useLocalize: () => (key: string) => key,
+  useLocalize: () => (key: string) => LOCALIZED_STRINGS[key] ?? key,
 }));
 
 jest.mock('../DownloadArtifact', () => ({
@@ -121,6 +136,21 @@ describe('Artifacts — fullscreen toggle', () => {
     const { queryByRole } = renderArtifacts();
     expect(queryByRole('button', { name: /fullscreen|maximize/i })).not.toBeInTheDocument();
   });
+
+  it('removes the fixed inset-0 full-viewport class when fullscreen is toggled back off', () => {
+    const { getByRole, container } = renderArtifacts();
+    const toggle = getByRole('button', { name: /fullscreen|maximize/i });
+
+    // On: the fixed/inset-0 escape-hatch class should be present.
+    fireEvent.click(toggle);
+    expect(container.querySelector('.fixed.inset-0')).not.toBeNull();
+
+    // Off again: same button (now labeled "Exit fullscreen") toggles it back,
+    // and the escape-hatch class must be gone — otherwise the panel would be
+    // stuck full-viewport forever.
+    fireEvent.click(getByRole('button', { name: /exit fullscreen/i }));
+    expect(container.querySelector('.fixed.inset-0')).toBeNull();
+  });
 });
 
 describe('Artifacts — zoom controls', () => {
@@ -149,5 +179,19 @@ describe('Artifacts — zoom controls', () => {
     // Ten increments of 0.25 from 0.5 should clamp at 2, not run away.
     for (let i = 0; i < 10; i++) fireEvent.click(zoomIn);
     expect(scaledEl.style.transform).toBe('scale(2)');
+  });
+
+  it('resets zoom back to 100% via the reset control', () => {
+    const { getByRole, container } = renderArtifacts({ activeTab: 'preview' });
+    const zoomIn = getByRole('button', { name: /zoom in/i });
+    const resetZoom = getByRole('button', { name: /reset zoom/i });
+    const scaledEl = container.querySelector('[style*="scale"]') as HTMLElement;
+
+    fireEvent.click(zoomIn);
+    fireEvent.click(zoomIn);
+    expect(scaledEl.style.transform).toBe('scale(1.5)');
+
+    fireEvent.click(resetZoom);
+    expect(scaledEl.style.transform).toBe('scale(1)');
   });
 });

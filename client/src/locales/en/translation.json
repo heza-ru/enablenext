@@ -1008,6 +1008,8 @@
   "com_ui_fork_split_target_setting": "Start fork from target message by default",
   "com_ui_fork_success": "Successfully forked conversation",
   "com_ui_fork_visible": "Visible messages only",
+  "com_ui_fullscreen": "Fullscreen",
+  "com_ui_fullscreen_exit": "Exit fullscreen",
   "com_ui_generate_qrcode": "Generate QR Code",
   "com_ui_generating": "Generating...",
   "com_ui_generation_settings": "Generation Settings",

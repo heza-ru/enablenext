@@ -1,6 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { Code, Play, RefreshCw, X, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Code,
+  Play,
+  RefreshCw,
+  X,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+} from 'lucide-react';
 import { useSetRecoilState, useResetRecoilState } from 'recoil';
 import { Button, Spinner, useMediaQuery, Radio } from '@librechat/client';
 import type { SandpackPreviewRef, CodeEditorRef } from '@codesandbox/sandpack-react';
@@ -331,7 +341,11 @@ export default function Artifacts() {
                   size="icon"
                   variant="ghost"
                   onClick={() => setIsFullscreen((v) => !v)}
-                  aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                  aria-label={
+                    isFullscreen
+                      ? localize('com_ui_fullscreen_exit')
+                      : localize('com_ui_fullscreen')
+                  }
                 >
                   {isFullscreen ? (
                     <Minimize2 size={16} aria-hidden="true" />
@@ -346,15 +360,23 @@ export default function Artifacts() {
                     size="icon"
                     variant="ghost"
                     onClick={() => adjustZoom(-0.25)}
-                    aria-label="Zoom out"
+                    aria-label={localize('com_ui_zoom_out')}
                   >
                     <ZoomOut size={16} aria-hidden="true" />
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
+                    onClick={() => setZoomLevel(1)}
+                    aria-label={localize('com_ui_reset_zoom')}
+                  >
+                    <RotateCcw size={16} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     onClick={() => adjustZoom(0.25)}
-                    aria-label="Zoom in"
+                    aria-label={localize('com_ui_zoom_in')}
                   >
                     <ZoomIn size={16} aria-hidden="true" />
                   </Button>
