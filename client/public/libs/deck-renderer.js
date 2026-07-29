@@ -768,7 +768,11 @@
         cardEl.style.cssText = 'background:#4a4560;border-radius:8px;padding:1.1rem 1.25rem;display:flex;align-items:flex-start;gap:.9rem;border:1px solid rgba(255,255,255,.05);';
         var icon = document.createElement('div');
         icon.className = 'ig-icon';
-        icon.style.cssText = 'width:2rem;height:2rem;flex-shrink:0;background:rgba(255,107,24,.12);border-radius:6px;';
+        icon.style.cssText = 'width:2rem;height:2rem;flex-shrink:0;background:rgba(255,107,24,.12);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#FF6B18;';
+        var iconDef = (typeof window.DeckIcons !== 'undefined') ? window.DeckIcons.getIcon(card.icon) : null;
+        if (iconDef) {
+          icon.innerHTML = '<svg width="18" height="18" viewBox="' + iconDef.viewBox + '">' + iconDef.svg + '</svg>';
+        }
         var text = document.createElement('div');
         text.className = 'ig-text';
         var title = document.createElement('div');
@@ -806,6 +810,11 @@
         var cy = g.grid.y + row * (cardH + 0.18);
         pptxSlide.addShape('roundRect', { x: cx, y: cy, w: cardW, h: cardH, fill: { color: '35324A' }, rectRadius: 0.06 });
         pptxSlide.addShape('rect', { x: cx + 0.15, y: cy + cardH * 0.25, w: 0.06, h: 0.06, fill: { color: 'FF6B18' } });
+        if (card.icon && window.DeckIcons && window.DeckIcons.getIcon(card.icon)) {
+          pptxSlide.addShape('roundRect', {
+            x: cx + 0.15, y: cy + 0.15, w: 0.32, h: 0.32, fill: { color: 'FF6B18' }, transparency: 88, rectRadius: 0.05,
+          });
+        }
         pptxSlide.addText(card.title || '', {
           x: cx + 0.28, y: cy + 0.15, w: cardW - 0.38, h: 0.38, fontSize: 11, color: 'FFFFFF', fontFace: 'DM Sans',
         });

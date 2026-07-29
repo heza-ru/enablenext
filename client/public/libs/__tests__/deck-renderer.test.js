@@ -577,6 +577,29 @@ describe('layout: icon_grid', () => {
     );
     expect(slideEl.querySelector('.ig-grid').style.gridTemplateColumns).toBe('repeat(3,1fr)');
   });
+
+  it('renders a real icon svg when card.icon matches a known name', () => {
+    document.body.innerHTML = '';
+    require('../icons.js');
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('icon_grid').render(
+      { title: 'T', cards: [{ title: 'A', desc: 'B', icon: 'check' }] },
+      slideEl,
+    );
+    const iconEl = slideEl.querySelector('.ig-icon svg');
+    expect(iconEl).not.toBeNull();
+  });
+
+  it('falls back to the plain colored square when card.icon is unset or unknown', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('icon_grid').render(
+      { title: 'T', cards: [{ title: 'A', desc: 'B' }] },
+      slideEl,
+    );
+    expect(slideEl.querySelector('.ig-icon svg')).toBeNull();
+  });
 });
 
 describe('layout: timeline', () => {
