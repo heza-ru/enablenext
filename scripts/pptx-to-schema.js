@@ -28,9 +28,8 @@ function extractXfrm(shapeXml) {
   };
 }
 
-function extractShapes(slideXml, rels, mediaByRelId, slideIndex, assets) {
+function extractShapes(slideXml, mediaByRelId, slideIndex, assets) {
   const elements = [];
-  let idx = 0;
 
   // p:sp (text box / filled shape)
   const spRe = /<p:sp>([\s\S]*?)<\/p:sp>/g;
@@ -49,7 +48,6 @@ function extractShapes(slideXml, rels, mediaByRelId, slideIndex, assets) {
     if (textMatches.trim().length > 0) {
       elements.push({ type: 'text', text: textMatches, ...rect });
     }
-    idx++;
   }
 
   // p:pic (image)
@@ -104,7 +102,7 @@ async function convertPptxToSchema(buffer) {
     const relsXml = zip.file(relsFile) ? await zip.file(relsFile).async('string') : null;
     const mediaByRelId = parseRels(relsXml);
 
-    const elements = extractShapes(slideXml, relsXml, mediaByRelId, slideIndex, assetRefs);
+    const elements = extractShapes(slideXml, mediaByRelId, slideIndex, assetRefs);
     slides.push({ componentId: 'slide-' + slideIndex, elements: elements });
   }
 
