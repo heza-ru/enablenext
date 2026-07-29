@@ -485,6 +485,39 @@ describe('layout: chart', () => {
     expect(labelCalls.length).toBe(6);
     expect(labelCalls.map((c) => c.text)).not.toContain('Bar 7');
   });
+
+  it('renders a bar chart by default when type is unset (existing behavior unchanged)', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render({ title: 'T', bars: [{ label: 'A', value: 5 }] }, slideEl);
+    expect(slideEl.querySelector('.chart-rows')).not.toBeNull();
+    expect(slideEl.querySelector('.chart-pie')).toBeNull();
+  });
+
+  it('renders a pie chart when type is "pie"', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render(
+      { title: 'T', type: 'pie', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 5 }] },
+      slideEl,
+    );
+    expect(slideEl.querySelector('.chart-pie')).not.toBeNull();
+    expect(slideEl.querySelector('.chart-rows')).toBeNull();
+  });
+
+  it('exportPptx calls addChart for a pie chart instead of addShape bars', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+    DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+      title: 'T', type: 'pie', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 5 }],
+    });
+    expect(pptxSlide.addChart).toHaveBeenCalledWith(
+      'pie',
+      expect.arrayContaining([expect.objectContaining({ name: 'T', labels: ['A', 'B'], values: [5, 5] })]),
+      expect.any(Object),
+    );
+    expect(pptxSlide.addShape).not.toHaveBeenCalled();
+  });
 });
 
 describe('layout: process', () => {

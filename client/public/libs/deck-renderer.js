@@ -611,11 +611,40 @@
       var h2 = document.createElement('h2');
       h2.style.cssText = "font-size:clamp(1.2rem,2.2vw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
+
+      var bars = (spec.bars || []).slice(0, 6);
+      if (spec.type === 'pie') {
+        var total = bars.reduce(function (sum, b) { return sum + b.value; }, 0) || 1;
+        var colors = ['#FF6B18', '#F9A352', '#4a4560', '#8A8A9C', '#35324A', '#C53F27'];
+        var acc = 0;
+        var stops = bars.map(function (b, i) {
+          var start = (acc / total) * 100;
+          acc += b.value;
+          var end = (acc / total) * 100;
+          return colors[i % colors.length] + ' ' + start + '% ' + end + '%';
+        }).join(', ');
+        var pie = document.createElement('div');
+        pie.className = 'chart-pie';
+        pie.style.cssText = 'width:10rem;height:10rem;border-radius:50%;background:conic-gradient(' + stops + ');margin:0 auto;';
+        var legend = document.createElement('div');
+        legend.className = 'chart-pie-legend';
+        legend.style.cssText = 'display:flex;flex-direction:column;gap:.4rem;margin-top:1rem;';
+        bars.forEach(function (b, i) {
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:#fff;';
+          row.innerHTML = '<span style="width:.7rem;height:.7rem;border-radius:2px;background:' + colors[i % colors.length] + ';"></span>' + b.label + ' (' + b.value + ')';
+          legend.appendChild(row);
+        });
+        slideEl.appendChild(h2);
+        slideEl.appendChild(pie);
+        slideEl.appendChild(legend);
+        return;
+      }
+
       var rows = document.createElement('div');
       rows.className = 'chart-rows';
       rows.style.cssText = 'display:flex;flex-direction:column;gap:.9rem;';
       // Structural cap: max 6 bars to fit within the fixed 3.6in bars geometry
-      var bars = (spec.bars || []).slice(0, 6);
       var max = Math.max.apply(null, bars.map(function (b) { return b.value; }).concat([1]));
       bars.forEach(function (bar) {
         var row = document.createElement('div');
@@ -652,6 +681,16 @@
         fontSize: 20, color: 'FF6B18', fontFace: 'DM Sans',
       });
       var bars = (spec.bars || []).slice(0, 6); // same structural cap as render()
+
+      if (spec.type === 'pie') {
+        pptxSlide.addChart(
+          'pie',
+          [{ name: spec.title || '', labels: bars.map(function (b) { return b.label; }), values: bars.map(function (b) { return b.value; }) }],
+          { x: g.bars.x, y: g.bars.y, w: g.bars.w, h: g.bars.h, showLegend: true, legendPos: 'r' },
+        );
+        return;
+      }
+
       var max = Math.max.apply(null, bars.map(function (b) { return b.value; }).concat([1]));
       var rowH = g.bars.h / Math.max(bars.length, 1);
       var trackX = g.bars.x + 2.2;
