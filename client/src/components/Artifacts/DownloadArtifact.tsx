@@ -4,11 +4,13 @@ import { CircleCheckBig, Loader2 } from 'lucide-react';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react/unstyled';
 import type { Artifact } from '~/common';
 import { Button } from '@librechat/client';
+import { useUpdateMessageMutation } from 'librechat-data-provider/react-query';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { useCodeState } from '~/Providers/EditorContext';
 import { apiBaseUrl } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
+import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 
 const LOG = '[DownloadArtifact]';
@@ -279,10 +281,17 @@ const DownloadArtifact = ({
   const [done, setDone] = useState<string | null>(null);
   const { data: startupConfig } = useGetStartupConfig();
   const { token } = useAuthContext();
+  const { conversation } = useChatContext();
+  const conversationId = conversation?.conversationId;
+  const conversationModel = conversation?.model;
+  const messageId = artifact.messageId;
   const [driveLink, setDriveLink] = useState<string | null>(null);
   const [driveSaving, setDriveSaving] = useState<string | null>(null);
   const [driveError, setDriveError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [pendingDeck, setPendingDeck] = useState<object | null>(null);
+  const updateMessageMutation = useUpdateMessageMutation(conversationId ?? '');
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,6 +382,19 @@ const DownloadArtifact = ({
       if (downloadErrorTimerRef.current) clearTimeout(downloadErrorTimerRef.current);
       iframeCleanupRef.current?.();
     };
+  }, []);
+
+  // Tracks the deck sent up by deck-editor.js's commit handler
+  // (artifact-deck-updated) so the Save button knows what to persist and can
+  // stay disabled until at least one edit has actually been committed.
+  useEffect(() => {
+    const handle = (e: MessageEvent) => {
+      if (e.data?.type === 'artifact-deck-updated') {
+        setPendingDeck(e.data.deck);
+      }
+    };
+    window.addEventListener('message', handle);
+    return () => window.removeEventListener('message', handle);
   }, []);
 
   // Reset bridgeReadyRef when a genuinely different artifact is shown.
@@ -853,6 +875,36 @@ const DownloadArtifact = ({
     flash('html');
   };
 
+  // Toggles the deck-editor.js contenteditable state inside the live Sandpack
+  // preview iframe by posting artifact-editor-toggle, which download-bridge.js
+  // relays to window.DeckEditor.{enableEditing,disableEditing}.
+  const toggleEditing = () => {
+    const next = !isEditing;
+    setIsEditing(next);
+    const client = previewRef?.current?.getClient();
+    const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)?.iframe
+      ?.contentWindow;
+    iframeWindow?.postMessage({ type: 'artifact-editor-toggle', enabled: next }, '*');
+  };
+
+  // Reconstructs the artifact's full source text with the edited window.DECK
+  // JSON substituted for the original, then persists it via the same
+  // useUpdateMessageMutation call EditMessage.tsx uses for text edits.
+  const saveEditedDeck = () => {
+    if (!pendingDeck || !messageId) return;
+    const updatedText = content.replace(
+      /window\.DECK\s*=\s*\{[\s\S]*?\};/,
+      'window.DECK = ' + JSON.stringify(pendingDeck) + ';',
+    );
+    updateMessageMutation.mutate({
+      conversationId: conversationId ?? '',
+      model: conversationModel ?? 'gpt-3.5-turbo',
+      text: updatedText,
+      messageId,
+    });
+    setPendingDeck(null);
+  };
+
   const downloadNative = (fmt: NativeFormat) => {
     console.log(`${LOG} Download requested: ${fmt.label} (triggerFn: ${fmt.triggerFn})`);
     console.log(`${LOG} content length: ${content.length}, has previewRef: ${!!previewRef}`);
@@ -913,6 +965,9 @@ const DownloadArtifact = ({
 
   // Show PDF button only for presentations (which have downloadPptx)
   const isPresentationArtifact = nativeFormats.some((f) => f.triggerFn === 'downloadPptx');
+  // Editor toggle is presentation-only per the design spec's Non-Goals —
+  // decks are the only artifact type deck-editor.js supports.
+  const isDeckArtifact = nativeFormats.some((f) => f.ext === 'pptx');
 
   return (
     <div className="flex items-center gap-1">
@@ -1028,6 +1083,31 @@ const DownloadArtifact = ({
         {done === 'html' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
         HTML
       </Button>
+      {isDeckArtifact && (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs font-medium"
+            onClick={toggleEditing}
+            aria-label={isEditing ? 'Done Editing' : 'Edit'}
+          >
+            {isEditing ? 'Done Editing' : 'Edit'}
+          </Button>
+          {isEditing && pendingDeck && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs font-medium"
+              onClick={saveEditedDeck}
+              disabled={updateMessageMutation.isLoading}
+              aria-label="Save"
+            >
+              Save
+            </Button>
+          )}
+        </>
+      )}
     </div>
   );
 };

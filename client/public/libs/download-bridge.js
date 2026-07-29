@@ -86,5 +86,15 @@
     });
   });
 
+  window.addEventListener('message', function (e) {
+    if (!e.data || e.data.type !== 'artifact-editor-toggle') return;
+    if (typeof window.DeckEditor === 'undefined') return; // non-deck artifacts don't load deck-editor.js
+    if (e.data.enabled) {
+      window.DeckEditor.enableEditing(document.body);
+    } else {
+      window.DeckEditor.disableEditing(document.body);
+    }
+  });
+
   window.parent.postMessage({ type: 'bridge-ready' }, '*');
 })();

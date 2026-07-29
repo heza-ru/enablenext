@@ -1,9 +1,15 @@
 import { render, fireEvent, act } from '@testing-library/react';
+import { useUpdateMessageMutation } from 'librechat-data-provider/react-query';
 import DownloadArtifact, {
   runInHiddenIframe,
   detectNativeFormats,
   NATIVE_FORMATS,
 } from '../DownloadArtifact';
+
+// Mutable so the "Presentation editor toggle" describe block can set a
+// conversationId/model without affecting the other describe blocks, which
+// don't care about the chat context at all.
+let mockConversation: Record<string, unknown> | undefined = undefined;
 
 // Mutable so individual tests can flip googleDrivePickerEnabled on to
 // exercise the Drive button without affecting the other describe blocks.
@@ -29,6 +35,13 @@ jest.mock('~/Providers/EditorContext', () => ({
   useCodeState: () => ({ currentCode: mockCurrentCode }),
 }));
 jest.mock('~/hooks', () => ({ useLocalize: () => (s: string) => s }));
+jest.mock('~/Providers', () => ({
+  useChatContext: () => ({ conversation: mockConversation }),
+}));
+jest.mock('librechat-data-provider/react-query', () => ({
+  ...jest.requireActual('librechat-data-provider/react-query'),
+  useUpdateMessageMutation: jest.fn(),
+}));
 
 // downloadNative only arms the FALLBACK_MS timer (the race under test) when a
 // previewRef is supplied and triggerViaPreviewIframe() succeeds in dispatching
@@ -48,6 +61,8 @@ const fakePreviewRef = {
 beforeEach(() => {
   mockStartupConfigData = {};
   mockCurrentCode = '<html>...downloadPptx()...</html>';
+  mockConversation = undefined;
+  (useUpdateMessageMutation as jest.Mock).mockReturnValue({ mutate: jest.fn(), isLoading: false });
 });
 
 describe('DownloadArtifact — PDF (HD) button tooltip copy', () => {
@@ -323,6 +338,94 @@ describe('runInHiddenIframe — onError callback (Bug 2)', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toMatch(/synchronous export failure/);
     cleanup();
+  });
+});
+
+describe('DownloadArtifact — Presentation editor toggle', () => {
+  afterEach(() => {
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  it('shows an Edit button only for deck content (PPTX-capable artifacts)', () => {
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const { getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    expect(getByRole('button', { name: /^edit$/i })).toBeInTheDocument();
+  });
+
+  it('does not show an Edit button for doc/xlsx-only artifacts', () => {
+    mockCurrentCode = '<script src="/libs/doc-renderer.js"></script>';
+    const { queryByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    expect(queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+
+  it('posts artifact-editor-toggle to the preview iframe on click', () => {
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: {
+        getClient: () => ({ iframe: { contentWindow: { postMessage } } }),
+      },
+    } as never;
+    const { getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={previewRef}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /^edit$/i }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'artifact-editor-toggle', enabled: true }),
+      '*',
+    );
+  });
+
+  it('calls updateMessageMutation.mutate with reconstructed text on Save after an artifact-deck-updated message', () => {
+    const mockMutate = jest.fn();
+    (useUpdateMessageMutation as jest.Mock).mockReturnValue({
+      mutate: mockMutate,
+      isLoading: false,
+    });
+    mockCurrentCode =
+      '<script src="/libs/deck-renderer.js"></script>' +
+      '<script>window.DECK = {"title":"Old"};</script>';
+    mockConversation = { conversationId: 'conv-1', model: 'gpt-4' };
+
+    const { getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode, messageId: 'msg-1' } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+
+    fireEvent.click(getByRole('button', { name: /^edit$/i }));
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-deck-updated', deck: { title: 'New' } },
+        }),
+      );
+    });
+
+    fireEvent.click(getByRole('button', { name: /^save$/i }));
+
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        messageId: 'msg-1',
+        text: expect.stringContaining('"title":"New"'),
+      }),
+    );
   });
 });
 

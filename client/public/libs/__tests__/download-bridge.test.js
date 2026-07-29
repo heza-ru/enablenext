@@ -111,4 +111,40 @@ describe('download-bridge.js', () => {
     a.click();
     expect(realClickCalled).toBe(true);
   });
+
+  it('relays artifact-editor-toggle to window.DeckEditor.enableEditing/disableEditing', () => {
+    loadBridge();
+    const enableEditing = jest.fn();
+    const disableEditing = jest.fn();
+    window.DeckEditor = { enableEditing, disableEditing };
+    try {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      );
+      expect(enableEditing).toHaveBeenCalledWith(document.body);
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: false },
+        }),
+      );
+      expect(disableEditing).toHaveBeenCalledWith(document.body);
+    } finally {
+      delete window.DeckEditor;
+    }
+  });
+
+  it('ignores artifact-editor-toggle when window.DeckEditor is undefined (non-deck artifacts)', () => {
+    loadBridge();
+    delete window.DeckEditor;
+    expect(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      ),
+    ).not.toThrow();
+  });
 });

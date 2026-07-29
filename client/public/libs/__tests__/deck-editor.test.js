@@ -53,6 +53,30 @@ describe('DeckEditor.enableEditing', () => {
     expect(window.DeckEditor.getDeck()).toBe(window.DECK);
   });
 
+  it('posts artifact-deck-updated to window.parent with the mutated deck after a commit', () => {
+    const originalParent = window.parent;
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'parent', {
+      value: { postMessage },
+      configurable: true,
+    });
+
+    window.DeckEditor.enableEditing(mount);
+    const el = mount.querySelector('.schema-text');
+    el.textContent = 'Edited';
+    el.dispatchEvent(new Event('blur'));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'artifact-deck-updated', deck: window.DECK }),
+      '*',
+    );
+
+    Object.defineProperty(window, 'parent', {
+      value: originalParent,
+      configurable: true,
+    });
+  });
+
   it('re-binds correctly when enableEditing is called again on a new mount without an intervening disableEditing', () => {
     const mountA = mount;
     window.DeckEditor.enableEditing(mountA);

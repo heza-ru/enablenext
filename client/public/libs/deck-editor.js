@@ -22,6 +22,9 @@
       if (slide.elements && slide.elements[elementIndex]) {
         slide.elements[elementIndex].text = el.textContent;
       }
+      if (typeof window.parent !== 'undefined' && window.parent !== window) {
+        window.parent.postMessage({ type: 'artifact-deck-updated', deck: window.DECK }, '*');
+      }
     };
   }
 
