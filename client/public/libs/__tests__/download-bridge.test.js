@@ -22,12 +22,34 @@ describe('download-bridge.js', () => {
     'utf8',
   );
 
+  // download-bridge.js registers its 'message' listeners on the real global
+  // `window`, which jsdom does NOT reset between tests in the same file.
+  // Without cleanup, every test's listener stays live for the rest of the
+  // suite — so a later test's message (e.g. one targeting a newly-defined
+  // global fn) gets picked up and re-invoked by every earlier test's
+  // still-registered listener too (since the handler resolves `fn` and
+  // `window.parent` at dispatch time, not at registration time), multiplying
+  // call counts. Track each loadBridge() call's listeners and remove them in
+  // afterEach so tests are isolated from one another.
+  let registeredListeners = [];
+  afterEach(() => {
+    registeredListeners.forEach(({ type, listener }) => window.removeEventListener(type, listener));
+    registeredListeners = [];
+  });
+
   function loadBridge() {
     const posted = [];
     // Minimal window.parent stub to capture postMessage calls.
     window.parent = { postMessage: (msg) => posted.push(msg) };
+    const origAddEventListener = window.addEventListener.bind(window);
+    // eslint-disable-next-line no-unused-vars
+    const spy = jest.spyOn(window, 'addEventListener').mockImplementation((type, listener, opts) => {
+      registeredListeners.push({ type, listener });
+      origAddEventListener(type, listener, opts);
+    });
     // eslint-disable-next-line no-eval
     eval(scriptSrc);
+    spy.mockRestore();
     return posted;
   }
 
@@ -93,6 +115,48 @@ describe('download-bridge.js', () => {
       expect(errorMsg.message).toBe('export blew up');
     } finally {
       delete window.throwingFn;
+    }
+  });
+
+  it('calls the message-triggered export fn with zero arguments when no args are provided (regression)', () => {
+    // This is the existing call shape every current trigger uses (PPTX, and
+    // DOCX/XLSX before Task 14's options picker) — the .apply(null, args||[])
+    // change must not alter it.
+    const fn = jest.fn();
+    window.zeroArgFn = fn;
+    try {
+      loadBridge();
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-download-request', fn: 'zeroArgFn' },
+        }),
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith();
+      expect(fn.mock.calls[0].length).toBe(0);
+    } finally {
+      delete window.zeroArgFn;
+    }
+  });
+
+  it('forwards e.data.args to the message-triggered export fn as individual arguments', () => {
+    const fn = jest.fn();
+    window.argsFn = fn;
+    try {
+      loadBridge();
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-download-request',
+            fn: 'argsFn',
+            args: [{ pageSize: 'Letter' }],
+          },
+        }),
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith({ pageSize: 'Letter' });
+    } finally {
+      delete window.argsFn;
     }
   });
 

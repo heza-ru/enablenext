@@ -41,6 +41,31 @@ export function detectNativeFormats(content: string): NativeFormat[] {
 }
 
 /**
+ * Sniffs sheet names out of an excel-creator artifact's source text, the same
+ * way detectNativeFormats sniffs format capability — by pattern-matching the
+ * source string, since nothing structured is available before the artifact
+ * actually runs (see excel-creator.skill.md's `const SHEETS = [...]`
+ * convention). Narrowed to the `SHEETS = [...]` block specifically (rather
+ * than matching `name:` anywhere in the whole artifact) to avoid false
+ * positives from unrelated `name:` fields elsewhere in the source.
+ *
+ * Never throws — an unparseable/absent SHEETS block just yields []. Callers
+ * fail open to "download all sheets" when this returns [] or a single name,
+ * per the design's never-block-a-download requirement.
+ */
+export function parseSheetNames(content: string): string[] {
+  const blockMatch = content.match(/SHEETS\s*=\s*\[[\s\S]*?\];/);
+  const block = blockMatch ? blockMatch[0] : content;
+  const names: string[] = [];
+  const nameRe = /name:\s*['"]([^'"]+)['"]/g;
+  let m: RegExpExecArray | null;
+  while ((m = nameRe.exec(block)) !== null) {
+    names.push(m[1]);
+  }
+  return names;
+}
+
+/**
  * Primary approach: postMessage to the live Sandpack preview iframe.
  *
  * The artifact HTML (from the presentation-creator skill) has a built-in listener:
@@ -55,6 +80,7 @@ export function detectNativeFormats(content: string): NativeFormat[] {
 function triggerViaPreviewIframe(
   previewRef: MutableRefObject<SandpackPreviewRef | undefined>,
   fnName: string,
+  args?: unknown[],
 ): boolean {
   console.log(`${LOG} [postMessage] Attempting ${fnName} via Sandpack preview iframe`);
 
@@ -80,7 +106,14 @@ function triggerViaPreviewIframe(
   console.log(
     `${LOG} [postMessage] Dispatching { type: 'artifact-download-request', fn: '${fnName}' } to preview iframe`,
   );
-  iframeWindow.postMessage({ type: 'artifact-download-request', fn: fnName }, '*');
+  const message: Record<string, unknown> = { type: 'artifact-download-request', fn: fnName };
+  // Only attach `args` when actually provided — every trigger that doesn't
+  // pass export options (PPTX, and DOCX/XLSX with no options selected) keeps
+  // posting the exact same zero-arg message shape as before.
+  if (args && args.length > 0) {
+    message.args = args;
+  }
+  iframeWindow.postMessage(message, '*');
   return true;
 }
 
@@ -185,6 +218,7 @@ export function runInHiddenIframe(
   html: string,
   fnName: string,
   onError?: (message: string) => void,
+  args?: unknown[],
 ): () => void {
   const patchedHtml = patchLibUrls(html);
   console.log(`${LOG} [hiddenIframe] Creating hidden iframe to run ${fnName}`);
@@ -243,7 +277,7 @@ export function runInHiddenIframe(
           if (bridgeInvoked) return;
           bridgeInvoked = true;
           try {
-            win[fnName]();
+            win[fnName].apply(null, args || []);
             console.log(`${LOG} [hiddenIframe] ${fnName}() invoked — waiting for blob interception`);
           } catch (err) {
             console.error(`${LOG} [hiddenIframe] Error invoking ${fnName}:`, err);
@@ -291,6 +325,16 @@ const DownloadArtifact = ({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [pendingDeck, setPendingDeck] = useState<object | null>(null);
+  // Export-options pickers (Task 14): DOCX page size and XLSX sheet
+  // selection. Only one of these is ever open at a time in practice (each
+  // format has its own button), but they're independent state so opening one
+  // never has to reason about the other.
+  const [docxPicker, setDocxPicker] = useState<NativeFormat | null>(null);
+  const [docxPageSize, setDocxPageSize] = useState<'A4' | 'Letter'>('A4');
+  const [xlsxPicker, setXlsxPicker] = useState<{ fmt: NativeFormat; sheetNames: string[] } | null>(
+    null,
+  );
+  const [selectedSheets, setSelectedSheets] = useState<Set<string>>(new Set());
   const updateMessageMutation = useUpdateMessageMutation(conversationId ?? '');
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
@@ -905,7 +949,7 @@ const DownloadArtifact = ({
     setPendingDeck(null);
   };
 
-  const downloadNative = (fmt: NativeFormat) => {
+  const downloadNative = (fmt: NativeFormat, args?: unknown[]) => {
     console.log(`${LOG} Download requested: ${fmt.label} (triggerFn: ${fmt.triggerFn})`);
     console.log(`${LOG} content length: ${content.length}, has previewRef: ${!!previewRef}`);
 
@@ -930,6 +974,7 @@ const DownloadArtifact = ({
       const sent = triggerViaPreviewIframe(
         previewRef as MutableRefObject<SandpackPreviewRef | undefined>,
         fmt.triggerFn,
+        args,
       );
       if (sent) {
         console.log(
@@ -949,7 +994,12 @@ const DownloadArtifact = ({
               `Running hidden-iframe fallback.`,
           );
           fallbackTimerRef.current = null;
-          iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn, showDownloadError);
+          iframeCleanupRef.current = runInHiddenIframe(
+            content,
+            fmt.triggerFn,
+            showDownloadError,
+            args,
+          );
         }, FALLBACK_MS);
         flash(fmt.ext);
         return;
@@ -959,8 +1009,61 @@ const DownloadArtifact = ({
       console.log(`${LOG} No previewRef provided — using hidden iframe`);
     }
 
-    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn, showDownloadError);
+    iframeCleanupRef.current = runInHiddenIframe(content, fmt.triggerFn, showDownloadError, args);
     flash(fmt.ext);
+  };
+
+  /**
+   * Entry point for the per-format download button. DOCX always opens a
+   * page-size popover first (no way to parse a meaningful default from
+   * source text, so the choice is always offered). XLSX opens a
+   * sheet-selection popover only when more than one sheet name could be
+   * parsed from the artifact's source — for zero or one sheet there's
+   * nothing useful to choose, so it proceeds straight to downloadNative
+   * (fail open, per the design's never-block-a-download requirement).
+   * Every other format is unaffected and downloads immediately, as before.
+   */
+  const handleDownloadClick = (fmt: NativeFormat) => {
+    if (fmt.triggerFn === 'downloadDocx') {
+      setDocxPageSize('A4');
+      setDocxPicker(fmt);
+      return;
+    }
+    if (fmt.triggerFn === 'downloadExcel') {
+      const sheetNames = parseSheetNames(content);
+      if (sheetNames.length > 1) {
+        setSelectedSheets(new Set(sheetNames));
+        setXlsxPicker({ fmt, sheetNames });
+        return;
+      }
+      downloadNative(fmt);
+      return;
+    }
+    downloadNative(fmt);
+  };
+
+  const confirmDocxDownload = () => {
+    if (!docxPicker) return;
+    downloadNative(docxPicker, [{ pageSize: docxPageSize }]);
+    setDocxPicker(null);
+  };
+
+  const toggleSelectedSheet = (name: string) => {
+    setSelectedSheets((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  };
+
+  const confirmXlsxDownload = () => {
+    if (!xlsxPicker) return;
+    downloadNative(xlsxPicker.fmt, [Array.from(selectedSheets)]);
+    setXlsxPicker(null);
   };
 
   // Show PDF button only for presentations (which have downloadPptx)
@@ -970,19 +1073,99 @@ const DownloadArtifact = ({
   const isDeckArtifact = nativeFormats.some((f) => f.ext === 'pptx');
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="relative flex items-center gap-1">
       {nativeFormats.map((fmt) => (
         <React.Fragment key={fmt.ext}>
           <Button
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-xs font-medium"
-            onClick={() => downloadNative(fmt)}
+            onClick={() => handleDownloadClick(fmt)}
             aria-label={`Download as ${fmt.label}`}
           >
             {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
             {fmt.label}
           </Button>
+          {docxPicker?.ext === fmt.ext && (
+            <div
+              role="dialog"
+              aria-label="DOCX page size"
+              className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+            >
+              <div className="mb-2 font-medium">Page size</div>
+              <label className="mb-1 flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="docx-page-size"
+                  aria-label="A4"
+                  checked={docxPageSize === 'A4'}
+                  onChange={() => setDocxPageSize('A4')}
+                />
+                A4
+              </label>
+              <label className="mb-2 flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="docx-page-size"
+                  aria-label="Letter"
+                  checked={docxPageSize === 'Letter'}
+                  onChange={() => setDocxPageSize('Letter')}
+                />
+                Letter
+              </label>
+              <div className="flex gap-2">
+                <Button size="sm" className="h-6 px-2 text-xs" onClick={confirmDocxDownload}>
+                  Download
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setDocxPicker(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+          {xlsxPicker?.fmt.ext === fmt.ext && (
+            <div
+              role="dialog"
+              aria-label="XLSX sheet selection"
+              className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+            >
+              <div className="mb-2 font-medium">Sheets to export</div>
+              {xlsxPicker.sheetNames.map((name) => (
+                <label key={name} className="mb-1 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    aria-label={name}
+                    checked={selectedSheets.has(name)}
+                    onChange={() => toggleSelectedSheet(name)}
+                  />
+                  {name}
+                </label>
+              ))}
+              <div className="mt-1 flex gap-2">
+                <Button
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={confirmXlsxDownload}
+                  disabled={selectedSheets.size === 0}
+                >
+                  Download
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setXlsxPicker(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
           {startupConfig?.googleDrivePickerEnabled && (
             <Button
               size="sm"

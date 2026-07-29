@@ -207,10 +207,17 @@ function buildTabs() {
 }
 
 // ── Excel export ──────────────────────────────────────
-async function downloadExcel() {
+// selectedSheetNames (optional string[]) added in Task 14 (export options
+// picker) — when provided, only sheets whose `.name` is in the array get
+// exported. Omitting it (or passing an empty/non-array value) preserves the
+// existing "export every sheet" behavior exactly.
+async function downloadExcel(selectedSheetNames) {
   const wb = new ExcelJS.Workbook();
+  const sheetsToExport = (Array.isArray(selectedSheetNames) && selectedSheetNames.length > 0)
+    ? SHEETS.filter(sh => selectedSheetNames.indexOf(sh.name) !== -1)
+    : SHEETS;
 
-  SHEETS.forEach(sh => {
+  sheetsToExport.forEach(sh => {
     const ws = wb.addWorksheet(sh.name);
     const numeric = new Set(sh.numericCols || []);
 
@@ -291,6 +298,7 @@ renderSheet(0);
 - `summaryRow`: optional footer row (totals, averages etc) — use `null` for blank cells
 - For multi-sheet workbooks add more objects to the `SHEETS` array
 - Filename is auto-derived from `document.title` — set it to the spreadsheet topic
+- `window.downloadExcel(selectedSheetNames)` accepts an optional `string[]` of sheet `name`s to export; omitting it exports every sheet in `SHEETS` (the existing default). The artifact itself never needs to pass this — the download UI's sheet-selection picker supplies it when the user deselects sheets before downloading.
 
 ## After Generating
 

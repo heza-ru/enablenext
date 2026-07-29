@@ -6,9 +6,12 @@
 // DownloadArtifact.tsx's hidden-iframe fallback path.
 //
 // Two ways this gets used:
-//   1. Message-triggered: host posts { type: 'artifact-download-request', fn }
-//      to this window; this script invokes window[fn](), captures the blob
-//      the function creates via a download <a> click, and posts back
+//   1. Message-triggered: host posts
+//      { type: 'artifact-download-request', fn, args? } to this window; this
+//      script invokes window[fn].apply(null, args || []) (args is optional —
+//      e.g. downloadDocx's { pageSize } or downloadExcel's selected sheet
+//      names array, added in Task 14), captures the blob the function
+//      creates via a download <a> click, and posts back
 //      { type: 'artifact-download', filename, data, mimeType }.
 //   2. Direct-invoke: the host calls window[fn]() itself (hidden-iframe path);
 //      the global patches below are already active by the time it does, so
@@ -76,7 +79,10 @@
     // Point the single global click/dispatch patch at this request's source
     // window for the duration of this call.
     currentTarget = e.source || window.parent;
-    Promise.resolve(window[fn]()).catch(function (err) {
+    // args (added in Task 14, export options picker) is optional — every
+    // trigger that doesn't pass it (PPTX, and DOCX/XLSX with no options
+    // selected) calls window[fn] with zero arguments exactly as before.
+    Promise.resolve(window[fn].apply(null, e.data.args || [])).catch(function (err) {
       // eslint-disable-next-line no-console
       console.error('[download-bridge] error running ' + fn + ':', err);
       currentTarget.postMessage(

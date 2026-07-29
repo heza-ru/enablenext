@@ -392,7 +392,13 @@
     },
   });
 
-  async function downloadDocx() {
+  async function downloadDocx(options) {
+    // pageSize option added in Task 14 (export options picker). Optional —
+    // omitting it (or passing anything other than 'Letter') preserves the
+    // existing A4 default exactly.
+    var pageSize = (options && options.pageSize === 'Letter')
+      ? { width: 12240, height: 15840 } // Letter, 8.5in x 11in, in twips
+      : { width: 11906, height: 16838 }; // A4, 210mm x 297mm, in twips — existing default
     var doc = window.DOC;
     var helpers = {
       // AlignmentType/BorderStyle/ShadingType are deliberately not passed here — every block below
@@ -444,7 +450,7 @@
         default: { document: { run: { font: FONT, size: 22, color: INK }, paragraph: { spacing: { line: 360 } } } },
       },
       sections: [{
-        properties: { page: { size: { width: 11906, height: 16838 } } }, // A4 in twips (210mm x 297mm), per redesign spec
+        properties: { page: { size: pageSize } },
         children: children,
       }],
     });
