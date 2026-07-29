@@ -20,10 +20,16 @@
   }
 
   function renderSchemaElements(elements, containerEl) {
-    (elements || []).forEach(function (el) {
+    (elements || []).forEach(function (el, elIndex) {
       if (el.type === 'text') {
         var span = document.createElement('div');
         span.className = 'schema-text';
+        // Record this element's true position in the slide's `elements` array
+        // (not its position among only the text elements) so deck-editor.js's
+        // inline-edit commit writes back to the correct array slot even when
+        // the slide mixes shape/image elements before/between text elements
+        // (the common case for real master-deck componentId slides).
+        span.dataset.elIndex = String(elIndex);
         span.style.position = 'absolute';
         span.style.left = (el.x / SW) * 100 + '%';
         span.style.top = (el.y / SH) * 100 + '%';

@@ -77,6 +77,7 @@ The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this sha
 <script src="/libs/deck-renderer.js"></script>
 <script src="/libs/deck-schema-renderer.js"></script>
 <script src="/libs/icons.js"></script>
+<script src="/libs/deck-editor.js"></script>
 </head>
 <body>
 <div id="deck-root"></div>
@@ -97,13 +98,15 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 
 **Never write CSS, positioning, or duplicated content in the artifact.** Every slide is one object in `slides[]` with a `layout` field (from the table below) and that layout's content fields — nothing else. `deck-renderer.js` (loaded from `/libs/`, never regenerated) owns every visual decision.
 
+**The structured editor is automatic — no extra authoring needed.** Once `deck-editor.js` is included in the script-tag list above, the artifact panel's "Edit" button host-triggers inline editing (contenteditable text on `schema` layout elements, layout/variant swap, slide reorder/duplicate/delete, and the image picker) with zero additional code in the artifact itself — it is wired up entirely by `deck-editor.js` reading and mutating `window.DECK` in place. Never hand-write editing affordances (edit buttons, drag handles, contenteditable attributes) into the artifact; just include the script tag and the rest follows.
+
 ## Layout Reference
 
 | `layout` | Fields | Use for |
 |---|---|---|
-| `title` | `title`, `eyebrow`, `subtitle` | Deck cover |
-| `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview |
-| `section` | `title`, `eyebrow?` (small label above title) | Chapter break |
+| `title` | `title`, `eyebrow`, `subtitle` | Deck cover — **fallback only; prefer a real `componentId` (`slide-4`..`slide-10`), see below** |
+| `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview — **fallback only; prefer a real `componentId` (`slide-17`..`slide-19`), see below** |
+| `section` | `title`, `eyebrow?` (small label above title) | Chapter break — **fallback only; prefer a real `componentId` (`slide-20`..`slide-25`), see below** |
 | `content` | `title`, `bullets` (up to 3) | Bulleted explanation |
 | `two_col` | `title`, `bullets` (up to 4), `rightBrandImage?` | Context + visual |
 | `stat` | `stats` (up to 3, each `{value, label}`) | KPI callout |
@@ -114,7 +117,7 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 | `process` | `title`, `steps` (up to 5, each `{label, desc, num?}`) | Sequential workflow |
 | `icon_grid` | `title`, `cols?` (2 or 3, default 3), `cards` (up to 6, each `{title, desc, icon?}` — see `window.DeckIcons.ICON_NAMES` below for valid `icon` values) | Feature/capability grid |
 | `timeline` | `title`, `milestones` (up to 6, each `{date, title, body}`) | Roadmap/history |
-| `closing` | `title`, `body?`, `cta?` | Deck close |
+| `closing` | `title`, `body?`, `cta?` | Deck close — **fallback only; prefer a real `componentId` (`slide-97`..`slide-100`), see below** |
 | `case_study` | `challenge`, `solution`, `results`, `cta?`, `metadata?` (`{industry?, region?, solution?}`) | Customer case study |
 | `mockup` | `device` (`"desktop"` \| `"mobile"`), `screenshotBrandImage?` | Product screenshot |
 | `matrix_2x2` | `title`, `xAxisLabel`, `yAxisLabel`, `quadrants` (exactly 4, each `{label, items?}` up to 3 items) | Strategic framework |
@@ -129,6 +132,7 @@ Every content rule from the previous version of this skill (action titles, one-i
 - **NO EMOJIS** — ever.
 - **Every slide is one object in `DECK.slides[]`** — never write raw HTML/CSS for slide content, only the artifact shape above.
 - **Pick the layout that matches the content**, not the one that's easiest to write — see Layout Reference above.
+- **Title, section, agenda, and closing slides default to a real master-deck `componentId`, not the hand-coded `title`/`section`/`agenda`/`closing` layout** — see "Schema Layout & the Master Deck Library" below for the exact ranges and when the hand-coded fallback is actually acceptable.
 - **Brand images are accents, not backgrounds** — pass an asset key only via the `rightBrandImage`/`screenshotBrandImage` field on a layout that accepts one; `deck-renderer.js` constrains size and placement so a brand image can never become a full-bleed slide background.
 
 ## Content Rules (apply before writing any slide spec)
@@ -146,6 +150,17 @@ Every content rule from the previous version of this skill (action titles, one-i
 Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to render a raw `{ elements: [...] }` tree of primitive `text` / `image` / `shape` elements with explicit `x`/`y`/`w`/`h` (inches) — either fully hand-authored, or copied from a real slide in the Whatfix master deck.
 
 **The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. Use `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) to find the right `N` for a given category — e.g. `slide-96`..`slide-104` for thank-you variants, `slide-20`..`slide-25` for section dividers, `slide-11` for the Event Name variant, `slide-58`..`slide-67` for 6-card infographic grids. Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
+
+**DEFAULT TO A REAL `componentId` FOR TITLE, SECTION, AGENDA, AND CLOSING SLIDES — this is a directive, not a suggestion.** The whole reason the master-deck library and `componentId` lookup exist is a direct user complaint that generated decks used generic, flat hand-coded cover/section/agenda/thank-you slides instead of the user's own real brand designs. The 4 hand-coded layouts below exist as a fallback for when nothing in the library fits — they are **not** the default choice for these categories:
+
+| Category | Old hand-coded fallback | Prefer this `componentId` range instead (verified against `brand/master-deck-layouts.md`) |
+|---|---|---|
+| Deck cover / opening slide | `title` | `slide-4`..`slide-10` (title slides — slide 4 is a section-divider-style header, slides 5–10 are the 6 real title-slide variants) |
+| Chapter break | `section` | `slide-20`..`slide-25` (section dividers) |
+| Session/agenda overview | `agenda` | `slide-17`..`slide-19` (agenda — numbered session list with time slots) |
+| Deck close | `closing` | `slide-96`..`slide-104` (thank-you — slide 96 is a section-divider-style header, slides 97–100 are the 4 near-identical "Thank you!" variants; slides 101–104 are repeated shape-alignment tip slides, not real thank-you content — don't use those 4) |
+
+**Workflow**: for any title/section/agenda/closing slide, `file_search` the relevant `componentId` range above in `master-deck-library.json` first, pick a variant whose existing layout/copy shape fits the slide's actual content, and inline its `elements` array (editing only the `.text` fields you need to change, per the rules below). Only fall back to the plain `title`/`section`/`agenda`/`closing` layout when you've checked the range and genuinely nothing fits (e.g. every variant in range has fixed copy that can't be adapted to the content, or — per the known limitations below — the only remaining unused variant is one of the mis-scaled/oversized-shape slides that can't be cleanly copied). Don't skip the check just because the hand-coded layout is less typing; the fallback existing at all is not license to default to it.
 
 **`componentId` vs `elements` — these are alternatives, not both required:**
 - To reuse a master-deck slide **verbatim** (no text changes), look up its `componentId` entry in the library via `file_search` and copy its `elements` array directly into the slide spec as-is.

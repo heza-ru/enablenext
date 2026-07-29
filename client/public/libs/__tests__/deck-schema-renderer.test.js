@@ -19,6 +19,26 @@ describe('DeckSchemaRenderer.renderSchemaElements', () => {
     expect(el.style.color).toBe('rgb(255, 107, 24)');
   });
 
+  // Regression test: deck-editor.js's inline-edit commit handler needs to
+  // know each text element's true index in the `elements` array (not its
+  // index among only the text elements) to write edits back to the right
+  // slot on slides that mix shape/image elements with text — see
+  // task-10-report.md and deck-editor.test.js's matching regression test.
+  it('tags each schema-text element with data-el-index reflecting its true position in elements[]', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [
+        { type: 'shape', shape: 'rect', fill: '000000', x: 0, y: 0, w: 10, h: 5.625 },
+        { type: 'text', x: 1, y: 0.5, w: 4, h: 1, text: 'First text' },
+        { type: 'shape', shape: 'rect', fill: 'FFFFFF', x: 2, y: 2, w: 1, h: 1 },
+        { type: 'text', x: 1, y: 2, w: 4, h: 1, text: 'Second text' },
+      ],
+      container,
+    );
+    const textEls = container.querySelectorAll('.schema-text');
+    expect(textEls[0].dataset.elIndex).toBe('1');
+    expect(textEls[1].dataset.elIndex).toBe('3');
+  });
+
   it('renders an image element via brandImagePath', () => {
     window.DeckSchemaRenderer.renderSchemaElements(
       [{ type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' }],

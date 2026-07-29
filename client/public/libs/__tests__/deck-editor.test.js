@@ -97,6 +97,44 @@ describe('DeckEditor.enableEditing', () => {
     elB.dispatchEvent(new Event('blur'));
     expect(window.DECK.slides[0].elements[0].text).toBe('Rebound');
   });
+
+  // Regression test (found during Task 10 end-to-end verification): real
+  // master-deck componentId slides almost always mix shape/image elements
+  // with text elements (e.g. a background rect before the title text). The
+  // commit handler used to derive `elementIndex` from the loop position
+  // among only the `.schema-text` NodeList matches, not the element's true
+  // index in `slide.elements` — so on any slide where a non-text element
+  // precedes the text element being edited, the edit silently wrote onto
+  // the wrong array slot (typically adding a stray `.text` prop to a shape)
+  // and the real text element was never updated. Fixed by having
+  // deck-schema-renderer.js tag each schema-text node with `data-el-index`
+  // (its true position in `elements`) and having deck-editor.js prefer that
+  // over the loop index.
+  it('commits to the correct elements[] index when text is preceded by shape/image elements', () => {
+    const mountMixed = document.createElement('div');
+    window.DECK = {
+      title: 'Mixed',
+      slides: [
+        {
+          layout: 'schema',
+          elements: [
+            { type: 'shape', shape: 'rect', fill: 'FF0000', x: 0, y: 0, w: 10, h: 5.625 },
+            { type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Real text' },
+          ],
+        },
+      ],
+    };
+    window.DeckRenderer.renderDeck(window.DECK, mountMixed);
+    window.DeckEditor.enableEditing(mountMixed);
+
+    const el = mountMixed.querySelector('.schema-text');
+    el.textContent = 'Edited text';
+    el.dispatchEvent(new Event('blur'));
+
+    expect(window.DECK.slides[0].elements[0].type).toBe('shape');
+    expect(window.DECK.slides[0].elements[0].text).toBeUndefined();
+    expect(window.DECK.slides[0].elements[1].text).toBe('Edited text');
+  });
 });
 
 describe('DeckEditor slide operations', () => {

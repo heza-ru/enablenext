@@ -38,7 +38,16 @@
     var slideEls = mountEl.querySelectorAll('.slide');
     slideEls.forEach(function (slideEl, slideIndex) {
       var textEls = slideEl.querySelectorAll('.schema-text, [data-deck-field]');
-      textEls.forEach(function (el, elementIndex) {
+      textEls.forEach(function (el, loopIndex) {
+        // `.schema-text` elements carry `data-el-index` (set by
+        // deck-schema-renderer.js) recording their true position in the
+        // slide's `elements` array. Using the plain loop index instead would
+        // be wrong for any slide that mixes shape/image elements with text
+        // (the common case for real master-deck componentId slides) — see
+        // task-10-report.md for the bug this fixes. `data-deck-field`
+        // elements (not yet used by any hand-coded layout) have no such
+        // attribute, so they fall back to the loop index unchanged.
+        var elementIndex = el.dataset.elIndex !== undefined ? parseInt(el.dataset.elIndex, 10) : loopIndex;
         el.setAttribute('contenteditable', 'true');
         el.dataset.slideIndex = String(slideIndex);
         el.dataset.elementIndex = String(elementIndex);
