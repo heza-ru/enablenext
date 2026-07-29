@@ -75,6 +75,8 @@ The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this sha
 <script src="/libs/pptxgen.bundle.js"></script>
 <script src="/libs/download-bridge.js"></script>
 <script src="/libs/deck-renderer.js"></script>
+<script src="/libs/deck-schema-renderer.js"></script>
+<script src="/libs/icons.js"></script>
 </head>
 <body>
 <div id="deck-root"></div>
@@ -107,10 +109,10 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 | `stat` | `stats` (up to 3, each `{value, label}`) | KPI callout |
 | `quote` | `quote`, `cite?` | Pull quote |
 | `split` | `title`, `eyebrow?`, `body`, `rightColor?` (hex, defaults to orange), `rightBrandImage?` | Full-bleed two-panel |
-| `chart` | `title`, `bars` (up to 6, each `{label, value}`) | Simple bar comparison |
+| `chart` | `title`, `bars` (up to 6, each `{label, value}`), `type?` (`"bar"` default or `"pie"`) | Simple bar or pie comparison |
 | `comparison` | `title`, `headers` (up to 4 columns), `rows` (up to 5, each row sliced to 4 cells) | Feature/competitor table |
 | `process` | `title`, `steps` (up to 5, each `{label, desc, num?}`) | Sequential workflow |
-| `icon_grid` | `title`, `cols?` (2 or 3, default 3), `cards` (up to 6, each `{title, desc}` — an `icon` key is accepted but not currently rendered) | Feature/capability grid |
+| `icon_grid` | `title`, `cols?` (2 or 3, default 3), `cards` (up to 6, each `{title, desc, icon?}` — see `window.DeckIcons.ICON_NAMES` below for valid `icon` values) | Feature/capability grid |
 | `timeline` | `title`, `milestones` (up to 6, each `{date, title, body}`) | Roadmap/history |
 | `closing` | `title`, `body?`, `cta?` | Deck close |
 | `case_study` | `challenge`, `solution`, `results`, `cta?`, `metadata?` (`{industry?, region?, solution?}`) | Customer case study |
@@ -118,6 +120,7 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 | `matrix_2x2` | `title`, `xAxisLabel`, `yAxisLabel`, `quadrants` (exactly 4, each `{label, items?}` up to 3 items) | Strategic framework |
 | `event_speaker` | `eventName`+`date`+`location` OR `speakers` (up to 4, each `{name, title, company}`) | Event/panel slide |
 | `objective` | `label`, `body` | Single-paragraph context block |
+| `schema` | `elements` (array of raw `{type: "text"\|"image"\|"shape", x, y, w, h, ...}` primitives) | Verbatim/edited master-deck slide, or a fully custom one-off — see "Schema Layout & the Master Deck Library" below |
 
 Every content rule from the previous version of this skill (action titles, one-idea-per-slide, layout variety, whitespace) is now enforced by `deck-renderer.js` itself — the caps above (max 3 bullets, max 3 stats, etc.) are structural, not suggestions. Still write good `title`/`headline` copy — the schema doesn't write your words for you, it just guarantees the layout can't be violated.
 
@@ -135,6 +138,30 @@ Every content rule from the previous version of this skill (action titles, one-i
 3. **Trust the schema's caps** — `content` accepts more than 3 bullets but only the first 3 render; if you have more than 3 points, that's two slides, not one.
 4. **Top-down structure** — key message first.
 5. **Varied layouts** — never repeat the same `layout` value on consecutive slides.
+
+---
+
+## Schema Layout & the Master Deck Library
+
+Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to render a raw `{ elements: [...] }` tree of primitive `text` / `image` / `shape` elements with explicit `x`/`y`/`w`/`h` (inches) — either fully hand-authored, or copied from a real slide in the Whatfix master deck.
+
+**The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. Use `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) to find the right `N` for a given category — e.g. `slide-96`..`slide-104` for thank-you variants, `slide-20`..`slide-25` for section dividers, `slide-11` for the Event Name variant, `slide-58`..`slide-67` for 6-card infographic grids. Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
+
+**`componentId` vs `elements` — these are alternatives, not both required:**
+- To reuse a master-deck slide **verbatim** (no text changes), look up its `componentId` entry in the library via `file_search` and copy its `elements` array directly into the slide spec as-is.
+- To reuse a master-deck slide **with different text** (e.g. put a real thank-you message into the generic "Thank you!" variant at `slide-97`), copy that same `elements` array into the slide spec and edit only the `.text` fields on the relevant `text` elements — everything else (position, fills, images) stays untouched.
+- To author a **fully custom** schema slide with no master-deck source, just write `elements` directly (Task 2's original design) — no `componentId` involved at all.
+- There is **no automatic merge/lookup at render time** — `deck-schema-renderer.js` only ever reads whatever `elements` array is present on the slide spec. `componentId` is a lookup key for you (the author) to use via `file_search` while writing the artifact, not a live reference the renderer resolves — always inline the actual `elements` array into the artifact's `window.DECK`, never emit `componentId` alone expecting it to render something.
+
+**Known limitations of the extracted library** (fragility in the regex-based PPTX→schema converter, not something to work around by hand — just be aware when picking a `componentId`):
+- **Grouped-shape positions**: shapes nested inside PowerPoint/Slides group containers (`<p:grpSp>`) keep their local offset rather than the group's composed position, so ~18% of slides have one element (usually a decorative image) positioned outside the visible canvas. Spot-checked and confirmed harmless on `slide-6`, `slide-8`, `slide-10`, `slide-11`, `slide-16`, `slide-23`, `slide-27`, `slide-29`, `slide-31`, `slide-34`, `slide-35`, `slide-55`, `slide-70`, `slide-71`, `slide-72`, `slide-73`, `slide-76`, `slide-77`, `slide-87` — in every case the core text content is still correct and usable; if you copy `elements` from one of these, drop or reposition any element whose `x`/`y` falls outside 0–10 / 0–5.625.
+- **Theme-color fills**: only literal solid RGB fills (`<a:srgbClr>`) are extracted; shapes filled via a theme/scheme color (`<a:schemeClr>`) come through with their text intact but no shape background — don't be surprised if a copied shape has no visible fill.
+- **Multi-run text concatenation**: adjacent text runs within one paragraph are joined with no separator (e.g. `slide-16`'s panel cards read as `"NameDesignationCompany"` instead of three lines) — split these back into separate lines/labels yourself when copying.
+- **Category-divider slides are intentionally thin** — `slide-4`, `slide-12`, `slide-17`, `slide-20`, `slide-26`, `slide-38`, `slide-40`, `slide-56`, `slide-78`, `slide-84`, `slide-93`, `slide-96` are single-title section headers in the source deck (e.g. "Agenda", "Tables", "Thank you Slides") — that's correct extraction, not a converter miss; don't reference them expecting real slide content.
+
+**`chart` layout, `type: "pie"`**: the `chart` layout (see Layout Reference table) also accepts `"type": "pie"` alongside its default bar rendering — same `bars` field (`{label, value}`), rendered as a pie/donut instead of a bar comparison. Omit `type` (or set `"bar"`) for the original bar chart.
+
+**`icon_grid` layout, real icons**: the `icon` field on each `icon_grid` card is now rendered (previously accepted but ignored). Set it to one of the 12 curated names in `window.DeckIcons.ICON_NAMES`: `check`, `arrow-right`, `star`, `clock`, `chart`, `target`, `lightbulb`, `shield`, `users`, `globe`, `gear`, `flag`. These are inline SVGs bundled in `/libs/icons.js` — no network dependency, no arbitrary icon names.
 
 ---
 
