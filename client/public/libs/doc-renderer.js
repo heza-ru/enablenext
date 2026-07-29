@@ -283,7 +283,11 @@
       var dataRows = (spec.rows || []).map(function (row) {
         return new helpers.TableRow({ children: row.slice(0, MAX_TABLE_COLS).map(function (cell) { return makeCell(cell, false); }) });
       });
-      return [new helpers.Table({ rows: [headerRow].concat(dataRows), width: { size: 100, type: helpers.WidthType.PERCENTAGE } })];
+      return [new helpers.Table({
+        rows: [headerRow].concat(dataRows),
+        width: { size: 100, type: helpers.WidthType.PERCENTAGE },
+        layout: helpers.TableLayoutType.FIXED,
+      })];
     },
   });
 
@@ -402,6 +406,7 @@
       HeadingLevel: window.docx.HeadingLevel,
       TableRow: window.docx.TableRow, TableCell: window.docx.TableCell,
       Table: window.docx.Table, WidthType: window.docx.WidthType,
+      TableLayoutType: window.docx.TableLayoutType,
       PageBreak: window.docx.PageBreak, ImageRun: window.docx.ImageRun,
     };
 
