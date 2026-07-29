@@ -917,6 +917,35 @@ describe('layout: objective', () => {
   });
 });
 
+describe('DeckRenderer.brandImagePath export', () => {
+  it('exposes brandImagePath on the public API', () => {
+    const DeckRenderer = loadDeckRenderer();
+    expect(typeof DeckRenderer.brandImagePath).toBe('function');
+    expect(DeckRenderer.brandImagePath('logo-dark')).toBe('/brand/logo-dark.svg');
+  });
+});
+
+describe('DeckRenderer.deckAssetPath', () => {
+  afterEach(() => {
+    delete window._BRAND_ORIGIN;
+  });
+
+  it('resolves a bare relative path with no origin set', () => {
+    const DeckRenderer = loadDeckRenderer();
+    expect(DeckRenderer.deckAssetPath('slide-42-image-1.png')).toBe(
+      '/deck-assets/slide-42-image-1.png',
+    );
+  });
+
+  it('prepends window._BRAND_ORIGIN when present, matching brandImagePath', () => {
+    const DeckRenderer = loadDeckRenderer();
+    window._BRAND_ORIGIN = 'https://app.example.com';
+    expect(DeckRenderer.deckAssetPath('slide-42-image-1.png')).toBe(
+      'https://app.example.com/deck-assets/slide-42-image-1.png',
+    );
+  });
+});
+
 describe('downloadPptx', () => {
   it('calls addSlide + the matching layout exportPptx once per slide in window.DECK', async () => {
     const DeckRenderer = loadDeckRenderer();

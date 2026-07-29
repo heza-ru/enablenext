@@ -65,6 +65,11 @@
     return origin + '/brand/' + key + '.' + ext;
   }
 
+  function deckAssetPath(filename) {
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    return origin + '/deck-assets/' + filename;
+  }
+
   function inchesToPercent(rect) {
     return {
       left: (rect.x / SW) * 100 + '%',
@@ -1398,6 +1403,8 @@
     inchesToPercent: inchesToPercent,
     renderDeck: renderDeck,
     downloadPptx: downloadPptx,
+    brandImagePath: brandImagePath,
+    deckAssetPath: deckAssetPath,
     goTo: goTo,
     next: next,
     prev: prev,
