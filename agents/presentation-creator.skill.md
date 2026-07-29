@@ -73,6 +73,7 @@ The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this sha
 <meta charset="UTF-8">
 <title>PRESENTATION_TITLE</title>
 <script src="/libs/pptxgen.bundle.js"></script>
+<script src="/libs/jszip.min.js"></script>
 <script src="/libs/download-bridge.js"></script>
 <script src="/libs/deck-renderer.js"></script>
 <script src="/libs/deck-schema-renderer.js"></script>

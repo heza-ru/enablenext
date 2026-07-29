@@ -1428,6 +1428,90 @@
     },
   });
 
+  // Real DM Sans / IBM Plex Sans font binaries, extracted once from
+  // brand/Copy of Master Deck 2026.pptx (ppt/fonts/*.fntdata) and vendored at
+  // client/public/brand/fonts/. PptxGenJS 4.0.1 has no font-embedding API --
+  // fontFace: 'DM Sans' only labels the intended font, it never embeds it --
+  // so without this step, opening the exported .pptx on a machine that lacks
+  // these fonts installed silently substitutes a fallback font and reflows
+  // text inside its fixed-size box. embedFontsInPptx() is a post-processing
+  // step, applied via direct OOXML zip surgery on the blob PptxGenJS already
+  // produced, using the exact <p:embeddedFontLst> shape/element order/
+  // relationship wiring already present in that same master deck file.
+  var EMBEDDED_FONTS = [
+    { typeface: 'DM Sans', regular: 'DMSans-regular.fntdata', bold: 'DMSans-bold.fntdata', italic: 'DMSans-italic.fntdata', boldItalic: 'DMSans-boldItalic.fntdata' },
+    { typeface: 'IBM Plex Sans', regular: 'IBMPlexSans-regular.fntdata', bold: 'IBMPlexSans-bold.fntdata', italic: 'IBMPlexSans-italic.fntdata', boldItalic: 'IBMPlexSans-boldItalic.fntdata' },
+  ];
+
+  async function embedFontsInPptx(blob) {
+    var zip = await window.JSZip.loadAsync(blob);
+
+    // Idempotency guard: if this blob already has fonts embedded (e.g. embedFontsInPptx
+    // was somehow invoked twice on the same output), return it unchanged rather than
+    // fetching+writing the font parts again, which would append a second, ID-colliding
+    // set of relationship entries into ppt/_rels/presentation.xml.rels.
+    var existingPresentationXml = await zip.file('ppt/presentation.xml').async('string');
+    if (existingPresentationXml.indexOf('<p:embeddedFontLst>') !== -1) {
+      return blob;
+    }
+
+    // 1. Fetch and add each font binary under ppt/fonts/ -- origin-aware, same reasoning as
+    // brandImagePath: this runs in the artifact's own context, which may be the cross-origin
+    // Sandpack preview iframe when downloadPptx() is invoked from the live preview.
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    var relEntries = [];
+    var embeddedFontXml = '';
+    var nextRid = 200; // starts well above any rId PptxGenJS itself assigns, to avoid collisions
+    for (var i = 0; i < EMBEDDED_FONTS.length; i++) {
+      var font = EMBEDDED_FONTS[i];
+      var ids = {};
+      var variants = ['regular', 'bold', 'italic', 'boldItalic'];
+      for (var v = 0; v < variants.length; v++) {
+        var key = variants[v];
+        var filename = font[key];
+        var resp = await fetch(origin + '/brand/fonts/' + filename);
+        var buf = await resp.arrayBuffer();
+        zip.file('ppt/fonts/' + filename, buf);
+        var rid = 'rId' + nextRid++;
+        ids[key] = rid;
+        relEntries.push('<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/' + filename + '"/>');
+      }
+      embeddedFontXml += '<p:embeddedFont><p:font typeface="' + font.typeface + '"/>' +
+        '<p:regular r:id="' + ids.regular + '"/><p:bold r:id="' + ids.bold + '"/>' +
+        '<p:italic r:id="' + ids.italic + '"/><p:boldItalic r:id="' + ids.boldItalic + '"/></p:embeddedFont>';
+    }
+
+    // 2. [Content_Types].xml -- add the fntdata Default entry once, before </Types>.
+    var contentTypes = await zip.file('[Content_Types].xml').async('string');
+    if (contentTypes.indexOf('Extension="fntdata"') === -1) {
+      contentTypes = contentTypes.replace('</Types>', '<Default Extension="fntdata" ContentType="application/x-fontdata"/></Types>');
+    }
+    zip.file('[Content_Types].xml', contentTypes);
+
+    // 3. ppt/_rels/presentation.xml.rels -- append the new font relationships before </Relationships>.
+    var rels = await zip.file('ppt/_rels/presentation.xml.rels').async('string');
+    rels = rels.replace('</Relationships>', relEntries.join('') + '</Relationships>');
+    zip.file('ppt/_rels/presentation.xml.rels', rels);
+
+    // 4. ppt/presentation.xml -- set embedTrueTypeFonts/saveSubsetFonts on <p:presentation>,
+    // and insert <p:embeddedFontLst> right after the <p:notesSz/> element (confirmed exact
+    // element order -- sldSz, notesSz, embeddedFontLst, defaultTextStyle -- against a real
+    // PowerPoint-saved file). NOTE: <p:notesSz> is always self-closing (both in PptxGenJS's own
+    // generated XML and in the master deck's own saved XML -- there is no literal "</p:notesSz>"
+    // closing-tag substring anywhere to match against), so the insertion point must be matched
+    // against the self-closing form "<p:notesSz .../>" instead.
+    var presentationXml = await zip.file('ppt/presentation.xml').async('string');
+    if (presentationXml.indexOf('embedTrueTypeFonts') === -1) {
+      presentationXml = presentationXml.replace('<p:presentation ', '<p:presentation embedTrueTypeFonts="1" saveSubsetFonts="1" ');
+    }
+    if (presentationXml.indexOf('<p:embeddedFontLst>') === -1) {
+      presentationXml = presentationXml.replace(/(<p:notesSz\b[^>]*\/>)/, '$1<p:embeddedFontLst>' + embeddedFontXml + '</p:embeddedFontLst>');
+    }
+    zip.file('ppt/presentation.xml', presentationXml);
+
+    return zip.generateAsync({ type: 'blob' });
+  }
+
   async function downloadPptx() {
     var deck = window.DECK;
     var pptx = new window.PptxGenJS();
@@ -1439,6 +1523,7 @@
       layout.exportPptx(pptxSlide, spec);
     });
     var blob = await pptx.write({ outputType: 'blob' });
+    blob = await embedFontsInPptx(blob);
     var slug = (deck.title || 'presentation').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -1457,6 +1542,7 @@
     inchesToPercent: inchesToPercent,
     renderDeck: renderDeck,
     downloadPptx: downloadPptx,
+    embedFontsInPptx: embedFontsInPptx,
     brandImagePath: brandImagePath,
     deckAssetPath: deckAssetPath,
     goTo: goTo,

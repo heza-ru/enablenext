@@ -109,6 +109,7 @@
   "homepage": "https://github.com/heza-ru/enablenext",
   "dependencies": {
     "docx": "^9.7.1",
+    "jszip": "^3.10.1",
     "pptxgenjs": "^4.0.1",
     "xlsx": "^0.18.5"
   },

@@ -1,11 +1,58 @@
 const fs = require('fs');
 const path = require('path');
+const JSZip = require('jszip');
 
 function loadDeckRenderer() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'deck-renderer.js'), 'utf8');
   // eslint-disable-next-line no-eval
   eval(src);
   return window.DeckRenderer;
+}
+
+// Builds a minimal but structurally real PPTX-shaped zip (the same three parts
+// PptxGenJS's own write({outputType:'blob'}) produces that embedFontsInPptx()
+// touches), as a Blob, for exercising embedFontsInPptx() without a full
+// PptxGenJS run (which Task 6's environment found flaky end-to-end in jsdom/JSZip).
+async function buildFakePptxBlob() {
+  const zip = new JSZip();
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '</Types>',
+  );
+  zip.file(
+    'ppt/presentation.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+      'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+      '<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>' +
+      '<p:sldSz cx="9144000" cy="5143500"/><p:notesSz cx="6858000" cy="9144000"/>' +
+      '<p:defaultTextStyle><a:defPPr/></p:defaultTextStyle>' +
+      '</p:presentation>',
+  );
+  zip.file(
+    'ppt/_rels/presentation.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>' +
+      '</Relationships>',
+  );
+  return zip.generateAsync({ type: 'blob' });
+}
+
+// Stubs window.JSZip + global.fetch so embedFontsInPptx() can run against the
+// fake blob above without hitting the network or requiring a real browser.
+function mockFontEmbeddingGlobals() {
+  window.JSZip = JSZip;
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1, 2, 3, 4]).buffer),
+    }),
+  );
 }
 
 describe('DeckRenderer registry', () => {
@@ -1035,10 +1082,11 @@ describe('downloadPptx', () => {
           addedSlides.push(slide);
           return slide;
         },
-        write: async () => new Blob(['fake pptx bytes']),
+        write: async () => buildFakePptxBlob(),
       };
     };
     window.PptxGenJS = global.PptxGenJS;
+    mockFontEmbeddingGlobals();
 
     // Mock URL.createObjectURL since it's not available in Node.js
     global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
@@ -1088,10 +1136,11 @@ describe('downloadPptx', () => {
           addedSlides.push(slide);
           return slide;
         },
-        write: async () => new Blob(['fake pptx bytes']),
+        write: async () => buildFakePptxBlob(),
       };
     };
     window.PptxGenJS = global.PptxGenJS;
+    mockFontEmbeddingGlobals();
 
     global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 
@@ -1122,6 +1171,100 @@ describe('downloadPptx', () => {
     });
     // Background must be set BEFORE exportPptx runs, so the layout sees it too.
     expect(backgroundAtExportTime).toEqual([{ color: '25223B' }, { color: '25223B' }]);
+  });
+});
+
+describe('embedFontsInPptx', () => {
+  it('adds a fntdata content-type declaration, font relationship entries, and an embeddedFontLst to the pptx zip', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    mockFontEmbeddingGlobals();
+
+    const sourceBlob = await buildFakePptxBlob();
+    const resultBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+
+    const resultZip = await JSZip.loadAsync(resultBlob);
+    expect(resultZip.file('ppt/fonts/DMSans-regular.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/DMSans-bold.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/DMSans-italic.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/DMSans-boldItalic.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-regular.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-bold.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-italic.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-boldItalic.fntdata')).not.toBeNull();
+
+    const contentTypes = await resultZip.file('[Content_Types].xml').async('string');
+    expect(contentTypes).toContain('Extension="fntdata"');
+
+    const rels = await resultZip.file('ppt/_rels/presentation.xml.rels').async('string');
+    expect(rels).toContain('fonts/DMSans-regular.fntdata');
+    expect(rels).toContain('fonts/IBMPlexSans-regular.fntdata');
+
+    const presentationXml = await resultZip.file('ppt/presentation.xml').async('string');
+    expect(presentationXml).toContain('embedTrueTypeFonts="1"');
+    expect(presentationXml).toContain('<p:embeddedFontLst>');
+    expect(presentationXml).toContain('typeface="DM Sans"');
+    expect(presentationXml).toContain('typeface="IBM Plex Sans"');
+  });
+
+  it('produces well-formed XML with no duplicate embedTrueTypeFonts attribute or malformed tags when run twice', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    mockFontEmbeddingGlobals();
+
+    const sourceBlob = await buildFakePptxBlob();
+    const onceBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+    const twiceBlob = await DeckRenderer.embedFontsInPptx(onceBlob);
+
+    const resultZip = await JSZip.loadAsync(twiceBlob);
+    const presentationXml = await resultZip.file('ppt/presentation.xml').async('string');
+
+    // Well-formed: exactly one <p:presentation ...> open tag, exactly one matching close tag,
+    // and the embedTrueTypeFonts attribute appears only once (not duplicated by the second pass).
+    expect((presentationXml.match(/<p:presentation\b/g) || []).length).toBe(1);
+    expect((presentationXml.match(/<\/p:presentation>/g) || []).length).toBe(1);
+    expect((presentationXml.match(/embedTrueTypeFonts="1"/g) || []).length).toBe(1);
+    expect(presentationXml.endsWith('</p:presentation>')).toBe(true);
+
+    const contentTypes = await resultZip.file('[Content_Types].xml').async('string');
+    expect((contentTypes.match(/Extension="fntdata"/g) || []).length).toBe(1);
+    expect((contentTypes.match(/<\/Types>/g) || []).length).toBe(1);
+
+    const rels = await resultZip.file('ppt/_rels/presentation.xml.rels').async('string');
+    expect((rels.match(/<\/Relationships>/g) || []).length).toBe(1);
+  });
+
+  it('does not alter any slide part already present in the zip (additive only)', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    mockFontEmbeddingGlobals();
+
+    const zip = new JSZip();
+    zip.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    zip.file(
+      'ppt/presentation.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:sldSz cx="9144000" cy="5143500"/><p:notesSz cx="6858000" cy="9144000"/>' +
+        '</p:presentation>',
+    );
+    zip.file(
+      'ppt/_rels/presentation.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>',
+    );
+    const slideXml = '<?xml version="1.0"?><p:sld><p:cSld><p:spTree/></p:cSld></p:sld>';
+    zip.file('ppt/slides/slide1.xml', slideXml);
+    const sourceBlob = await zip.generateAsync({ type: 'blob' });
+
+    const resultBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+    const resultZip = await JSZip.loadAsync(resultBlob);
+    const resultSlideXml = await resultZip.file('ppt/slides/slide1.xml').async('string');
+    expect(resultSlideXml).toBe(slideXml);
   });
 });
 
