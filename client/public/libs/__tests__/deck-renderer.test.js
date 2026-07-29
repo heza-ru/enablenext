@@ -1002,6 +1002,19 @@ describe('DeckRenderer.deckAssetPath', () => {
   });
 });
 
+describe('deck aspect-ratio lock (preview distortion fix)', () => {
+  it('sets the .deck element to a fixed 16/9 aspect-ratio that fits within the viewport regardless of container shape', () => {
+    document.body.innerHTML = '';
+    const DeckRenderer = loadDeckRenderer();
+    DeckRenderer.renderDeck({ title: 'T', slides: [{ layout: 'title', title: 'X' }] }, document.body);
+    const styleEl = document.getElementById('deck-renderer-base-styles');
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*aspect-ratio:\s*16\s*\/\s*9/);
+    // must use min()-style clamping against both viewport dimensions, not just width or just height
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*width:\s*min\(/);
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*height:\s*min\(/);
+  });
+});
+
 describe('downloadPptx', () => {
   it('calls addSlide + the matching layout exportPptx once per slide in window.DECK', async () => {
     const DeckRenderer = loadDeckRenderer();

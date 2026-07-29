@@ -86,8 +86,14 @@
     style.textContent =
       '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}' +
       'html,body{width:100%;height:100%;overflow:hidden;background:#1a1728;' +
+      'display:flex;align-items:center;justify-content:center;' +
       "font-family:'DM Sans','IBM Plex Sans',-apple-system,sans-serif}" +
-      '.deck{width:100vw;height:100vh;position:relative;overflow:hidden}' +
+      // Locks the deck to its designed 16:9 (SW=10 / SH=5.625) aspect ratio regardless of
+      // the artifacts panel's actual resizable width/height -- min() picks whichever of
+      // width-constrained-by-viewport-width or height-constrained-by-viewport-height is
+      // smaller, so the deck always fits inside the container without stretching/distorting,
+      // letterboxing (via the flex-centered html/body above) instead.
+      '.deck{width:min(100vw,177.78vh);height:min(100vh,56.25vw);aspect-ratio:16/9;position:relative;overflow:hidden;flex-shrink:0}' +
       '.slide{position:absolute;inset:0;opacity:0;background:#25223B;' +
       'content-visibility:auto;contain:layout style paint}' +
       '.slide.active{opacity:1;content-visibility:visible}';
