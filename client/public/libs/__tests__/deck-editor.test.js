@@ -20,7 +20,7 @@ describe('DeckEditor.enableEditing', () => {
   it('makes schema text elements contenteditable', () => {
     window.DeckEditor.enableEditing(mount);
     const el = mount.querySelector('.schema-text');
-    expect(el.isContentEditable).toBe(true);
+    expect(el.getAttribute('contenteditable')).toBe('true');
   });
 
   it('commits an edited text node back into window.DECK on blur', () => {
@@ -35,7 +35,7 @@ describe('DeckEditor.enableEditing', () => {
     window.DeckEditor.enableEditing(mount);
     window.DeckEditor.disableEditing(mount);
     const el = mount.querySelector('.schema-text');
-    expect(el.isContentEditable).toBe(false);
+    expect(el.hasAttribute('contenteditable')).toBe(false);
     el.textContent = 'Should not commit';
     el.dispatchEvent(new Event('blur'));
     expect(window.DECK.slides[0].elements[0].text).toBe('Original');
@@ -51,5 +51,26 @@ describe('DeckEditor.enableEditing', () => {
 
   it('getDeck returns the live window.DECK reference', () => {
     expect(window.DeckEditor.getDeck()).toBe(window.DECK);
+  });
+
+  it('re-binds correctly when enableEditing is called again on a new mount without an intervening disableEditing', () => {
+    const mountA = mount;
+    window.DeckEditor.enableEditing(mountA);
+
+    const mountB = document.createElement('div');
+    window.DECK = {
+      title: 'T2',
+      slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Second' }] }],
+    };
+    window.DeckRenderer.renderDeck(window.DECK, mountB);
+
+    // No disableEditing(mountA) call here: this must not silently no-op.
+    window.DeckEditor.enableEditing(mountB);
+
+    const elB = mountB.querySelector('.schema-text');
+    expect(elB.getAttribute('contenteditable')).toBe('true');
+    elB.textContent = 'Rebound';
+    elB.dispatchEvent(new Event('blur'));
+    expect(window.DECK.slides[0].elements[0].text).toBe('Rebound');
   });
 });

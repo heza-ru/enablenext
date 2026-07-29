@@ -11,33 +11,6 @@
 // structures is out of scope for this task and left as a separable
 // follow-up (see task-7-report.md).
 (function () {
-  // jsdom (our test environment) does not implement the spec's
-  // `HTMLElement.isContentEditable` getter at all (contentEditable-related
-  // properties are simply undefined there), whereas real browsers compute it
-  // from the `contenteditable` attribute, inherited from ancestors. Polyfill
-  // it — but only when it's actually missing — so tests can assert on it the
-  // same way a real browser would; this is a no-op in real browsers, which
-  // already provide the native getter.
-  if (
-    typeof document !== 'undefined' &&
-    typeof HTMLElement !== 'undefined' &&
-    typeof document.createElement('div').isContentEditable === 'undefined'
-  ) {
-    Object.defineProperty(HTMLElement.prototype, 'isContentEditable', {
-      configurable: true,
-      get: function () {
-        var el = this;
-        while (el) {
-          var value = el.getAttribute ? el.getAttribute('contenteditable') : null;
-          if (value === 'true' || value === '') return true;
-          if (value === 'false') return false;
-          el = el.parentElement;
-        }
-        return false;
-      },
-    });
-  }
-
   var editing = false;
   var boundHandlers = []; // { el, handler } pairs, so disableEditing can remove exactly what enableEditing added
 
@@ -73,7 +46,11 @@
     });
   }
 
-  function disableEditing() {
+  function disableEditing(mountEl) {
+    // mountEl is accepted (per the documented signature) but unused: we
+    // track exactly which elements were bound in boundHandlers regardless of
+    // which mount they came from, so no re-derivation from mountEl is
+    // needed to reverse enableEditing.
     boundHandlers.forEach(function (pair) {
       pair.el.removeAttribute('contenteditable');
       pair.el.removeEventListener('blur', pair.handler);
