@@ -354,7 +354,7 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
         previewRef={fakePreviewRef}
       />,
     );
-    expect(getByRole('button', { name: /^edit$/i })).toBeInTheDocument();
+    expect(getByRole('button', { name: /^com_ui_edit$/i })).toBeInTheDocument();
   });
 
   it('does not show an Edit button for doc/xlsx-only artifacts', () => {
@@ -365,7 +365,7 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
         previewRef={fakePreviewRef}
       />,
     );
-    expect(queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(queryByRole('button', { name: /^com_ui_edit$/i })).not.toBeInTheDocument();
   });
 
   it('posts artifact-editor-toggle to the preview iframe on click', () => {
@@ -382,7 +382,7 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
         previewRef={previewRef}
       />,
     );
-    fireEvent.click(getByRole('button', { name: /^edit$/i }));
+    fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'artifact-editor-toggle', enabled: true }),
       '*',
@@ -407,7 +407,7 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
       />,
     );
 
-    fireEvent.click(getByRole('button', { name: /^edit$/i }));
+    fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
 
     act(() => {
       window.dispatchEvent(
@@ -417,7 +417,7 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
       );
     });
 
-    fireEvent.click(getByRole('button', { name: /^save$/i }));
+    fireEvent.click(getByRole('button', { name: /^com_ui_save$/i }));
 
     expect(mockMutate).toHaveBeenCalledWith(
       expect.objectContaining({

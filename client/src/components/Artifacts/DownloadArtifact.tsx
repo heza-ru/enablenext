@@ -1090,9 +1090,9 @@ const DownloadArtifact = ({
             variant="ghost"
             className="h-7 px-2 text-xs font-medium"
             onClick={toggleEditing}
-            aria-label={isEditing ? 'Done Editing' : 'Edit'}
+            aria-label={isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
           >
-            {isEditing ? 'Done Editing' : 'Edit'}
+            {isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
           </Button>
           {isEditing && pendingDeck && (
             <Button
@@ -1101,9 +1101,9 @@ const DownloadArtifact = ({
               className="h-7 px-2 text-xs font-medium"
               onClick={saveEditedDeck}
               disabled={updateMessageMutation.isLoading}
-              aria-label="Save"
+              aria-label={localize('com_ui_save')}
             >
-              Save
+              {localize('com_ui_save')}
             </Button>
           )}
         </>
