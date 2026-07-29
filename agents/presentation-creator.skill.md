@@ -104,7 +104,7 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 
 | `layout` | Fields | Use for |
 |---|---|---|
-| `title` | `title`, `eyebrow`, `subtitle` | Deck cover — **fallback only; prefer a real `componentId` (`slide-4`..`slide-10`), see below** |
+| `title` | `title`, `eyebrow`, `subtitle` | Deck cover — **fallback only; prefer a real `componentId` (`slide-5`..`slide-9`; NOT `slide-10`, that's an Event Name slide), see below** |
 | `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview — **fallback only; prefer a real `componentId` (`slide-17`..`slide-19`), see below** |
 | `section` | `title`, `eyebrow?` (small label above title) | Chapter break — **fallback only; prefer a real `componentId` (`slide-20`..`slide-25`), see below** |
 | `content` | `title`, `bullets` (up to 3) | Bulleted explanation |
@@ -155,7 +155,7 @@ Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to 
 
 | Category | Old hand-coded fallback | Prefer this `componentId` range instead (verified against `brand/master-deck-layouts.md`) |
 |---|---|---|
-| Deck cover / opening slide | `title` | `slide-4`..`slide-10` (title slides — slide 4 is a section-divider-style header, slides 5–10 are the 6 real title-slide variants) |
+| Deck cover / opening slide | `title` | `slide-5`..`slide-9` (title slides — slide 4 is a section-divider-style header; slides 5–9 are the 5 real title-slide variants; **`slide-10` is NOT a title variant** — its `elements` are an "Event Name" cover ("Event Name" / "Date:" / "Time:" / "Location:"), same category as `slide-11` — do not pick it for a deck cover, it renders event-placeholder copy instead) |
 | Chapter break | `section` | `slide-20`..`slide-25` (section dividers) |
 | Session/agenda overview | `agenda` | `slide-17`..`slide-19` (agenda — numbered session list with time slots) |
 | Deck close | `closing` | `slide-96`..`slide-104` (thank-you — slide 96 is a section-divider-style header, slides 97–100 are the 4 near-identical "Thank you!" variants; slides 101–104 are repeated shape-alignment tip slides, not real thank-you content — don't use those 4) |
