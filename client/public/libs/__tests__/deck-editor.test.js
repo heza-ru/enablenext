@@ -74,3 +74,50 @@ describe('DeckEditor.enableEditing', () => {
     expect(window.DECK.slides[0].elements[0].text).toBe('Rebound');
   });
 });
+
+describe('DeckEditor slide operations', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = {
+      title: 'T',
+      slides: [
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 1' }] },
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 2' }] },
+      ],
+    };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+  });
+  afterEach(() => { delete window.DECK; });
+
+  it('reorderSlide moves a slide to a new index', () => {
+    window.DeckEditor.reorderSlide(0, 1, mount);
+    expect(window.DECK.slides[0].elements[0].text).toBe('Slide 2');
+    expect(window.DECK.slides[1].elements[0].text).toBe('Slide 1');
+  });
+
+  it('duplicateSlide inserts a deep copy right after the original', () => {
+    window.DeckEditor.duplicateSlide(0, mount);
+    expect(window.DECK.slides.length).toBe(3);
+    expect(window.DECK.slides[1].elements[0].text).toBe('Slide 1');
+    window.DECK.slides[1].elements[0].text = 'Changed copy';
+    expect(window.DECK.slides[0].elements[0].text).toBe('Slide 1'); // deep copy, not a reference
+  });
+
+  it('deleteSlide removes a slide', () => {
+    window.DeckEditor.deleteSlide(0, mount);
+    expect(window.DECK.slides.length).toBe(1);
+    expect(window.DECK.slides[0].elements[0].text).toBe('Slide 2');
+  });
+
+  it('setSlideImage updates an image element brand reference', () => {
+    window.DECK.slides[0].elements.push({ type: 'image', x: 0, y: 0, w: 1, h: 1, brandImage: 'logo-dark' });
+    window.DeckEditor.setSlideImage(0, 1, { brandImage: 'logo-light' }, mount);
+    expect(window.DECK.slides[0].elements[1].brandImage).toBe('logo-light');
+    expect(window.DECK.slides[0].elements[1].deckAsset).toBeUndefined();
+  });
+
+  it('setSlideImage throws if the target element is not an image', () => {
+    expect(() => window.DeckEditor.setSlideImage(0, 0, { brandImage: 'x' }, mount)).toThrow(/not an image element/);
+  });
+});

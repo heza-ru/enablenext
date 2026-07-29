@@ -67,10 +67,45 @@
     return window.DECK;
   }
 
+  function reorderSlide(fromIndex, toIndex, mountEl) {
+    var slides = window.DECK.slides;
+    var moved = slides.splice(fromIndex, 1)[0];
+    slides.splice(toIndex, 0, moved);
+    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+  }
+
+  function duplicateSlide(index, mountEl) {
+    var slides = window.DECK.slides;
+    var copy = JSON.parse(JSON.stringify(slides[index]));
+    slides.splice(index + 1, 0, copy);
+    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+  }
+
+  function deleteSlide(index, mountEl) {
+    window.DECK.slides.splice(index, 1);
+    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+  }
+
+  function setSlideImage(slideIndex, elementIndex, imageRef, mountEl) {
+    var el = window.DECK.slides[slideIndex].elements[elementIndex];
+    if (!el || el.type !== 'image') {
+      throw new Error('DeckEditor.setSlideImage: target element is not an image element');
+    }
+    delete el.brandImage;
+    delete el.deckAsset;
+    if (imageRef.brandImage) el.brandImage = imageRef.brandImage;
+    if (imageRef.deckAsset) el.deckAsset = imageRef.deckAsset;
+    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+  }
+
   window.DeckEditor = {
     enableEditing: enableEditing,
     disableEditing: disableEditing,
     isEditing: isEditing,
     getDeck: getDeck,
+    reorderSlide: reorderSlide,
+    duplicateSlide: duplicateSlide,
+    deleteSlide: deleteSlide,
+    setSlideImage: setSlideImage,
   };
 })();
