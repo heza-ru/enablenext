@@ -319,9 +319,12 @@
     // Scoped to the anchor's own subtree rather than `document` (final review 2,
     // Finding M2 -- the same document-wide-query anti-pattern Task 17's chromeEls
     // fix removed elsewhere in this file): the popover is appended as a sibling of
-    // the slide bar, so its parent is the only place a prior one can be, and this
-    // guard then works identically whether or not the mount is attached to the
-    // live document.
+    // the slide bar, so its parent is the only place THIS SLIDE's prior popover
+    // can be, and this guard works identically whether or not the mount is
+    // attached to the live document. Deliberately per-slide, not globally unique
+    // (final review 2, re-review Finding 2): opening slide B's picker no longer
+    // auto-closes slide A's, since each is only removed via its own tracked
+    // chromeEls entry / disableEditing -- no leak, just independent popovers.
     var existing = anchorBtn.parentElement.querySelector('.deck-editor-variant-popover');
     if (existing) closeVariantPopover(existing);
     var popover = document.createElement('div');

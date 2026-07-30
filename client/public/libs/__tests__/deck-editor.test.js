@@ -377,9 +377,25 @@ describe('DeckEditor visual variant picker', () => {
 
   // Regression test (final review 2, Finding M2 -- the duplicate-popover guard
   // originally used `document.querySelector`, the same document-wide-query
-  // anti-pattern Task 17's chromeEls fix removed elsewhere in this file; it only
-  // worked by accident for an attached mount). Attaching to document.body here
-  // mirrors the real production shape (download-bridge.js passes document.body).
+  // anti-pattern Task 17's chromeEls fix removed elsewhere in this file). This
+  // must use a DETACHED mount: the old document-wide guard only ever found a
+  // prior popover by coincidence when the mount was attached to the live
+  // document (an attached-mount version of this same test would pass against
+  // both the old and new guard, proving nothing -- caught in this review's own
+  // re-review). A detached mount is exactly the case the old guard failed:
+  // `document.querySelector` cannot see into a detached subtree, so it always
+  // reported "no existing popover" and produced one duplicate per click.
+  it('clicking "Change layout" twice in a row leaves exactly one popover (detached mount)', () => {
+    window.DeckEditor.enableEditing(mount);
+    const btn = mount.querySelector('[data-action="change-layout"]');
+    btn.click();
+    btn.click();
+    expect(mount.querySelectorAll('.deck-editor-variant-popover').length).toBe(1);
+  });
+
+  // Companion check for the real production shape (download-bridge.js passes
+  // an attached document.body) -- both attached and detached must land on
+  // exactly one popover per slide.
   it('clicking "Change layout" twice in a row leaves exactly one popover (attached mount)', () => {
     document.body.appendChild(mount);
     try {
