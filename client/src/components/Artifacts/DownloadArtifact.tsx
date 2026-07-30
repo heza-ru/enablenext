@@ -4,13 +4,11 @@ import { CircleCheckBig, Loader2 } from 'lucide-react';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react/unstyled';
 import type { Artifact } from '~/common';
 import { Button } from '@librechat/client';
-import { useUpdateMessageMutation } from 'librechat-data-provider/react-query';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { useCodeState } from '~/Providers/EditorContext';
 import { apiBaseUrl } from 'librechat-data-provider';
-import { useGetStartupConfig } from '~/data-provider';
+import { useEditArtifact, useGetStartupConfig } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
-import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 
 const LOG = '[DownloadArtifact]';
@@ -310,14 +308,13 @@ const DownloadArtifact = ({
   previewRef?: MutableRefObject<SandpackPreviewRef | undefined>;
 }) => {
   const localize = useLocalize();
-  const { currentCode } = useCodeState();
+  const { currentCode, setCurrentCode } = useCodeState();
   const { fileKey: fileName } = useArtifactProps({ artifact });
   const [done, setDone] = useState<string | null>(null);
   const { data: startupConfig } = useGetStartupConfig();
   const { token } = useAuthContext();
-  const { conversation } = useChatContext();
-  const conversationId = conversation?.conversationId;
-  const conversationModel = conversation?.model;
+  // conversationId/model are no longer needed here: useEditArtifact keys off
+  // {index, messageId} and the server resolves the conversation itself.
   const messageId = artifact.messageId;
   const [driveLink, setDriveLink] = useState<string | null>(null);
   const [driveSaving, setDriveSaving] = useState<string | null>(null);
@@ -335,7 +332,10 @@ const DownloadArtifact = ({
     null,
   );
   const [selectedSheets, setSelectedSheets] = useState<Set<string>>(new Set());
-  const updateMessageMutation = useUpdateMessageMutation(conversationId ?? '');
+  // Deck edits are ARTIFACT-CONTENT edits, not whole-message edits: the same
+  // mechanism ArtifactCodeEditor.tsx uses. See saveEditedDeck below for why
+  // useUpdateMessageMutation is the wrong tool here.
+  const editArtifact = useEditArtifact();
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -931,21 +931,39 @@ const DownloadArtifact = ({
     iframeWindow?.postMessage({ type: 'artifact-editor-toggle', enabled: next }, '*');
   };
 
-  // Reconstructs the artifact's full source text with the edited window.DECK
-  // JSON substituted for the original, then persists it via the same
-  // useUpdateMessageMutation call EditMessage.tsx uses for text edits.
+  // Persists an inline deck edit by rewriting ONLY the artifact's own body.
+  //
+  // This must NOT use useUpdateMessageMutation: that mutation's `text` field
+  // replaces the message's ENTIRE text (see EditMessage.tsx, where `text`
+  // genuinely is the full message). What we have here is only the artifact's
+  // code-fence BODY (`artifact.content`, produced by extractContent() in
+  // Artifact.tsx) — no `:::artifact{...}` header, no closing `:::`, and none
+  // of the assistant's surrounding prose. Posting it as full message text
+  // destroyed the artifact directive and any accompanying prose, and the
+  // message stopped rendering as an artifact at all.
+  //
+  // useEditArtifact is the correct mechanism (same one ArtifactCodeEditor.tsx
+  // uses): it sends {index, messageId, original, updated} and the server's
+  // replaceArtifactContent() locates the fence body inside the FULL stored
+  // message and splices only that region, leaving everything else intact. Its
+  // onSuccess also writes the server's returned content/text back into the
+  // messages query cache, so artifact.content doesn't go stale after a save.
   const saveEditedDeck = () => {
     if (!pendingDeck || !messageId) return;
-    const updatedText = content.replace(
+    // `original` must be the artifact body as the SERVER currently has it, so
+    // the splice can find it; base `updated` on the same string so the two
+    // stay consistent.
+    const original = artifact.content ?? '';
+    if (!original || artifact.index == null) return;
+    const updated = original.replace(
       /window\.DECK\s*=\s*\{[\s\S]*?\};/,
       'window.DECK = ' + JSON.stringify(pendingDeck) + ';',
     );
-    updateMessageMutation.mutate({
-      conversationId: conversationId ?? '',
-      model: conversationModel ?? 'gpt-3.5-turbo',
-      text: updatedText,
-      messageId,
-    });
+    editArtifact.mutate({ index: artifact.index, messageId, original, updated });
+    // Keep the local editor state in sync with what we just persisted, the
+    // same way ArtifactCodeEditor.tsx does, so the preview/editor don't show
+    // the pre-edit body until the query cache round-trips.
+    setCurrentCode?.(updated);
     setPendingDeck(null);
   };
 
@@ -1286,7 +1304,7 @@ const DownloadArtifact = ({
               variant="ghost"
               className="h-7 px-2 text-xs font-medium"
               onClick={saveEditedDeck}
-              disabled={updateMessageMutation.isLoading}
+              disabled={editArtifact.isLoading}
               aria-label={localize('com_ui_save')}
             >
               {localize('com_ui_save')}

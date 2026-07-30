@@ -1,5 +1,5 @@
 import { render, fireEvent, act } from '@testing-library/react';
-import { useUpdateMessageMutation } from 'librechat-data-provider/react-query';
+import { useEditArtifact } from '~/data-provider';
 import DownloadArtifact, {
   runInHiddenIframe,
   detectNativeFormats,
@@ -23,6 +23,7 @@ let mockCurrentCode = '<html>...downloadPptx()...</html>';
 // on the timing logic under test.
 jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: mockStartupConfigData }),
+  useEditArtifact: jest.fn(),
 }));
 jest.mock('~/hooks/AuthContext', () => ({
   useAuthContext: () => ({ token: 'test-token' }),
@@ -31,16 +32,13 @@ jest.mock('~/hooks/Artifacts/useArtifactProps', () => ({
   __esModule: true,
   default: () => ({ fileKey: 'test.pptx' }),
 }));
+const mockSetCurrentCode = jest.fn();
 jest.mock('~/Providers/EditorContext', () => ({
-  useCodeState: () => ({ currentCode: mockCurrentCode }),
+  useCodeState: () => ({ currentCode: mockCurrentCode, setCurrentCode: mockSetCurrentCode }),
 }));
 jest.mock('~/hooks', () => ({ useLocalize: () => (s: string) => s }));
 jest.mock('~/Providers', () => ({
   useChatContext: () => ({ conversation: mockConversation }),
-}));
-jest.mock('librechat-data-provider/react-query', () => ({
-  ...jest.requireActual('librechat-data-provider/react-query'),
-  useUpdateMessageMutation: jest.fn(),
 }));
 
 // downloadNative only arms the FALLBACK_MS timer (the race under test) when a
@@ -62,7 +60,8 @@ beforeEach(() => {
   mockStartupConfigData = {};
   mockCurrentCode = '<html>...downloadPptx()...</html>';
   mockConversation = undefined;
-  (useUpdateMessageMutation as jest.Mock).mockReturnValue({ mutate: jest.fn(), isLoading: false });
+  mockSetCurrentCode.mockClear();
+  (useEditArtifact as jest.Mock).mockReturnValue({ mutate: jest.fn(), isLoading: false });
 });
 
 describe('DownloadArtifact — PDF (HD) button tooltip copy', () => {
@@ -376,26 +375,25 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
     );
   });
 
-  it('calls updateMessageMutation.mutate with reconstructed text on Save after an artifact-deck-updated message', () => {
-    const mockMutate = jest.fn();
-    (useUpdateMessageMutation as jest.Mock).mockReturnValue({
-      mutate: mockMutate,
-      isLoading: false,
-    });
-    mockCurrentCode =
-      '<script src="/libs/deck-renderer.js"></script>' +
-      '<script>window.DECK = {"title":"Old"};</script>';
+  // The artifact's code-fence BODY only — no `:::artifact{...}` header, no
+  // closing `:::`, no surrounding assistant prose. This is exactly what
+  // extractContent() hands the component as `artifact.content`.
+  const FENCE_BODY =
+    '<script src="/libs/deck-renderer.js"></script>' +
+    '<script>window.DECK = {"title":"Old"};</script>';
+
+  function renderAndSave(mockMutate: jest.Mock) {
+    mockCurrentCode = FENCE_BODY;
     mockConversation = { conversationId: 'conv-1', model: 'gpt-4' };
+    (useEditArtifact as jest.Mock).mockReturnValue({ mutate: mockMutate, isLoading: false });
 
     const { getByRole } = render(
       <DownloadArtifact
-        artifact={{ content: mockCurrentCode, messageId: 'msg-1' } as never}
+        artifact={{ content: FENCE_BODY, messageId: 'msg-1', index: 3 } as never}
         previewRef={fakePreviewRef}
       />,
     );
-
     fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
-
     act(() => {
       window.dispatchEvent(
         new MessageEvent('message', {
@@ -403,16 +401,59 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
         }),
       );
     });
-
     fireEvent.click(getByRole('button', { name: /^com_ui_save$/i }));
+  }
 
-    expect(mockMutate).toHaveBeenCalledWith(
+  it('saves a deck edit via useEditArtifact with an artifact-content-only update, not whole-message text', () => {
+    const mockMutate = jest.fn();
+    renderAndSave(mockMutate);
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const payload = mockMutate.mock.calls[0][0];
+    expect(payload).toEqual(
       expect.objectContaining({
-        conversationId: 'conv-1',
+        index: 3,
         messageId: 'msg-1',
-        text: expect.stringContaining('"title":"New"'),
+        original: FENCE_BODY,
+        updated: expect.stringContaining('"title":"New"'),
       }),
     );
+    // The old (data-losing) mechanism sent a `text` field, which
+    // useUpdateMessageMutation interprets as the ENTIRE message body.
+    expect(payload).not.toHaveProperty('text');
+  });
+
+  /**
+   * Regression test for the whole-message-clobbering bug: saving an edited
+   * deck used to fire useUpdateMessageMutation with the bare fence body as
+   * the message's full `text`, which wiped the `:::artifact{...}` directive,
+   * the closing `:::`, and any assistant prose around the artifact. The
+   * mutation payload must therefore stay strictly within the artifact's own
+   * body — `updated` differs from `original` only in the window.DECK
+   * assignment, and carries no message-level scaffolding at all.
+   */
+  it('does not touch anything outside the artifact body when saving (no artifact directive or prose in the payload)', () => {
+    const mockMutate = jest.fn();
+    renderAndSave(mockMutate);
+
+    const { original, updated } = mockMutate.mock.calls[0][0];
+    // Payload is scoped to the fence body: no message-level scaffolding.
+    expect(updated).not.toContain(':::artifact');
+    expect(updated).not.toContain('```');
+    expect(original).toBe(FENCE_BODY);
+    // Only the DECK assignment changed; the rest of the body is byte-identical.
+    expect(updated).toContain('<script src="/libs/deck-renderer.js"></script>');
+    expect(updated).not.toContain('"title":"Old"');
+    expect(updated).toBe(
+      FENCE_BODY.replace('window.DECK = {"title":"Old"};', 'window.DECK = {"title":"New"};'),
+    );
+  });
+
+  // Closes finding M1: without this, artifact.content/the live editor keep
+  // showing the pre-edit body until the query cache round-trips.
+  it('syncs local editor state with the saved body so the UI does not go stale', () => {
+    renderAndSave(jest.fn());
+    expect(mockSetCurrentCode).toHaveBeenCalledWith(expect.stringContaining('"title":"New"'));
   });
 });
 
