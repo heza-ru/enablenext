@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { render, fireEvent, act } from '@testing-library/react';
 import { useEditArtifact } from '~/data-provider';
 import DownloadArtifact, {
@@ -617,5 +619,27 @@ describe('detectNativeFormats — lib-hint fallback (dropped-comment regression)
 
     const withExcelFn = '<script>function downloadExcel() {}</script>';
     expect(detectNativeFormats(withExcelFn).some((f) => f.label === 'XLSX')).toBe(true);
+  });
+});
+
+// Regression test: PDF (HD) / PPTX (HD) used to load html2canvas from a
+// third-party CDN (cdnjs.cloudflare.com) at click time, unlike every other
+// download path (pptxgenjs/xlsx/docx/jszip are all vendored locally into
+// client/public/libs/ via scripts/copy-libs.mjs). That CDN dependency meant
+// these two specific formats could fail for reasons entirely outside this
+// app's control (network policy, an ad-blocker/security browser extension,
+// the CDN being unreachable) while every other format kept working — making
+// an availability issue look format-specific. html2canvas is now vendored
+// the same way; this guards against silently reintroducing a CDN dependency.
+describe('captureSlides — html2canvas is loaded locally, not from a CDN', () => {
+  it('DownloadArtifact.tsx does not reference a third-party CDN for html2canvas', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../DownloadArtifact.tsx'), 'utf8');
+    expect(source).not.toMatch(/cdnjs\.cloudflare\.com.*html2canvas/);
+    expect(source).toContain('/libs/html2canvas.min.js');
+  });
+
+  it('the vendored html2canvas.min.js bundle exists in client/public/libs/', () => {
+    const bundlePath = path.join(__dirname, '../../../../public/libs/html2canvas.min.js');
+    expect(fs.existsSync(bundlePath)).toBe(true);
   });
 });

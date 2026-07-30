@@ -732,13 +732,20 @@ const DownloadArtifact = ({
             const win = iframe.contentWindow as any;
             const doc = iframe.contentDocument as Document;
 
-            // Inject html2canvas from cdnjs (reliable, widely cached)
+            // Inject html2canvas from our own locally-vendored bundle (matches
+            // pptxgenjs/xlsx/docx/jszip, all copied into client/public/libs/ by
+            // scripts/copy-libs.mjs) rather than a third-party CDN. A CDN
+            // dependency here meant PDF (HD) / PPTX (HD) could fail for reasons
+            // entirely outside this app's control -- a corporate network
+            // policy, an ad-blocker/security browser extension, or the CDN
+            // itself being unreachable -- while every other download path
+            // (which has no CDN dependency) kept working, making the failure
+            // look format-specific when it was actually an availability issue.
             await new Promise<void>((res, rej) => {
               const s = doc.createElement('script');
-              s.src =
-                'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+              s.src = `${window.location.origin}/libs/html2canvas.min.js`;
               s.onload = () => res();
-              s.onerror = () => rej(new Error('html2canvas failed to load from CDN'));
+              s.onerror = () => rej(new Error('html2canvas failed to load'));
               doc.head.appendChild(s);
             });
             // The early-phase timeout may have already fired (and rejected)

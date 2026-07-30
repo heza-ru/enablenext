@@ -1,7 +1,8 @@
 /**
  * copy-libs.mjs
- * Copies browser-bundle files for pptxgenjs, xlsx, and docx from node_modules
- * into client/public/libs/ so they are served as local static assets.
+ * Copies browser-bundle files for pptxgenjs, xlsx, docx, and html2canvas from
+ * node_modules into client/public/libs/ so they are served as local static
+ * assets.
  *
  * Run: node scripts/copy-libs.mjs
  * Also called automatically via the "copy-libs" npm script before builds.
@@ -33,6 +34,10 @@ const LIBS = [
   {
     src:  'node_modules/jszip/dist/jszip.min.js',
     dest: 'jszip.min.js',
+  },
+  {
+    src:  'node_modules/html2canvas/dist/html2canvas.min.js',
+    dest: 'html2canvas.min.js',
   },
 ];
 
