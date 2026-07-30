@@ -169,6 +169,12 @@
     el.h = pxToInches(size.h);
     el.rotation = node.rotation() || 0;
     notifyChange();
+    // Keep the floating toolbar (Task 7) glued to the element as it's
+    // dragged/resized/rotated — its position was computed from the node's
+    // pre-drag bounding box, so it must recompute once the node settles.
+    if (window.CanvasToolbars && selectedIndices.length === 1 && selectedIndices[0] === node._elIndex) {
+      window.CanvasToolbars.showFor(node._elIndex, node, stage);
+    }
   }
 
   function handleDragEnd(e) {
@@ -205,6 +211,13 @@
     transformer.nodes(nodes);
     transformer.moveToTop();
     layer.batchDraw();
+    if (window.CanvasToolbars) {
+      if (selectedIndices.length === 1 && nodes.length === 1) {
+        window.CanvasToolbars.showFor(selectedIndices[0], nodes[0], stage);
+      } else {
+        window.CanvasToolbars.hide();
+      }
+    }
   }
 
   // Plain click: replace selection with just this element.
@@ -234,6 +247,7 @@
     selectedIndices = [];
     if (transformer) transformer.nodes([]);
     if (layer) layer.batchDraw();
+    if (window.CanvasToolbars) window.CanvasToolbars.hide();
   }
 
   function getSelectedIndices() {
@@ -285,6 +299,7 @@
     selectedIndices = [];
     if (transformer) transformer.nodes([]);
     if (layer) layer.batchDraw();
+    if (window.CanvasToolbars) window.CanvasToolbars.hide();
     notifyChange();
   }
 
@@ -499,6 +514,7 @@
   function unmount() {
     if (stage) { stage.destroy(); stage = null; layer = null; transformer = null; }
     selectedIndices = [];
+    if (window.CanvasToolbars) window.CanvasToolbars.hide();
     if (keydownHandler) {
       document.removeEventListener('keydown', keydownHandler);
       keydownHandler = null;
@@ -519,6 +535,8 @@
     deselect: deselect,
     getSelectedIndices: getSelectedIndices,
     onChange: onChange,
+    notifyChange: notifyChange,
+    getActiveSlideIndex: function () { return activeSlideIndex; },
     // Real actions (not test-only internals) — same functions Task 5's
     // keyboard shortcuts call, exposed so the context menu (Task 6) and
     // toolbar (Task 7) can invoke them directly instead of synthesizing

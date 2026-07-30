@@ -527,4 +527,64 @@ describe('CanvasEditor keyboard shortcuts', () => {
     expect(redo).toHaveBeenCalledTimes(1);
     window.CanvasEditor._undoRedoHook = null;
   });
+
+  describe('CanvasToolbars (Task 7) wiring', () => {
+    let showFor;
+    let hide;
+
+    beforeEach(() => {
+      showFor = jest.fn();
+      hide = jest.fn();
+      window.CanvasToolbars = { showFor, hide, isVisible: () => false };
+    });
+
+    afterEach(() => {
+      delete window.CanvasToolbars;
+    });
+
+    it('selecting a single element calls CanvasToolbars.showFor with its index, node, and stage', () => {
+      window.CanvasEditor.selectElement(1);
+      expect(showFor).toHaveBeenCalledTimes(1);
+      const [elIndex, node, stage] = showFor.mock.calls[0];
+      expect(elIndex).toBe(1);
+      expect(node._elIndex).toBe(1);
+      expect(stage).toBe(window.CanvasEditor.getStage());
+    });
+
+    it('multi-select (toggleSelectElement growing past one) calls hide()', () => {
+      window.CanvasEditor.selectElement(0);
+      showFor.mockClear();
+      window.CanvasEditor.toggleSelectElement(1);
+      expect(hide).toHaveBeenCalled();
+      expect(showFor).not.toHaveBeenCalled();
+    });
+
+    it('deselect() calls hide()', () => {
+      window.CanvasEditor.selectElement(0);
+      window.CanvasEditor.deselect();
+      expect(hide).toHaveBeenCalled();
+    });
+
+    it('deleteSelected() calls hide()', () => {
+      window.CanvasEditor.selectElement(0);
+      window.CanvasEditor.deleteSelected();
+      expect(hide).toHaveBeenCalled();
+    });
+
+    it('dragging/transforming the sole selected element re-calls showFor to reposition', () => {
+      window.CanvasEditor.selectElement(0);
+      showFor.mockClear();
+      const node = window.CanvasEditor.getStage().getLayers()[0].getChildren()
+        .find((n) => n._elIndex === 0);
+      window.CanvasEditor._updateElementFromNode(node);
+      expect(showFor).toHaveBeenCalledWith(0, node, window.CanvasEditor.getStage());
+    });
+
+    it('unmount() calls hide()', () => {
+      window.CanvasEditor.unmount();
+      expect(hide).toHaveBeenCalled();
+      // Re-mount for this suite's shared afterEach, which also calls unmount().
+      window.CanvasEditor.mount(mount, 0);
+    });
+  });
 });
