@@ -13,6 +13,7 @@ const { createMulterInstance } = require('./multer');
 const files = require('./files');
 const images = require('./images');
 const avatar = require('./avatar');
+const deckAsset = require('./deckAsset');
 const speech = require('./speech');
 
 const initialize = async () => {
@@ -46,12 +47,14 @@ const initialize = async () => {
   router.post('/', upload.single('file'));
   router.post('/images', upload.single('file'));
   router.post('/images/avatar', upload.single('file'));
+  router.post('/images/deck-asset', upload.single('file'));
   router.post('/images/agents/:agent_id/avatar', upload.single('file'));
   router.post('/images/assistants/:assistant_id/avatar', upload.single('file'));
 
   router.use('/', files);
   router.use('/images', images);
   router.use('/images/avatar', avatar);
+  router.use('/images/deck-asset', deckAsset);
   router.use('/images/agents', agentAvatarRouter);
   router.use('/images/assistants', asstAvatarRouter);
   return router;
