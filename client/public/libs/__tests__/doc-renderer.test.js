@@ -273,7 +273,11 @@ describe('block: table', () => {
     class TableRow { constructor(opts) { calls.TableRow.push(opts); Object.assign(this, opts); } }
     class Table { constructor(opts) { calls.Table.push(opts); Object.assign(this, opts); } }
     const { helpers: baseHelpers } = makeDocxHelpers();
-    const helpers = Object.assign({}, baseHelpers, { Table, TableRow, TableCell, WidthType: { PERCENTAGE: 'pct' } });
+    const helpers = Object.assign({}, baseHelpers, {
+      Table, TableRow, TableCell,
+      WidthType: { PERCENTAGE: 'pct' },
+      TableLayoutType: { FIXED: 'fixed' },
+    });
 
     const result = DocRenderer.getBlock('table').exportDocx({
       type: 'table',
