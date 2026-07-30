@@ -115,11 +115,20 @@
   /**
    * Run the auto-fit pass over every .schema-text element under rootEl.
    * Call this only after rootEl is attached to the live document.
+   *
+   * Nodes living inside deck-editor.js chrome (e.g. an open "Change layout"
+   * variant popover, whose ~16 thumbnails each render real schema content via
+   * renderSchemaElements, including real .schema-text spans) are skipped: they
+   * are not part of the actual slide content this pass is meant to fit, and
+   * needlessly shrink-fitting ~150-200 extra thumbnail nodes on every re-run
+   * (e.g. goTo navigation back to a slide with the popover left open) just
+   * wastes cycles and slightly shrinks thumbnail text for no reason.
    */
   function fitAllSchemaText(rootEl) {
     if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return;
     var nodes = rootEl.querySelectorAll('.schema-text');
     for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].closest('.deck-editor-chrome')) continue;
       fitSchemaText(nodes[i]);
     }
   }

@@ -175,7 +175,49 @@ describe('download-bridge.js', () => {
     expect(realClickCalled).toBe(true);
   });
 
-  it('relays artifact-editor-toggle to window.DeckEditor.enableEditing/disableEditing', () => {
+  // Regression test (polish round 1, Finding M3): the real production
+  // bootstrap script mounts the deck at #deck-root, not document.body
+  // (agents/presentation-creator.skill.md's deck template calls
+  // DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'))).
+  // Every structural mutator's renderDeck call does `mountEl.innerHTML = ''`
+  // before rebuilding, so passing document.body itself as the mount would
+  // wipe out document.body's own children -- including the #deck-root div --
+  // on the very first chrome-driven mutation. The bridge must resolve
+  // #deck-root and hand THAT to enableEditing/disableEditing, not document.body.
+  it('relays artifact-editor-toggle to window.DeckEditor.enableEditing/disableEditing using #deck-root as the mount', () => {
+    loadBridge();
+    const deckRoot = document.createElement('div');
+    deckRoot.id = 'deck-root';
+    document.body.appendChild(deckRoot);
+    const enableEditing = jest.fn();
+    const disableEditing = jest.fn();
+    window.DeckEditor = { enableEditing, disableEditing };
+    try {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      );
+      expect(enableEditing).toHaveBeenCalledWith(deckRoot);
+      expect(enableEditing).not.toHaveBeenCalledWith(document.body);
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: false },
+        }),
+      );
+      expect(disableEditing).toHaveBeenCalledWith(deckRoot);
+      expect(disableEditing).not.toHaveBeenCalledWith(document.body);
+    } finally {
+      delete window.DeckEditor;
+      deckRoot.remove();
+    }
+  });
+
+  // Fallback path: if #deck-root genuinely doesn't exist (e.g. a future
+  // template change), the bridge must still fall back to document.body
+  // rather than passing null/undefined to the editor.
+  it('falls back to document.body for artifact-editor-toggle when #deck-root does not exist', () => {
     loadBridge();
     const enableEditing = jest.fn();
     const disableEditing = jest.fn();

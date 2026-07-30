@@ -95,10 +95,22 @@
   window.addEventListener('message', function (e) {
     if (!e.data || e.data.type !== 'artifact-editor-toggle') return;
     if (typeof window.DeckEditor === 'undefined') return; // non-deck artifacts don't load deck-editor.js
+    // Resolve the same mount point the production bootstrap script uses
+    // (DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root')),
+    // per agents/presentation-creator.skill.md's deck template) rather than
+    // document.body itself. Every structural mutator (reorderSlide/
+    // duplicateSlide/deleteSlide/setSlideImage/setSlideComponent) eventually
+    // calls DeckRenderer.renderDeck(window.DECK, mountEl), which does
+    // `mountEl.innerHTML = ''` before rebuilding -- if mountEl were
+    // document.body, the first such mutation would wipe out document.body's
+    // own children, including the #deck-root div and its bootstrap <script>
+    // tag. Falling back to document.body only covers the case where
+    // #deck-root genuinely doesn't exist (e.g. a future template change).
+    var mountEl = document.getElementById('deck-root') || document.body;
     if (e.data.enabled) {
-      window.DeckEditor.enableEditing(document.body);
+      window.DeckEditor.enableEditing(mountEl);
     } else {
-      window.DeckEditor.disableEditing(document.body);
+      window.DeckEditor.disableEditing(mountEl);
     }
   });
 

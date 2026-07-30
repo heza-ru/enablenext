@@ -316,16 +316,17 @@
   }
 
   function openVariantPopover(anchorBtn, slideIndex, mountEl) {
-    // Scoped to the anchor's own subtree rather than `document` (final review 2,
+    // Scoped to mountEl (the whole deck) rather than `document` (final review 2,
     // Finding M2 -- the same document-wide-query anti-pattern Task 17's chromeEls
-    // fix removed elsewhere in this file): the popover is appended as a sibling of
-    // the slide bar, so its parent is the only place THIS SLIDE's prior popover
-    // can be, and this guard works identically whether or not the mount is
-    // attached to the live document. Deliberately per-slide, not globally unique
-    // (final review 2, re-review Finding 2): opening slide B's picker no longer
-    // auto-closes slide A's, since each is only removed via its own tracked
-    // chromeEls entry / disableEditing -- no leak, just independent popovers.
-    var existing = anchorBtn.parentElement.querySelector('.deck-editor-variant-popover');
+    // fix removed elsewhere in this file) and rather than just anchorBtn's own
+    // slide (polish round 1, Finding UX3 -- a per-slide scope meant opening slide
+    // B's popover no longer closed slide A's, a UX regression from the
+    // conventional "only one popover open at a time" pattern). mountEl is always
+    // a real element reference passed by the caller (not `document` itself), so
+    // this query works correctly whether or not the mount is attached to the live
+    // document, while still restoring single-popover-across-the-whole-deck
+    // behavior.
+    var existing = mountEl.querySelector('.deck-editor-variant-popover');
     if (existing) closeVariantPopover(existing);
     var popover = document.createElement('div');
     popover.className = 'deck-editor-chrome deck-editor-variant-popover';

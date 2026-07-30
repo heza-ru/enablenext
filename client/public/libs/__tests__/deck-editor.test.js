@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 require('../deck-renderer.js');
 require('../deck-schema-renderer.js');
 require('../deck-editor.js');
@@ -351,6 +354,67 @@ describe('DeckEditor visual variant picker', () => {
     expect(thumbs[0].querySelector('.schema-text, .schema-shape, .schema-image')).not.toBeNull();
   });
 
+  // Regression test (polish round 1, Finding M4): the tests above only mock
+  // global.fetch with a single hand-written { componentId: 'slide-97' }
+  // entry, so a stale/wrong CURATED_VARIANTS range in deck-editor.js could
+  // silently produce a near-empty popover with no test failure (missing ids
+  // are skipped silently by design in openVariantPopover). This test instead
+  // resolves fetch with the REAL master-deck-library.json content and asserts
+  // the thumbnail count matches the curated ranges' total id count -- computed
+  // here from the ranges themselves (Title 5-9 / Agenda 18-19 / Section 21-25
+  // / Closing 97-100, per agents/presentation-creator.skill.md's componentId
+  // preference table and deck-editor.js's CURATED_VARIANTS), not hardcoded as
+  // a magic number, so it can't silently drift out of sync if the curated
+  // ranges ever change.
+  it('renders exactly one thumbnail per curated componentId against the real master-deck-library.json', async () => {
+    // fetchLibrary() caches its result for the module's lifetime (see
+    // deck-editor.js), and the beforeEach above already warmed that cache
+    // with the single-entry mock library shared by the other tests in this
+    // describe block -- so this test needs a fresh module instance (mirroring
+    // the same pattern used in the 'DeckEditor.setSlideComponent' describe
+    // block above) to make sure the REAL library mocked below is what
+    // actually gets fetched, not a stale cached value.
+    jest.resetModules();
+    require('../deck-renderer.js');
+    require('../deck-schema-renderer.js');
+    require('../deck-editor.js');
+    var freshMount = document.createElement('div');
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'S1' }] }] };
+    window.DeckRenderer.renderDeck(window.DECK, freshMount);
+
+    function range(start, end) {
+      var ids = [];
+      for (var i = start; i <= end; i++) ids.push('slide-' + i);
+      return ids;
+    }
+    var curatedIds = [].concat(
+      range(5, 9), // Title
+      range(18, 19), // Agenda
+      range(21, 25), // Section
+      range(97, 100), // Closing
+    );
+
+    var realLibrary = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', '..', 'brand', 'master-deck-library.json'), 'utf8'),
+    );
+    global.fetch = jest.fn().mockResolvedValue({ json: () => Promise.resolve(realLibrary) });
+
+    window.DeckEditor.enableEditing(freshMount);
+    freshMount.querySelector('[data-action="change-layout"]').click();
+    // Let the real library's fetch + thumbnail render settle: fetchLibrary()
+    // itself chains fetch().then(json).then(cache-and-return), and
+    // openVariantPopover chains a further .then() on top of that, so this
+    // needs a few microtask flushes (a single Promise.resolve() await is not
+    // enough), rather than a fixed timer.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    var thumbs = freshMount.querySelectorAll('.deck-editor-variant-thumb');
+    expect(thumbs.length).toBe(curatedIds.length);
+    var renderedIds = Array.from(thumbs).map(function (t) { return t.dataset.componentId; });
+    expect(renderedIds.sort()).toEqual(curatedIds.slice().sort());
+  });
+
   it('clicking a thumbnail calls setSlideComponent and closes the popover', async () => {
     window.DeckEditor.enableEditing(mount);
     mount.querySelector('[data-action="change-layout"]').click();
@@ -408,6 +472,26 @@ describe('DeckEditor visual variant picker', () => {
       window.DeckEditor.disableEditing(mount);
       mount.remove();
     }
+  });
+
+  // Regression test (polish round 1, Finding UX3): the duplicate-guard's query
+  // scope was moved from `anchorBtn.parentElement` (per-slide) to `mountEl`
+  // (whole deck) to restore "only one popover open at a time" across the
+  // entire deck, matching the conventional dropdown/popover pattern. This
+  // proves the CROSS-slide case specifically: opening slide 1's popover while
+  // slide 0's is still open must close slide 0's, not just guard against
+  // double-opening the SAME slide's (which the two tests above already cover).
+  it('opening a second slide\'s popover closes the first slide\'s (single popover across the whole deck)', () => {
+    window.DECK.slides.push({ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'S2' }] });
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+    window.DeckEditor.enableEditing(mount);
+
+    const bars = mount.querySelectorAll('.deck-editor-slide-bar');
+    bars[0].querySelector('[data-action="change-layout"]').click();
+    expect(mount.querySelectorAll('.deck-editor-variant-popover').length).toBe(1);
+
+    bars[1].querySelector('[data-action="change-layout"]').click();
+    expect(mount.querySelectorAll('.deck-editor-variant-popover').length).toBe(1);
   });
 
   // Regression test (final review 2, Finding M1): Escape dismisses an open

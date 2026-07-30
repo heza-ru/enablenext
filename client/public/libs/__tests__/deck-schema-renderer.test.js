@@ -309,6 +309,43 @@ describe('DeckSchemaRenderer text auto-fit', () => {
     expect(parseFloat(el.style.fontSize)).toBe(8);
   });
 
+  // Regression test (polish round 1, Finding M4): an open "Change layout"
+  // variant popover (deck-editor.js) is appended as a child of the .slide
+  // element and renders real schema content -- including real .schema-text
+  // spans -- for each of its curated thumbnails. fitAllSchemaText must skip
+  // any .schema-text node living inside that chrome (marked with the
+  // .deck-editor-chrome class, mirroring deck-editor.js's own chrome tagging)
+  // so it doesn't needlessly re-measure/shrink ~150-200 thumbnail text nodes
+  // on every re-run, while still fitting real top-level slide text normally.
+  it('skips .schema-text nodes inside deck-editor chrome (e.g. an open variant popover)', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 5, h: 5, text: 'Real slide text', fontSize: 14 }],
+      mountEl,
+    );
+    var realEl = mountEl.querySelector('.schema-text');
+
+    // Simulate an open variant popover: a .deck-editor-chrome wrapper
+    // containing its own nested .schema-text span (a thumbnail's rendered text).
+    var popover = document.createElement('div');
+    popover.className = 'deck-editor-chrome deck-editor-variant-popover';
+    var chromeText = document.createElement('div');
+    chromeText.className = 'schema-text';
+    chromeText.style.fontSize = '14pt';
+    chromeText.textContent = 'Thumbnail text';
+    popover.appendChild(chromeText);
+    mountEl.appendChild(popover);
+
+    // Force overflow on both nodes so a shrink would be visible if it ran.
+    mockOverflow(realEl, 5000, 50);
+    Object.defineProperty(chromeText, 'scrollHeight', { get: () => 5000, configurable: true });
+    Object.defineProperty(chromeText, 'clientHeight', { get: () => 50, configurable: true });
+
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
+
+    expect(parseFloat(realEl.style.fontSize)).toBeLessThan(14); // real content still fitted
+    expect(chromeText.style.fontSize).toBe('14pt'); // chrome-nested node untouched
+  });
+
   it('does not shrink text that already fits (no overflow)', () => {
     window.DeckSchemaRenderer.renderSchemaElements(
       [{ type: 'text', x: 0, y: 0, w: 5, h: 5, text: 'Short', fontSize: 14 }],
