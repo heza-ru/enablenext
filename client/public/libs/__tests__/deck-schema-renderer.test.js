@@ -69,10 +69,39 @@ describe('DeckSchemaRenderer.renderSchemaElements', () => {
     expect(img.getAttribute('src')).toBe('/deck-assets/slide-42-image-1.png');
   });
 
-  it('throws if an image element sets neither brandImage nor deckAsset', () => {
-    expect(() =>
-      window.DeckSchemaRenderer.renderSchemaElements([{ type: 'image', x: 0, y: 0, w: 1, h: 1 }], container),
-    ).toThrow(/brandImage.*deckAsset/);
+  // Regression test (production bug: a schema image element missing both
+  // brandImage and deckAsset -- an easy real-world authoring slip, especially
+  // for componentId-copied library elements -- threw synchronously inside
+  // renderDeck's per-slide loop, which (before the renderDeck-level isolation
+  // fix) aborted rendering of the ENTIRE deck, not just this one element.
+  // Even with that slide-level isolation in place, a single missing image
+  // reference now degrades gracefully at the ELEMENT level too: the rest of
+  // the slide's real content (title, other images, shapes) still renders
+  // normally around a visible placeholder, instead of losing the whole slide
+  // over one broken image reference.
+  it('renders a visible placeholder (not a thrown exception) if an image element sets neither brandImage nor deckAsset', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2 }],
+      container,
+    );
+    expect(container.querySelector('.schema-image')).toBeNull(); // no broken <img> tag
+    const placeholder = container.querySelector('.schema-image-placeholder');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder.textContent).toMatch(/image/i);
+  });
+
+  it('renders real elements normally on a slide that also contains a broken image element', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [
+        { type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Real title' },
+        { type: 'image', x: 1, y: 1, w: 2, h: 2 }, // missing brandImage/deckAsset
+        { type: 'shape', x: 0, y: 2, w: 1, h: 1, shape: 'roundRect', fill: '4a4560' },
+      ],
+      container,
+    );
+    expect(container.querySelector('.schema-text').textContent).toBe('Real title');
+    expect(container.querySelector('.schema-shape')).not.toBeNull();
+    expect(container.querySelector('.schema-image-placeholder')).not.toBeNull();
   });
 
   it('renders a shape element as a positioned div with fill', () => {
@@ -118,6 +147,29 @@ describe('DeckSchemaRenderer.exportSchemaElements', () => {
       { type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' },
     ]);
     expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/brand/logo-dark.svg', x: 0, y: 0, w: 2, h: 2 }));
+  });
+
+  // Export-side counterpart of the render-path placeholder regression test
+  // above: an image element missing brandImage/deckAsset must not throw and
+  // abort exporting the rest of the slide/deck -- it should add a visible
+  // placeholder (a shape + text, since PptxGenJS has no "broken image" concept)
+  // at the element's position instead of calling addImage, and exporting the
+  // rest of the slide's elements must continue normally.
+  it('exports a visible placeholder shape+text (not a thrown exception) for an image element missing brandImage/deckAsset', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Real title' },
+      { type: 'image', x: 1, y: 1, w: 2, h: 2 },
+      { type: 'shape', x: 0, y: 2, w: 1, h: 1, shape: 'roundRect', fill: '4a4560' },
+    ]);
+    expect(slide.addText).toHaveBeenCalledWith('Real title', expect.any(Object));
+    expect(slide.addImage).not.toHaveBeenCalled();
+    expect(slide.addShape).toHaveBeenCalledWith('rect', expect.objectContaining({ x: 1, y: 1, w: 2, h: 2 }));
+    // Placeholder label text, distinguishable from the real 'Real title' call.
+    expect(slide.addText).toHaveBeenCalledWith(
+      expect.stringMatching(/image/i),
+      expect.objectContaining({ x: 1, y: 1, w: 2, h: 2 }),
+    );
   });
 
   /**

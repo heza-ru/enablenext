@@ -53,7 +53,33 @@
         containerEl.appendChild(span);
       } else if (el.type === 'image') {
         if (!el.brandImage && !el.deckAsset) {
-          throw new Error('DeckSchemaRenderer: image element must set brandImage or deckAsset');
+          // Degrade gracefully instead of throwing: a missing image reference
+          // is a common, recoverable authoring slip (especially for
+          // componentId-copied library elements) and shouldn't cost the rest
+          // of the slide's real content. Before this, a single such element
+          // threw synchronously inside renderDeck's per-slide render loop,
+          // which (prior to that loop's own isolation fix) aborted rendering
+          // of the ENTIRE deck, not just this one element or slide.
+          var placeholder = document.createElement('div');
+          placeholder.className = 'schema-image-placeholder';
+          placeholder.dataset.elIndex = String(elIndex);
+          placeholder.style.position = 'absolute';
+          placeholder.style.left = (el.x / SW) * 100 + '%';
+          placeholder.style.top = (el.y / SH) * 100 + '%';
+          placeholder.style.width = (el.w / SW) * 100 + '%';
+          placeholder.style.height = (el.h / SH) * 100 + '%';
+          placeholder.style.display = 'flex';
+          placeholder.style.alignItems = 'center';
+          placeholder.style.justifyContent = 'center';
+          placeholder.style.border = '1px dashed rgba(255,255,255,.4)';
+          placeholder.style.background = 'rgba(255,255,255,.05)';
+          placeholder.style.color = 'rgba(255,255,255,.6)';
+          placeholder.style.fontSize = '.7rem';
+          placeholder.style.fontFamily = "'DM Sans',sans-serif";
+          placeholder.style.textAlign = 'center';
+          placeholder.textContent = 'Image unavailable';
+          containerEl.appendChild(placeholder);
+          return;
         }
         var img = document.createElement('img');
         img.className = 'schema-image';
@@ -147,7 +173,22 @@
         });
       } else if (el.type === 'image') {
         if (!el.brandImage && !el.deckAsset) {
-          throw new Error('DeckSchemaRenderer: image element must set brandImage or deckAsset');
+          // Export-side counterpart of the render-path placeholder above:
+          // degrade gracefully (a placeholder shape + label) instead of
+          // throwing and aborting the rest of this slide's export (and, before
+          // downloadPptx's own per-slide isolation fix, the entire .pptx file).
+          // PptxGenJS has no native "broken image" concept, so a shape + text
+          // pair stands in for the missing image.
+          pptxSlide.addShape('rect', {
+            x: el.x, y: el.y, w: el.w, h: el.h,
+            fill: { color: '3a3550' },
+            line: { color: 'FFFFFF', width: 0.75, dashType: 'dash' },
+          });
+          pptxSlide.addText('Image unavailable', {
+            x: el.x, y: el.y, w: el.w, h: el.h,
+            fontSize: 10, color: 'CCCCCC', align: 'center', valign: 'middle',
+          });
+          return;
         }
         // Use the origin-prefixed path as-is. The primary export trigger
         // (triggerViaPreviewIframe in DownloadArtifact.tsx) runs downloadPptx()

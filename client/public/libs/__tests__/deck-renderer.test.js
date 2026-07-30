@@ -116,12 +116,77 @@ describe('renderDeck', () => {
     expect(slides[0].textContent).toBe('Hello');
   });
 
-  it('throws a clear error if a slide spec names an unregistered layout', () => {
+  it('renders a visible in-place error slide (not a thrown exception) if a slide spec names an unregistered layout', () => {
     const DeckRenderer = loadDeckRenderer();
     const mount = document.createElement('div');
     expect(() =>
       DeckRenderer.renderDeck({ slides: [{ layout: 'nonexistent' }] }, mount),
-    ).toThrow(/nonexistent/);
+    ).not.toThrow();
+    const slides = mount.querySelectorAll('.slide');
+    expect(slides.length).toBe(1);
+    expect(slides[0].classList.contains('slide-error')).toBe(true);
+    expect(slides[0].textContent).toMatch(/nonexistent/);
+  });
+
+  // Regression test (production bug: a single malformed slide anywhere in a
+  // real LLM-authored deck -- most commonly a schema image element missing
+  // brandImage/deckAsset -- threw synchronously inside the per-slide render
+  // loop, aborting renderDeck() before ANY slide was ever attached to the
+  // document. Confirmed live in a real browser: a 4-slide deck with one bad
+  // element rendered ZERO slides and left only the app-shell background
+  // visible, even though 3 of the 4 slides were perfectly valid). Each
+  // slide's render must now be isolated: one bad slide shows a visible error
+  // placeholder in its own place, every other slide renders normally.
+  it('isolates a single slide render failure: sibling slides still render normally', () => {
+    const DeckRenderer = loadDeckRenderer();
+    DeckRenderer.registerLayout('good_layout', {
+      geometry: {},
+      render: (spec, slideEl) => { slideEl.textContent = spec.text; },
+      exportPptx: () => {},
+    });
+    DeckRenderer.registerLayout('broken_layout', {
+      geometry: {},
+      render: () => { throw new Error('boom from broken_layout'); },
+      exportPptx: () => {},
+    });
+    const mount = document.createElement('div');
+
+    DeckRenderer.renderDeck(
+      {
+        slides: [
+          { layout: 'good_layout', text: 'First' },
+          { layout: 'broken_layout' },
+          { layout: 'good_layout', text: 'Third' },
+        ],
+      },
+      mount,
+    );
+
+    const slides = mount.querySelectorAll('.slide');
+    expect(slides.length).toBe(3); // all three slides present, none dropped
+    expect(slides[0].textContent).toBe('First');
+    expect(slides[1].classList.contains('slide-error')).toBe(true);
+    expect(slides[1].textContent).toMatch(/boom from broken_layout/);
+    expect(slides[2].textContent).toBe('Third');
+  });
+
+  it('clears any partial DOM a failing layout.render() left behind before showing the error placeholder', () => {
+    const DeckRenderer = loadDeckRenderer();
+    DeckRenderer.registerLayout('partial_then_throw', {
+      geometry: {},
+      render: (spec, slideEl) => {
+        slideEl.appendChild(document.createElement('span')).textContent = 'partial content';
+        throw new Error('threw after partial render');
+      },
+      exportPptx: () => {},
+    });
+    const mount = document.createElement('div');
+
+    DeckRenderer.renderDeck({ slides: [{ layout: 'partial_then_throw' }] }, mount);
+
+    const slide = mount.querySelector('.slide');
+    expect(slide.querySelector('span')).toBeNull(); // partial content cleared
+    expect(slide.textContent).toMatch(/threw after partial render/);
   });
 });
 
@@ -1210,6 +1275,64 @@ describe('downloadPptx', () => {
     });
     // Background must be set BEFORE exportPptx runs, so the layout sees it too.
     expect(backgroundAtExportTime).toEqual([{ color: '25223B' }, { color: '25223B' }]);
+  });
+
+  // Regression test (same production bug as renderDeck's isolation tests
+  // above): exportPptx had the identical unguarded per-slide loop, so the
+  // same malformed element that blanked the live preview also aborted the
+  // ENTIRE pptx export -- one bad slide meant no .pptx file at all, even for
+  // a deck where every other slide was fine.
+  it('isolates a single slide export failure: the pptx still gets one slide per spec, with an error message on the failing one', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    DeckRenderer.registerLayout('good_export_layout', {
+      geometry: {},
+      render: () => {},
+      exportPptx: () => {},
+    });
+    DeckRenderer.registerLayout('broken_export_layout', {
+      geometry: {},
+      render: () => {},
+      exportPptx: () => { throw new Error('boom from broken_export_layout'); },
+    });
+
+    const addedSlides = [];
+    // eslint-disable-next-line no-undef
+    global.PptxGenJS = function () {
+      return {
+        layout: null,
+        addSlide: () => {
+          const slide = { addTextCalls: [], addText(text, opts) { this.addTextCalls.push({ text, opts }); } };
+          addedSlides.push(slide);
+          return slide;
+        },
+        write: async () => buildFakePptxBlob(),
+      };
+    };
+    window.PptxGenJS = global.PptxGenJS;
+    mockFontEmbeddingGlobals();
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+    const mockLink = { href: '', download: '', click: jest.fn() };
+    const originalCreateElement = document.createElement;
+    document.createElement = jest.fn((tag) => (tag === 'a' ? mockLink : originalCreateElement.call(document, tag)));
+    document.body.appendChild = jest.fn();
+    document.body.removeChild = jest.fn();
+
+    window.DECK = {
+      title: 'Test Deck',
+      slides: [
+        { layout: 'good_export_layout' },
+        { layout: 'broken_export_layout' },
+        { layout: 'good_export_layout' },
+      ],
+    };
+
+    await expect(DeckRenderer.downloadPptx()).resolves.not.toThrow();
+
+    expect(addedSlides.length).toBe(3); // one slide added per spec, none dropped
+    expect(addedSlides[0].addTextCalls.length).toBe(0);
+    expect(addedSlides[1].addTextCalls.length).toBe(1);
+    expect(addedSlides[1].addTextCalls[0].text).toMatch(/boom from broken_export_layout/);
+    expect(addedSlides[2].addTextCalls.length).toBe(0);
   });
 });
 

@@ -107,7 +107,15 @@
       'position:relative;overflow:hidden;flex-shrink:0}' +
       '.slide{position:absolute;inset:0;opacity:0;background:#25223B;' +
       'content-visibility:auto;contain:layout style paint}' +
-      '.slide.active{opacity:1;content-visibility:visible}';
+      '.slide.active{opacity:1;content-visibility:visible}' +
+      // Visible, obvious failure state for a single slide's render() throwing
+      // (see renderDeck's per-slide try/catch) -- deliberately loud (red
+      // border/text) rather than blending in, so a broken slide is diagnosable
+      // at a glance instead of silently looking like an empty/blank slide.
+      '.slide-error{display:flex;align-items:center;justify-content:center;' +
+      'padding:2rem;border:2px dashed #ff4d4f;background:#2a1a1c}' +
+      '.slide-error-message{color:#ff8a8a;font-size:1rem;text-align:center;' +
+      "font-family:'DM Sans',sans-serif;max-width:80%}";
     document.head.appendChild(style);
   }
 
@@ -153,10 +161,31 @@
     currentSlides = [];
     currentIndex = 0;
     (deckSpec.slides || []).forEach(function (spec, i) {
-      var layout = getLayout(spec.layout); // throws if unregistered — fail loudly, not silently
       var slideEl = document.createElement('section');
-      slideEl.className = 'slide ' + spec.layout + (i === 0 ? ' active' : '');
-      layout.render(spec, slideEl);
+      slideEl.className = 'slide ' + (spec.layout || 'unknown') + (i === 0 ? ' active' : '');
+      // Each slide's render is isolated: a single malformed slide (most
+      // commonly a schema element the LLM authored incorrectly, e.g. an
+      // image with no brandImage/deckAsset, or a typo'd layout name) must
+      // not take down every OTHER slide in the deck. Before this isolation,
+      // any slide's render() throwing propagated all the way out of
+      // renderDeck() itself, aborting the whole function before
+      // mountEl.innerHTML/appendChild ever ran — confirmed live in a real
+      // browser to render literally zero slides (just the app-shell
+      // background) for a deck where only one slide out of several was bad.
+      try {
+        var layout = getLayout(spec.layout); // throws if unregistered
+        layout.render(spec, slideEl);
+      } catch (err) {
+        console.error('DeckRenderer: slide ' + (i + 1) + ' failed to render:', err);
+        slideEl.classList.add('slide-error');
+        // Clear anything the failing render() may have appended before it
+        // threw, so a partial/garbled slide never mixes with the error message.
+        slideEl.innerHTML = '';
+        var msg = document.createElement('div');
+        msg.className = 'slide-error-message';
+        msg.textContent = 'Slide ' + (i + 1) + ' failed to render: ' + (err && err.message ? err.message : String(err));
+        slideEl.appendChild(msg);
+      }
       deckEl.appendChild(slideEl);
       currentSlides.push(slideEl);
     });
@@ -1594,11 +1623,24 @@
     var deck = window.DECK;
     var pptx = new window.PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE'; // matches SW=10/SH=5.625
-    (deck.slides || []).forEach(function (spec) {
-      var layout = getLayout(spec.layout);
+    (deck.slides || []).forEach(function (spec, i) {
       var pptxSlide = pptx.addSlide();
       pptxSlide.background = { color: '25223B' };
-      layout.exportPptx(pptxSlide, spec);
+      // Mirrors renderDeck's per-slide isolation: one slide's exportPptx
+      // throwing (same root causes as the render-side failure -- an
+      // unregistered layout name, a malformed schema element) must not abort
+      // building the ENTIRE .pptx file. Before this, a single bad slide meant
+      // no exported file at all, even when every other slide was fine.
+      try {
+        var layout = getLayout(spec.layout);
+        layout.exportPptx(pptxSlide, spec);
+      } catch (err) {
+        console.error('DeckRenderer: slide ' + (i + 1) + ' failed to export:', err);
+        pptxSlide.addText(
+          'Slide ' + (i + 1) + ' failed to export: ' + (err && err.message ? err.message : String(err)),
+          { x: 0.5, y: 0.5, w: SW - 1, h: SH - 1, fontSize: 18, color: 'FF8A8A', align: 'center' },
+        );
+      }
     });
     var blob = await pptx.write({ outputType: 'blob' });
     blob = await embedFontsInPptx(blob);
