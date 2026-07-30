@@ -106,8 +106,8 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 | `layout` | Fields | Use for |
 |---|---|---|
 | `title` | `title`, `eyebrow`, `subtitle` | Deck cover — **fallback only; prefer a real `componentId` (`slide-5`..`slide-9`; NOT `slide-10`, that's an Event Name slide), see below** |
-| `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview — **fallback only; prefer a real `componentId` (`slide-17`..`slide-19`), see below** |
-| `section` | `title`, `eyebrow?` (small label above title) | Chapter break — **fallback only; prefer a real `componentId` (`slide-20`..`slide-25`), see below** |
+| `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview — **fallback only; prefer a real `componentId` (`slide-18`..`slide-19`), see below** |
+| `section` | `title`, `eyebrow?` (small label above title) | Chapter break — **fallback only; prefer a real `componentId` (`slide-21`..`slide-25`), see below** |
 | `content` | `title`, `bullets` (up to 3) | Bulleted explanation |
 | `two_col` | `title`, `bullets` (up to 4), `rightBrandImage?` | Context + visual |
 | `stat` | `stats` (up to 3, each `{value, label}`) | KPI callout |
@@ -150,16 +150,16 @@ Every content rule from the previous version of this skill (action titles, one-i
 
 Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to render a raw `{ elements: [...] }` tree of primitive `text` / `image` / `shape` elements with explicit `x`/`y`/`w`/`h` (inches) — either fully hand-authored, or copied from a real slide in the Whatfix master deck.
 
-**The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. Use `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) to find the right `N` for a given category — e.g. `slide-96`..`slide-104` for thank-you variants, `slide-20`..`slide-25` for section dividers, `slide-11` for the Event Name variant, `slide-58`..`slide-67` for 6-card infographic grids. Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
+**The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. Use `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) to find the right `N` for a given category — e.g. `slide-97`..`slide-100` for thank-you variants, `slide-21`..`slide-25` for section dividers, `slide-11` for the Event Name variant, `slide-58`..`slide-67` for 6-card infographic grids. Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
 
 **DEFAULT TO A REAL `componentId` FOR TITLE, SECTION, AGENDA, AND CLOSING SLIDES — this is a directive, not a suggestion.** The whole reason the master-deck library and `componentId` lookup exist is a direct user complaint that generated decks used generic, flat hand-coded cover/section/agenda/thank-you slides instead of the user's own real brand designs. The 4 hand-coded layouts below exist as a fallback for when nothing in the library fits — they are **not** the default choice for these categories:
 
 | Category | Old hand-coded fallback | Prefer this `componentId` range instead (verified against `brand/master-deck-layouts.md`) |
 |---|---|---|
 | Deck cover / opening slide | `title` | `slide-5`..`slide-9` (title slides — slide 4 is a section-divider-style header; slides 5–9 are the 5 real title-slide variants; **`slide-10` is NOT a title variant** — its `elements` are an "Event Name" cover ("Event Name" / "Date:" / "Time:" / "Location:"), same category as `slide-11` — do not pick it for a deck cover, it renders event-placeholder copy instead) |
-| Chapter break | `section` | `slide-20`..`slide-25` (section dividers) |
-| Session/agenda overview | `agenda` | `slide-17`..`slide-19` (agenda — numbered session list with time slots) |
-| Deck close | `closing` | `slide-96`..`slide-104` (thank-you — slide 96 is a section-divider-style header, slides 97–100 are the 4 near-identical "Thank you!" variants; slides 101–104 are repeated shape-alignment tip slides, not real thank-you content — don't use those 4) |
+| Chapter break | `section` | `slide-21`..`slide-25` (section dividers — **`slide-20` is excluded**: it's the single-text category-divider header "Section Slides", not a usable divider layout) |
+| Session/agenda overview | `agenda` | `slide-18`..`slide-19` (agenda — numbered session list with time slots; **`slide-17` is excluded**: it's the single-text category-divider header "Agenda", not a usable agenda layout) |
+| Deck close | `closing` | `slide-97`..`slide-100` (the 4 near-identical "Thank you!" variants; **`slide-96` is excluded** — single-text category-divider header "Thank you Slides" — and **`slide-101`..`slide-104` are excluded** — repeated shape-alignment tip slides, not thank-you content) |
 
 **Workflow**: for any title/section/agenda/closing slide, `file_search` the relevant `componentId` range above in `master-deck-library.json` first, pick a variant whose existing layout/copy shape fits the slide's actual content, and inline its `elements` array (editing only the `.text` fields you need to change, per the rules below). Only fall back to the plain `title`/`section`/`agenda`/`closing` layout when you've checked the range and genuinely nothing fits (e.g. every variant in range has fixed copy that can't be adapted to the content, or — per the known limitations below — the only remaining unused variant is one of the mis-scaled/oversized-shape slides that can't be cleanly copied). Don't skip the check just because the hand-coded layout is less typing; the fallback existing at all is not license to default to it.
 
