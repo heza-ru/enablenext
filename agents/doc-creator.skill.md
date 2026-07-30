@@ -111,6 +111,8 @@ The same fields also populate the exported `.docx` file's invisible properties (
 
 Every generated document is A4 (210mm × 297mm) by default — this is set once, centrally, in `doc-renderer.js`; you never configure it per document.
 
+`window.downloadDocx(options)` (exposed by `doc-renderer.js`) accepts an optional `options` object with `pageSize?: 'A4' | 'Letter'`. Omitting `options` (or the whole argument) preserves the A4 default exactly. Passing `{ pageSize: 'Letter' }` exports at Letter size (8.5in × 11in / 12240×15840 twips) instead. This only affects the exported `.docx`'s page-size section property — the live HTML preview's `@page{size:A4}` CSS is unaffected and stays A4-only for on-screen viewing. The artifact itself never needs to set this — the download UI's export-options picker supplies it when the user chooses Letter.
+
 ## After Generating
 
 1. Add more sections or restructure the document?

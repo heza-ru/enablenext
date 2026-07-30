@@ -22,12 +22,33 @@ describe('download-bridge.js', () => {
     'utf8',
   );
 
+  // download-bridge.js registers its 'message' listeners on the real global
+  // `window`, which jsdom does NOT reset between tests in the same file.
+  // Without cleanup, every test's listener stays live for the rest of the
+  // suite — so a later test's message (e.g. one targeting a newly-defined
+  // global fn) gets picked up and re-invoked by every earlier test's
+  // still-registered listener too (since the handler resolves `fn` and
+  // `window.parent` at dispatch time, not at registration time), multiplying
+  // call counts. Track each loadBridge() call's listeners and remove them in
+  // afterEach so tests are isolated from one another.
+  let registeredListeners = [];
+  afterEach(() => {
+    registeredListeners.forEach(({ type, listener }) => window.removeEventListener(type, listener));
+    registeredListeners = [];
+  });
+
   function loadBridge() {
     const posted = [];
     // Minimal window.parent stub to capture postMessage calls.
     window.parent = { postMessage: (msg) => posted.push(msg) };
+    const origAddEventListener = window.addEventListener.bind(window);
+    const spy = jest.spyOn(window, 'addEventListener').mockImplementation((type, listener, opts) => {
+      registeredListeners.push({ type, listener });
+      origAddEventListener(type, listener, opts);
+    });
     // eslint-disable-next-line no-eval
     eval(scriptSrc);
+    spy.mockRestore();
     return posted;
   }
 
@@ -96,6 +117,48 @@ describe('download-bridge.js', () => {
     }
   });
 
+  it('calls the message-triggered export fn with zero arguments when no args are provided (regression)', () => {
+    // This is the existing call shape every current trigger uses (PPTX, and
+    // DOCX/XLSX before Task 14's options picker) — the .apply(null, args||[])
+    // change must not alter it.
+    const fn = jest.fn();
+    window.zeroArgFn = fn;
+    try {
+      loadBridge();
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-download-request', fn: 'zeroArgFn' },
+        }),
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith();
+      expect(fn.mock.calls[0].length).toBe(0);
+    } finally {
+      delete window.zeroArgFn;
+    }
+  });
+
+  it('forwards e.data.args to the message-triggered export fn as individual arguments', () => {
+    const fn = jest.fn();
+    window.argsFn = fn;
+    try {
+      loadBridge();
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-download-request',
+            fn: 'argsFn',
+            args: [{ pageSize: 'Letter' }],
+          },
+        }),
+      );
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith({ pageSize: 'Letter' });
+    } finally {
+      delete window.argsFn;
+    }
+  });
+
   it('does not intercept a click on an anchor with no blob: href', () => {
     loadBridge();
     let realClickCalled = false;
@@ -110,5 +173,83 @@ describe('download-bridge.js', () => {
     });
     a.click();
     expect(realClickCalled).toBe(true);
+  });
+
+  // Regression test (polish round 1, Finding M3): the real production
+  // bootstrap script mounts the deck at #deck-root, not document.body
+  // (agents/presentation-creator.skill.md's deck template calls
+  // DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'))).
+  // Every structural mutator's renderDeck call does `mountEl.innerHTML = ''`
+  // before rebuilding, so passing document.body itself as the mount would
+  // wipe out document.body's own children -- including the #deck-root div --
+  // on the very first chrome-driven mutation. The bridge must resolve
+  // #deck-root and hand THAT to enableEditing/disableEditing, not document.body.
+  it('relays artifact-editor-toggle to window.DeckEditor.enableEditing/disableEditing using #deck-root as the mount', () => {
+    loadBridge();
+    const deckRoot = document.createElement('div');
+    deckRoot.id = 'deck-root';
+    document.body.appendChild(deckRoot);
+    const enableEditing = jest.fn();
+    const disableEditing = jest.fn();
+    window.DeckEditor = { enableEditing, disableEditing };
+    try {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      );
+      expect(enableEditing).toHaveBeenCalledWith(deckRoot);
+      expect(enableEditing).not.toHaveBeenCalledWith(document.body);
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: false },
+        }),
+      );
+      expect(disableEditing).toHaveBeenCalledWith(deckRoot);
+      expect(disableEditing).not.toHaveBeenCalledWith(document.body);
+    } finally {
+      delete window.DeckEditor;
+      deckRoot.remove();
+    }
+  });
+
+  // Fallback path: if #deck-root genuinely doesn't exist (e.g. a future
+  // template change), the bridge must still fall back to document.body
+  // rather than passing null/undefined to the editor.
+  it('falls back to document.body for artifact-editor-toggle when #deck-root does not exist', () => {
+    loadBridge();
+    const enableEditing = jest.fn();
+    const disableEditing = jest.fn();
+    window.DeckEditor = { enableEditing, disableEditing };
+    try {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      );
+      expect(enableEditing).toHaveBeenCalledWith(document.body);
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: false },
+        }),
+      );
+      expect(disableEditing).toHaveBeenCalledWith(document.body);
+    } finally {
+      delete window.DeckEditor;
+    }
+  });
+
+  it('ignores artifact-editor-toggle when window.DeckEditor is undefined (non-deck artifacts)', () => {
+    loadBridge();
+    delete window.DeckEditor;
+    expect(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      ),
+    ).not.toThrow();
   });
 });

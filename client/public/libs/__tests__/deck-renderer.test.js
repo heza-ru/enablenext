@@ -1,11 +1,64 @@
 const fs = require('fs');
 const path = require('path');
+const JSZip = require('jszip');
 
 function loadDeckRenderer() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'deck-renderer.js'), 'utf8');
   // eslint-disable-next-line no-eval
   eval(src);
   return window.DeckRenderer;
+}
+
+// Builds a minimal but structurally real PPTX-shaped zip (the same three parts
+// PptxGenJS's own write({outputType:'blob'}) produces that embedFontsInPptx()
+// touches), as a Blob, for exercising embedFontsInPptx() without a full
+// PptxGenJS run (which Task 6's environment found flaky end-to-end in jsdom/JSZip).
+async function buildFakePptxBlob() {
+  const zip = new JSZip();
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '</Types>',
+  );
+  zip.file(
+    'ppt/presentation.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+      // Real PptxGenJS 4.0.1 output already emits saveSubsetFonts="1" (and
+      // autoCompressPictures="0") on <p:presentation> by default, in every export --
+      // confirmed against a real pptx.write() blob. Included here so this fixture matches
+      // reality closely enough to catch the exact duplicate-attribute bug that a naive
+      // "insert both embedTrueTypeFonts and saveSubsetFonts together" guard produces.
+      'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" ' +
+      'saveSubsetFonts="1" autoCompressPictures="0">' +
+      '<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>' +
+      '<p:sldSz cx="9144000" cy="5143500"/><p:notesSz cx="6858000" cy="9144000"/>' +
+      '<p:defaultTextStyle><a:defPPr/></p:defaultTextStyle>' +
+      '</p:presentation>',
+  );
+  zip.file(
+    'ppt/_rels/presentation.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>' +
+      '</Relationships>',
+  );
+  return zip.generateAsync({ type: 'blob' });
+}
+
+// Stubs window.JSZip + global.fetch so embedFontsInPptx() can run against the
+// fake blob above without hitting the network or requiring a real browser.
+function mockFontEmbeddingGlobals() {
+  window.JSZip = JSZip;
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1, 2, 3, 4]).buffer),
+    }),
+  );
 }
 
 describe('DeckRenderer registry', () => {
@@ -485,6 +538,72 @@ describe('layout: chart', () => {
     expect(labelCalls.length).toBe(6);
     expect(labelCalls.map((c) => c.text)).not.toContain('Bar 7');
   });
+
+  it('renders a bar chart by default when type is unset (existing behavior unchanged)', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render({ title: 'T', bars: [{ label: 'A', value: 5 }] }, slideEl);
+    expect(slideEl.querySelector('.chart-rows')).not.toBeNull();
+    expect(slideEl.querySelector('.chart-pie')).toBeNull();
+  });
+
+  it('renders a pie chart when type is "pie"', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render(
+      { title: 'T', type: 'pie', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 5 }] },
+      slideEl,
+    );
+    expect(slideEl.querySelector('.chart-pie')).not.toBeNull();
+    expect(slideEl.querySelector('.chart-rows')).toBeNull();
+  });
+
+  it('exportPptx calls addChart for a pie chart instead of addShape bars', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+    DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+      title: 'T', type: 'pie', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 5 }],
+    });
+    expect(pptxSlide.addChart).toHaveBeenCalledWith(
+      'pie',
+      expect.arrayContaining([expect.objectContaining({ name: 'T', labels: ['A', 'B'], values: [5, 5] })]),
+      expect.any(Object),
+    );
+    expect(pptxSlide.addShape).not.toHaveBeenCalled();
+  });
+
+  it('renders a simple line/area indicator when type is "line" or "area" (preview treats them the same visually — a connected trend line over the bars, distinguished by fill)', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render({ title: 'T', type: 'line', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }] }, slideEl);
+    expect(slideEl.querySelector('.chart-line')).not.toBeNull();
+  });
+
+  it('exportPptx calls addChart with "line" for type:"line"', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+    DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+      title: 'T', type: 'line', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }],
+    });
+    expect(pptxSlide.addChart).toHaveBeenCalledWith('line', expect.arrayContaining([expect.objectContaining({ labels: ['A', 'B'], values: [5, 8] })]), expect.any(Object));
+  });
+
+  it('exportPptx calls addChart with "area" for type:"area"', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+    DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+      title: 'T', type: 'area', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }],
+    });
+    expect(pptxSlide.addChart).toHaveBeenCalledWith('area', expect.anything(), expect.any(Object));
+  });
+
+  it('bar chart (default/unset type) behavior is unchanged', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render({ title: 'T', bars: [{ label: 'A', value: 5 }] }, slideEl);
+    expect(slideEl.querySelector('.chart-rows')).not.toBeNull();
+    expect(slideEl.querySelector('.chart-line')).toBeNull();
+  });
 });
 
 describe('layout: process', () => {
@@ -576,6 +695,29 @@ describe('layout: icon_grid', () => {
       slideEl,
     );
     expect(slideEl.querySelector('.ig-grid').style.gridTemplateColumns).toBe('repeat(3,1fr)');
+  });
+
+  it('renders a real icon svg when card.icon matches a known name', () => {
+    document.body.innerHTML = '';
+    require('../icons.js');
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('icon_grid').render(
+      { title: 'T', cards: [{ title: 'A', desc: 'B', icon: 'check' }] },
+      slideEl,
+    );
+    const iconEl = slideEl.querySelector('.ig-icon svg');
+    expect(iconEl).not.toBeNull();
+  });
+
+  it('falls back to the plain colored square when card.icon is unset or unknown', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('icon_grid').render(
+      { title: 'T', cards: [{ title: 'A', desc: 'B' }] },
+      slideEl,
+    );
+    expect(slideEl.querySelector('.ig-icon svg')).toBeNull();
   });
 });
 
@@ -917,6 +1059,48 @@ describe('layout: objective', () => {
   });
 });
 
+describe('DeckRenderer.brandImagePath export', () => {
+  it('exposes brandImagePath on the public API', () => {
+    const DeckRenderer = loadDeckRenderer();
+    expect(typeof DeckRenderer.brandImagePath).toBe('function');
+    expect(DeckRenderer.brandImagePath('logo-dark')).toBe('/brand/logo-dark.svg');
+  });
+});
+
+describe('DeckRenderer.deckAssetPath', () => {
+  afterEach(() => {
+    delete window._BRAND_ORIGIN;
+  });
+
+  it('resolves a bare relative path with no origin set', () => {
+    const DeckRenderer = loadDeckRenderer();
+    expect(DeckRenderer.deckAssetPath('slide-42-image-1.png')).toBe(
+      '/deck-assets/slide-42-image-1.png',
+    );
+  });
+
+  it('prepends window._BRAND_ORIGIN when present, matching brandImagePath', () => {
+    const DeckRenderer = loadDeckRenderer();
+    window._BRAND_ORIGIN = 'https://app.example.com';
+    expect(DeckRenderer.deckAssetPath('slide-42-image-1.png')).toBe(
+      'https://app.example.com/deck-assets/slide-42-image-1.png',
+    );
+  });
+});
+
+describe('deck aspect-ratio lock (preview distortion fix)', () => {
+  it('sets the .deck element to a fixed 16/9 aspect-ratio that fits within the viewport regardless of container shape', () => {
+    document.body.innerHTML = '';
+    const DeckRenderer = loadDeckRenderer();
+    DeckRenderer.renderDeck({ title: 'T', slides: [{ layout: 'title', title: 'X' }] }, document.body);
+    const styleEl = document.getElementById('deck-renderer-base-styles');
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*aspect-ratio:\s*16\s*\/\s*9/);
+    // must use min()-style clamping against both viewport dimensions, not just width or just height
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*width:\s*min\(/);
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*height:\s*min\(/);
+  });
+});
+
 describe('downloadPptx', () => {
   it('calls addSlide + the matching layout exportPptx once per slide in window.DECK', async () => {
     const DeckRenderer = loadDeckRenderer();
@@ -937,10 +1121,11 @@ describe('downloadPptx', () => {
           addedSlides.push(slide);
           return slide;
         },
-        write: async () => new Blob(['fake pptx bytes']),
+        write: async () => buildFakePptxBlob(),
       };
     };
     window.PptxGenJS = global.PptxGenJS;
+    mockFontEmbeddingGlobals();
 
     // Mock URL.createObjectURL since it's not available in Node.js
     global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
@@ -990,10 +1175,11 @@ describe('downloadPptx', () => {
           addedSlides.push(slide);
           return slide;
         },
-        write: async () => new Blob(['fake pptx bytes']),
+        write: async () => buildFakePptxBlob(),
       };
     };
     window.PptxGenJS = global.PptxGenJS;
+    mockFontEmbeddingGlobals();
 
     global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
 
@@ -1024,6 +1210,105 @@ describe('downloadPptx', () => {
     });
     // Background must be set BEFORE exportPptx runs, so the layout sees it too.
     expect(backgroundAtExportTime).toEqual([{ color: '25223B' }, { color: '25223B' }]);
+  });
+});
+
+describe('embedFontsInPptx', () => {
+  it('adds a fntdata content-type declaration, font relationship entries, and an embeddedFontLst to the pptx zip', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    mockFontEmbeddingGlobals();
+
+    const sourceBlob = await buildFakePptxBlob();
+    const resultBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+
+    const resultZip = await JSZip.loadAsync(resultBlob);
+    expect(resultZip.file('ppt/fonts/DMSans-regular.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/DMSans-bold.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/DMSans-italic.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/DMSans-boldItalic.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-regular.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-bold.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-italic.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-boldItalic.fntdata')).not.toBeNull();
+
+    const contentTypes = await resultZip.file('[Content_Types].xml').async('string');
+    expect(contentTypes).toContain('Extension="fntdata"');
+
+    const rels = await resultZip.file('ppt/_rels/presentation.xml.rels').async('string');
+    expect(rels).toContain('fonts/DMSans-regular.fntdata');
+    expect(rels).toContain('fonts/IBMPlexSans-regular.fntdata');
+
+    const presentationXml = await resultZip.file('ppt/presentation.xml').async('string');
+    expect(presentationXml).toContain('embedTrueTypeFonts="1"');
+    expect(presentationXml).toContain('<p:embeddedFontLst>');
+    expect(presentationXml).toContain('typeface="DM Sans"');
+    expect(presentationXml).toContain('typeface="IBM Plex Sans"');
+  });
+
+  it('produces well-formed XML with no duplicate embedTrueTypeFonts attribute or malformed tags when run twice', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    mockFontEmbeddingGlobals();
+
+    const sourceBlob = await buildFakePptxBlob();
+    const onceBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+    const twiceBlob = await DeckRenderer.embedFontsInPptx(onceBlob);
+
+    const resultZip = await JSZip.loadAsync(twiceBlob);
+    const presentationXml = await resultZip.file('ppt/presentation.xml').async('string');
+
+    // Well-formed: exactly one <p:presentation ...> open tag, exactly one matching close tag,
+    // and the embedTrueTypeFonts attribute appears only once (not duplicated by the second pass).
+    expect((presentationXml.match(/<p:presentation\b/g) || []).length).toBe(1);
+    expect((presentationXml.match(/<\/p:presentation>/g) || []).length).toBe(1);
+    expect((presentationXml.match(/embedTrueTypeFonts="1"/g) || []).length).toBe(1);
+    expect(presentationXml.endsWith('</p:presentation>')).toBe(true);
+    // saveSubsetFonts is already present in the fixture (matching real PptxGenJS output, which
+    // emits it by default in every export) -- embedFontsInPptx must not add a second one, since
+    // two saveSubsetFonts attributes on the same start tag violates XML's Unique Att Spec
+    // constraint and is rejected by strict XML parsers.
+    expect((presentationXml.match(/saveSubsetFonts="1"/g) || []).length).toBe(1);
+
+    const contentTypes = await resultZip.file('[Content_Types].xml').async('string');
+    expect((contentTypes.match(/Extension="fntdata"/g) || []).length).toBe(1);
+    expect((contentTypes.match(/<\/Types>/g) || []).length).toBe(1);
+
+    const rels = await resultZip.file('ppt/_rels/presentation.xml.rels').async('string');
+    expect((rels.match(/<\/Relationships>/g) || []).length).toBe(1);
+  });
+
+  it('does not alter any slide part already present in the zip (additive only)', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    mockFontEmbeddingGlobals();
+
+    const zip = new JSZip();
+    zip.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    zip.file(
+      'ppt/presentation.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:sldSz cx="9144000" cy="5143500"/><p:notesSz cx="6858000" cy="9144000"/>' +
+        '</p:presentation>',
+    );
+    zip.file(
+      'ppt/_rels/presentation.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>',
+    );
+    const slideXml = '<?xml version="1.0"?><p:sld><p:cSld><p:spTree/></p:cSld></p:sld>';
+    zip.file('ppt/slides/slide1.xml', slideXml);
+    const sourceBlob = await zip.generateAsync({ type: 'blob' });
+
+    const resultBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+    const resultZip = await JSZip.loadAsync(resultBlob);
+    const resultSlideXml = await resultZip.file('ppt/slides/slide1.xml').async('string');
+    expect(resultSlideXml).toBe(slideXml);
   });
 });
 

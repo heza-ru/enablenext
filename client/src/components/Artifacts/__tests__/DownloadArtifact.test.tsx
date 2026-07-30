@@ -1,9 +1,15 @@
 import { render, fireEvent, act } from '@testing-library/react';
+import { useEditArtifact } from '~/data-provider';
 import DownloadArtifact, {
   runInHiddenIframe,
   detectNativeFormats,
   NATIVE_FORMATS,
 } from '../DownloadArtifact';
+
+// Mutable so the "Presentation editor toggle" describe block can set a
+// conversationId/model without affecting the other describe blocks, which
+// don't care about the chat context at all.
+let mockConversation: Record<string, unknown> | undefined = undefined;
 
 // Mutable so individual tests can flip googleDrivePickerEnabled on to
 // exercise the Drive button without affecting the other describe blocks.
@@ -17,6 +23,7 @@ let mockCurrentCode = '<html>...downloadPptx()...</html>';
 // on the timing logic under test.
 jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: mockStartupConfigData }),
+  useEditArtifact: jest.fn(),
 }));
 jest.mock('~/hooks/AuthContext', () => ({
   useAuthContext: () => ({ token: 'test-token' }),
@@ -25,10 +32,14 @@ jest.mock('~/hooks/Artifacts/useArtifactProps', () => ({
   __esModule: true,
   default: () => ({ fileKey: 'test.pptx' }),
 }));
+const mockSetCurrentCode = jest.fn();
 jest.mock('~/Providers/EditorContext', () => ({
-  useCodeState: () => ({ currentCode: mockCurrentCode }),
+  useCodeState: () => ({ currentCode: mockCurrentCode, setCurrentCode: mockSetCurrentCode }),
 }));
 jest.mock('~/hooks', () => ({ useLocalize: () => (s: string) => s }));
+jest.mock('~/Providers', () => ({
+  useChatContext: () => ({ conversation: mockConversation }),
+}));
 
 // downloadNative only arms the FALLBACK_MS timer (the race under test) when a
 // previewRef is supplied and triggerViaPreviewIframe() succeeds in dispatching
@@ -48,21 +59,18 @@ const fakePreviewRef = {
 beforeEach(() => {
   mockStartupConfigData = {};
   mockCurrentCode = '<html>...downloadPptx()...</html>';
+  mockConversation = undefined;
+  mockSetCurrentCode.mockClear();
+  (useEditArtifact as jest.Mock).mockReturnValue({ mutate: jest.fn(), isLoading: false });
 });
 
 describe('DownloadArtifact — PDF (HD) button tooltip copy', () => {
   it('PDF (HD) button tooltip describes the client-side capture approach', () => {
     const { queryByTitle, getByTitle } = render(
-      <DownloadArtifact
-        artifact={{ content: '...downloadPptx()...' } as never}
-      />,
+      <DownloadArtifact artifact={{ content: '...downloadPptx()...' } as never} />,
     );
-    expect(
-      queryByTitle(/Server-side Playwright render/i),
-    ).toBeNull();
-    expect(
-      getByTitle(/screenshots each slide.*in-browser/i),
-    ).toBeDefined();
+    expect(queryByTitle(/Server-side Playwright render/i)).toBeNull();
+    expect(getByTitle(/screenshots each slide.*in-browser/i)).toBeDefined();
   });
 });
 
@@ -87,9 +95,7 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
     // (the previous version of this test dispatched bridge-ready AFTER the
     // click, which does not happen in practice and masked a bug where the
     // ref was reset to false on every click).
-    window.dispatchEvent(
-      new MessageEvent('message', { data: { type: 'bridge-ready' } }),
-    );
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'bridge-ready' } }));
 
     fireEvent.click(getByLabelText('Download as PPTX'));
 
@@ -131,9 +137,7 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
     );
 
     // artifact-v1 confirms it's alive.
-    window.dispatchEvent(
-      new MessageEvent('message', { data: { type: 'bridge-ready' } }),
-    );
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'bridge-ready' } }));
     fireEvent.click(getByLabelText('Download as PPTX'));
     jest.advanceTimersByTime(15_000);
     expect(document.querySelectorAll('iframe').length).toBe(0);
@@ -200,7 +204,7 @@ describe('DownloadArtifact — saveToDrive timeout (Bug 1)', () => {
     expect(queryByLabelText('Open ↗')).toBeNull();
   });
 
-  it('does not let an earlier, superseded saveToDrive call\'s stale timeout clobber a later call\'s successful state', async () => {
+  it("does not let an earlier, superseded saveToDrive call's stale timeout clobber a later call's successful state", async () => {
     // driveSaving/driveError/driveLink are component-wide state, not
     // per-format — starting a second Drive save for a different format
     // before the first's 20s timeout fires must not let that first call's
@@ -211,7 +215,7 @@ describe('DownloadArtifact — saveToDrive timeout (Bug 1)', () => {
       ok: true,
       json: async () => ({ webViewLink: 'https://drive.example/docx' }),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     (global as any).fetch = fetchMock;
 
     const { getByLabelText, getAllByText, queryByTitle } = render(
@@ -323,6 +327,250 @@ describe('runInHiddenIframe — onError callback (Bug 2)', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toMatch(/synchronous export failure/);
     cleanup();
+  });
+});
+
+describe('DownloadArtifact — Presentation editor toggle', () => {
+  afterEach(() => {
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  it('shows an Edit button only for deck content (PPTX-capable artifacts)', () => {
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const { getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    expect(getByRole('button', { name: /^com_ui_edit$/i })).toBeInTheDocument();
+  });
+
+  it('does not show an Edit button for doc/xlsx-only artifacts', () => {
+    mockCurrentCode = '<script src="/libs/doc-renderer.js"></script>';
+    const { queryByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    expect(queryByRole('button', { name: /^com_ui_edit$/i })).not.toBeInTheDocument();
+  });
+
+  it('posts artifact-editor-toggle to the preview iframe on click', () => {
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: {
+        getClient: () => ({ iframe: { contentWindow: { postMessage } } }),
+      },
+    } as never;
+    const { getByRole } = render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
+    fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'artifact-editor-toggle', enabled: true }),
+      '*',
+    );
+  });
+
+  // The artifact's code-fence BODY only — no `:::artifact{...}` header, no
+  // closing `:::`, no surrounding assistant prose. This is exactly what
+  // extractContent() hands the component as `artifact.content`.
+  const FENCE_BODY =
+    '<script src="/libs/deck-renderer.js"></script>' +
+    '<script>window.DECK = {"title":"Old"};</script>';
+
+  function renderAndSave(mockMutate: jest.Mock) {
+    mockCurrentCode = FENCE_BODY;
+    mockConversation = { conversationId: 'conv-1', model: 'gpt-4' };
+    (useEditArtifact as jest.Mock).mockReturnValue({ mutate: mockMutate, isLoading: false });
+
+    const { getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: FENCE_BODY, messageId: 'msg-1', index: 3 } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-deck-updated', deck: { title: 'New' } },
+        }),
+      );
+    });
+    fireEvent.click(getByRole('button', { name: /^com_ui_save$/i }));
+  }
+
+  it('saves a deck edit via useEditArtifact with an artifact-content-only update, not whole-message text', () => {
+    const mockMutate = jest.fn();
+    renderAndSave(mockMutate);
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const payload = mockMutate.mock.calls[0][0];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        index: 3,
+        messageId: 'msg-1',
+        original: FENCE_BODY,
+        updated: expect.stringContaining('"title":"New"'),
+      }),
+    );
+    // The old (data-losing) mechanism sent a `text` field, which
+    // useUpdateMessageMutation interprets as the ENTIRE message body.
+    expect(payload).not.toHaveProperty('text');
+  });
+
+  /**
+   * Regression test for the whole-message-clobbering bug: saving an edited
+   * deck used to fire useUpdateMessageMutation with the bare fence body as
+   * the message's full `text`, which wiped the `:::artifact{...}` directive,
+   * the closing `:::`, and any assistant prose around the artifact. The
+   * mutation payload must therefore stay strictly within the artifact's own
+   * body — `updated` differs from `original` only in the window.DECK
+   * assignment, and carries no message-level scaffolding at all.
+   */
+  it('does not touch anything outside the artifact body when saving (no artifact directive or prose in the payload)', () => {
+    const mockMutate = jest.fn();
+    renderAndSave(mockMutate);
+
+    const { original, updated } = mockMutate.mock.calls[0][0];
+    // Payload is scoped to the fence body: no message-level scaffolding.
+    expect(updated).not.toContain(':::artifact');
+    expect(updated).not.toContain('```');
+    expect(original).toBe(FENCE_BODY);
+    // Only the DECK assignment changed; the rest of the body is byte-identical.
+    expect(updated).toContain('<script src="/libs/deck-renderer.js"></script>');
+    expect(updated).not.toContain('"title":"Old"');
+    expect(updated).toBe(
+      FENCE_BODY.replace('window.DECK = {"title":"Old"};', 'window.DECK = {"title":"New"};'),
+    );
+  });
+
+  // Closes finding M1: without this, artifact.content/the live editor keep
+  // showing the pre-edit body until the query cache round-trips.
+  it('syncs local editor state with the saved body so the UI does not go stale', () => {
+    renderAndSave(jest.fn());
+    expect(mockSetCurrentCode).toHaveBeenCalledWith(expect.stringContaining('"title":"New"'));
+  });
+});
+
+// Renders DownloadArtifact with content guaranteed to trigger both DOCX and
+// XLSX detection (via the literal downloadDocx/downloadExcel strings), while
+// still passing the caller's `content` through verbatim for anything that
+// parses it further (e.g. parseSheetNames scanning for a SHEETS block). This
+// mirrors the pattern the design spec's test pseudocode assumes — the point
+// under test is the options-picker UI, not detectNativeFormats itself (which
+// has its own dedicated describe block above).
+function renderDownloadArtifact(overrides: { content: string }) {
+  mockCurrentCode =
+    '<script>function downloadDocx(){} function downloadExcel(){}</script>' + overrides.content;
+  return render(
+    <DownloadArtifact
+      artifact={{ content: mockCurrentCode } as never}
+      previewRef={fakePreviewRef}
+    />,
+  );
+}
+
+describe('DownloadArtifact — export options picker (Task 14)', () => {
+  afterEach(() => {
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  it('shows a page-size picker before downloading a DOCX artifact', () => {
+    const { getByRole } = renderDownloadArtifact({
+      content: '<script src="/libs/doc-renderer.js"></script>',
+    });
+    fireEvent.click(getByRole('button', { name: /docx/i }));
+    expect(getByRole('radio', { name: /a4/i })).toBeInTheDocument();
+    expect(getByRole('radio', { name: /letter/i })).toBeInTheDocument();
+  });
+
+  it('shows a sheet-selection checklist before downloading an XLSX artifact with multiple sheets', () => {
+    const content = "SHEETS = [{ name: 'Summary', headers: [] }, { name: 'Detail', headers: [] }];";
+    const { getByRole } = renderDownloadArtifact({ content });
+    fireEvent.click(getByRole('button', { name: /xlsx/i }));
+    expect(getByRole('checkbox', { name: /summary/i })).toBeInTheDocument();
+    expect(getByRole('checkbox', { name: /detail/i })).toBeInTheDocument();
+  });
+
+  it('falls back to downloading all sheets when sheet names cannot be parsed from content', () => {
+    const { getByRole, queryByRole } = renderDownloadArtifact({
+      content: '<script src="/libs/exceljs.bare.min.js"></script>',
+    });
+    fireEvent.click(getByRole('button', { name: /xlsx/i }));
+    expect(queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('does not show a sheet picker for a single-sheet artifact (nothing meaningful to choose)', () => {
+    const content = "SHEETS = [{ name: 'Sheet 1', headers: [] }];";
+    const { getByRole, queryByRole } = renderDownloadArtifact({ content });
+    fireEvent.click(getByRole('button', { name: /xlsx/i }));
+    expect(queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('passes { pageSize } through as postMessage args when confirming the DOCX picker', () => {
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: { getClient: () => ({ iframe: { contentWindow: { postMessage } } }) },
+    } as never;
+    mockCurrentCode = '<script>function downloadDocx(){}</script>';
+    const { getByRole } = render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
+    fireEvent.click(getByRole('button', { name: /docx/i }));
+    fireEvent.click(getByRole('radio', { name: /letter/i }));
+    fireEvent.click(getByRole('button', { name: /^com_ui_download$/i }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'artifact-download-request',
+        fn: 'downloadDocx',
+        args: [{ pageSize: 'Letter' }],
+      }),
+      '*',
+    );
+  });
+
+  it('passes the selected sheet names array through as postMessage args when confirming the XLSX picker', () => {
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: { getClient: () => ({ iframe: { contentWindow: { postMessage } } }) },
+    } as never;
+    mockCurrentCode =
+      "<script>function downloadExcel(){}</script>SHEETS = [{ name: 'Summary' }, { name: 'Detail' }];";
+    const { getByRole } = render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
+    fireEvent.click(getByRole('button', { name: /xlsx/i }));
+    fireEvent.click(getByRole('checkbox', { name: /detail/i })); // deselect Detail
+    fireEvent.click(getByRole('button', { name: /^com_ui_download$/i }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'artifact-download-request',
+        fn: 'downloadExcel',
+        args: [['Summary']],
+      }),
+      '*',
+    );
+  });
+
+  it('a zero-option PPTX download still posts a message with no args field at all (regression)', () => {
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: { getClient: () => ({ iframe: { contentWindow: { postMessage } } }) },
+    } as never;
+    mockCurrentCode = '<html>...downloadPptx()...</html>';
+    const { getByLabelText } = render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
+    fireEvent.click(getByLabelText('Download as PPTX'));
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'artifact-download-request', fn: 'downloadPptx' },
+      '*',
+    );
   });
 });
 

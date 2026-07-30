@@ -73,8 +73,12 @@ The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this sha
 <meta charset="UTF-8">
 <title>PRESENTATION_TITLE</title>
 <script src="/libs/pptxgen.bundle.js"></script>
+<script src="/libs/jszip.min.js"></script>
 <script src="/libs/download-bridge.js"></script>
 <script src="/libs/deck-renderer.js"></script>
+<script src="/libs/deck-schema-renderer.js"></script>
+<script src="/libs/icons.js"></script>
+<script src="/libs/deck-editor.js"></script>
 </head>
 <body>
 <div id="deck-root"></div>
@@ -95,29 +99,32 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 
 **Never write CSS, positioning, or duplicated content in the artifact.** Every slide is one object in `slides[]` with a `layout` field (from the table below) and that layout's content fields — nothing else. `deck-renderer.js` (loaded from `/libs/`, never regenerated) owns every visual decision.
 
+**The structured editor is automatic — no extra authoring needed.** Once `deck-editor.js` is included in the script-tag list above, the artifact panel's "Edit" button host-triggers inline editing (contenteditable text on `schema` layout elements, layout/variant swap, slide reorder/duplicate/delete, and the image picker) with zero additional code in the artifact itself — it is wired up entirely by `deck-editor.js` reading and mutating `window.DECK` in place. Never hand-write editing affordances (edit buttons, drag handles, contenteditable attributes) into the artifact; just include the script tag and the rest follows.
+
 ## Layout Reference
 
 | `layout` | Fields | Use for |
 |---|---|---|
-| `title` | `title`, `eyebrow`, `subtitle` | Deck cover |
-| `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview |
-| `section` | `title`, `eyebrow?` (small label above title) | Chapter break |
+| `title` | `title`, `eyebrow`, `subtitle` | Deck cover — **fallback only; prefer a real `componentId` (`slide-5`..`slide-9`; NOT `slide-10`, that's an Event Name slide), see below** |
+| `agenda` | `items` (array of strings, up to 12), `label?` (defaults to "AGENDA") | Session/section overview — **fallback only; prefer a real `componentId` (`slide-18`..`slide-19`), see below** |
+| `section` | `title`, `eyebrow?` (small label above title) | Chapter break — **fallback only; prefer a real `componentId` (`slide-21`..`slide-25`), see below** |
 | `content` | `title`, `bullets` (up to 3) | Bulleted explanation |
 | `two_col` | `title`, `bullets` (up to 4), `rightBrandImage?` | Context + visual |
 | `stat` | `stats` (up to 3, each `{value, label}`) | KPI callout |
 | `quote` | `quote`, `cite?` | Pull quote |
 | `split` | `title`, `eyebrow?`, `body`, `rightColor?` (hex, defaults to orange), `rightBrandImage?` | Full-bleed two-panel |
-| `chart` | `title`, `bars` (up to 6, each `{label, value}`) | Simple bar comparison |
+| `chart` | `title`, `bars` (up to 6, each `{label, value}`), `type?` (`"bar"` default, `"pie"`, `"line"`, or `"area"`) | Simple bar, pie, line, or area comparison |
 | `comparison` | `title`, `headers` (up to 4 columns), `rows` (up to 5, each row sliced to 4 cells) | Feature/competitor table |
 | `process` | `title`, `steps` (up to 5, each `{label, desc, num?}`) | Sequential workflow |
-| `icon_grid` | `title`, `cols?` (2 or 3, default 3), `cards` (up to 6, each `{title, desc}` — an `icon` key is accepted but not currently rendered) | Feature/capability grid |
+| `icon_grid` | `title`, `cols?` (2 or 3, default 3), `cards` (up to 6, each `{title, desc, icon?}` — see `window.DeckIcons.ICON_NAMES` below for valid `icon` values) | Feature/capability grid |
 | `timeline` | `title`, `milestones` (up to 6, each `{date, title, body}`) | Roadmap/history |
-| `closing` | `title`, `body?`, `cta?` | Deck close |
+| `closing` | `title`, `body?`, `cta?` | Deck close — **fallback only; prefer a real `componentId` (`slide-97`..`slide-100`), see below** |
 | `case_study` | `challenge`, `solution`, `results`, `cta?`, `metadata?` (`{industry?, region?, solution?}`) | Customer case study |
 | `mockup` | `device` (`"desktop"` \| `"mobile"`), `screenshotBrandImage?` | Product screenshot |
 | `matrix_2x2` | `title`, `xAxisLabel`, `yAxisLabel`, `quadrants` (exactly 4, each `{label, items?}` up to 3 items) | Strategic framework |
 | `event_speaker` | `eventName`+`date`+`location` OR `speakers` (up to 4, each `{name, title, company}`) | Event/panel slide |
 | `objective` | `label`, `body` | Single-paragraph context block |
+| `schema` | `elements` (array of raw `{type: "text"\|"image"\|"shape", x, y, w, h, ...}` primitives) | Verbatim/edited master-deck slide, or a fully custom one-off — see "Schema Layout & the Master Deck Library" below |
 
 Every content rule from the previous version of this skill (action titles, one-idea-per-slide, layout variety, whitespace) is now enforced by `deck-renderer.js` itself — the caps above (max 3 bullets, max 3 stats, etc.) are structural, not suggestions. Still write good `title`/`headline` copy — the schema doesn't write your words for you, it just guarantees the layout can't be violated.
 
@@ -126,6 +133,7 @@ Every content rule from the previous version of this skill (action titles, one-i
 - **NO EMOJIS** — ever.
 - **Every slide is one object in `DECK.slides[]`** — never write raw HTML/CSS for slide content, only the artifact shape above.
 - **Pick the layout that matches the content**, not the one that's easiest to write — see Layout Reference above.
+- **Title, section, agenda, and closing slides default to a real master-deck `componentId`, not the hand-coded `title`/`section`/`agenda`/`closing` layout** — see "Schema Layout & the Master Deck Library" below for the exact ranges and when the hand-coded fallback is actually acceptable.
 - **Brand images are accents, not backgrounds** — pass an asset key only via the `rightBrandImage`/`screenshotBrandImage` field on a layout that accepts one; `deck-renderer.js` constrains size and placement so a brand image can never become a full-bleed slide background.
 
 ## Content Rules (apply before writing any slide spec)
@@ -135,6 +143,46 @@ Every content rule from the previous version of this skill (action titles, one-i
 3. **Trust the schema's caps** — `content` accepts more than 3 bullets but only the first 3 render; if you have more than 3 points, that's two slides, not one.
 4. **Top-down structure** — key message first.
 5. **Varied layouts** — never repeat the same `layout` value on consecutive slides.
+
+---
+
+## Schema Layout & the Master Deck Library
+
+Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to render a raw `{ elements: [...] }` tree of primitive `text` / `image` / `shape` elements with explicit `x`/`y`/`w`/`h` (inches) — either fully hand-authored, or copied from a real slide in the Whatfix master deck.
+
+**The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. Use `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) to find the right `N` for a given category — e.g. `slide-97`..`slide-100` for thank-you variants, `slide-21`..`slide-25` for section dividers, `slide-11` for the Event Name variant, `slide-58`..`slide-67` for 6-card infographic grids. Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
+
+**DEFAULT TO A REAL `componentId` FOR TITLE, SECTION, AGENDA, AND CLOSING SLIDES — this is a directive, not a suggestion.** The whole reason the master-deck library and `componentId` lookup exist is a direct user complaint that generated decks used generic, flat hand-coded cover/section/agenda/thank-you slides instead of the user's own real brand designs. The 4 hand-coded layouts below exist as a fallback for when nothing in the library fits — they are **not** the default choice for these categories:
+
+| Category | Old hand-coded fallback | Prefer this `componentId` range instead (verified against `brand/master-deck-layouts.md`) |
+|---|---|---|
+| Deck cover / opening slide | `title` | `slide-5`..`slide-9` (title slides — slide 4 is a section-divider-style header; slides 5–9 are the 5 real title-slide variants; **`slide-10` is NOT a title variant** — its `elements` are an "Event Name" cover ("Event Name" / "Date:" / "Time:" / "Location:"), same category as `slide-11` — do not pick it for a deck cover, it renders event-placeholder copy instead) |
+| Chapter break | `section` | `slide-21`..`slide-25` (section dividers — **`slide-20` is excluded**: it's the single-text category-divider header "Section Slides", not a usable divider layout) |
+| Session/agenda overview | `agenda` | `slide-18`..`slide-19` (agenda — numbered session list with time slots; **`slide-17` is excluded**: it's the single-text category-divider header "Agenda", not a usable agenda layout) |
+| Deck close | `closing` | `slide-97`..`slide-100` (the 4 near-identical "Thank you!" variants; **`slide-96` is excluded** — single-text category-divider header "Thank you Slides" — and **`slide-101`..`slide-104` are excluded** — repeated shape-alignment tip slides, not thank-you content) |
+
+**Workflow**: for any title/section/agenda/closing slide, `file_search` the relevant `componentId` range above in `master-deck-library.json` first, pick a variant whose existing layout/copy shape fits the slide's actual content, and inline its `elements` array (editing only the `.text` fields you need to change, per the rules below). Only fall back to the plain `title`/`section`/`agenda`/`closing` layout when you've checked the range and genuinely nothing fits (e.g. every variant in range has fixed copy that can't be adapted to the content, or — per the known limitations below — the only remaining unused variant is one of the mis-scaled/oversized-shape slides that can't be cleanly copied). Don't skip the check just because the hand-coded layout is less typing; the fallback existing at all is not license to default to it.
+
+**`componentId` vs `elements` — these are alternatives, not both required:**
+- To reuse a master-deck slide **verbatim** (no text changes), look up its `componentId` entry in the library via `file_search` and copy its `elements` array directly into the slide spec as-is.
+- To reuse a master-deck slide **with different text** (e.g. put a real thank-you message into the generic "Thank you!" variant at `slide-97`), copy that same `elements` array into the slide spec and edit only the `.text` fields on the relevant `text` elements — everything else (position, fills, images) stays untouched.
+- To author a **fully custom** schema slide with no master-deck source, just write `elements` directly (Task 2's original design) — no `componentId` involved at all.
+- There is **no automatic merge/lookup at render time** — `deck-schema-renderer.js` only ever reads whatever `elements` array is present on the slide spec. `componentId` is a lookup key for you (the author) to use via `file_search` while writing the artifact, not a live reference the renderer resolves — always inline the actual `elements` array into the artifact's `window.DECK`, never emit `componentId` alone expecting it to render something.
+
+**Known limitations of the extracted library** (fragility in the regex-based PPTX→schema converter, not something to work around by hand — just be aware when picking a `componentId`):
+- **Grouped-shape positions and sizes**: shapes nested inside PowerPoint/Slides group containers (`<p:grpSp>`) keep their local offset/extent rather than the group's fully composed transform (position **and scale**), so ~18-20% of slides have at least one element that falls outside the visible 10in × 5.625in canvas. This shows up in two meaningfully different ways — **don't treat them the same**:
+  - **Small offset-only decorative image (safe to drop)**: a small (~2.66in × 1.76in) corner logo/badge positioned just past one edge (e.g. `x≈10.0-10.2, y=0`), with the rest of the slide's content (its text, main layout) unaffected. Confirmed on `slide-6`, `slide-8`, `slide-11`, `slide-23`, `slide-34`, `slide-35`, `slide-55`, `slide-70`, `slide-71`, `slide-72`, `slide-73`, `slide-77`, `slide-87` — in each of these, the core text content is correct and usable as-is; if you copy `elements` from one of these, just drop (or reposition) that one small out-of-bounds image.
+  - **Oversized/mis-scaled background shape or image (NOT safe to just drop or reposition)**: on `slide-10`, `slide-16`, `slide-27`, `slide-29`, `slide-31`, `slide-34`, `slide-76`, at least one `shape` or `image` element is both mispositioned **and** dramatically wrong-sized — e.g. `slide-16`, `slide-27`, `slide-29`, and `slide-34` each have a `14.11in × 14.11in` rect (several times larger than the entire canvas) at a negative `y`, which is clearly a group-clipped circle/panel whose group scale wasn't composed correctly (a scale bug, not just an offset bug); `slide-10`, `slide-31`, and `slide-76` have similarly oversized background images/shapes (up to ~7in × 8in) extending well past the canvas on multiple sides. These elements are the slide's **intended background design** — deleting them per the "just drop the out-of-bounds element" guidance above would leave the slide with no background at all, and repositioning alone won't fix it since the size is also wrong. Do not reference these specific `componentId`s expecting a clean copy-paste result; if you need one of these slide's category, either pick a different slide in the same category (per `brand/master-deck-layouts.md`) or manually reconstruct the background shape/size by hand rather than trusting the extracted geometry.
+  - Two further slides, `slide-24` and `slide-81`, have only negligible (~0.01-0.03in) overflow — not worth avoiding, well within normal rounding.
+- **Theme-color fills**: only literal solid RGB fills (`<a:srgbClr>`) are extracted; shapes filled via a theme/scheme color (`<a:schemeClr>`) come through with their text intact but no shape background — don't be surprised if a copied shape has no visible fill.
+- **Multi-run text concatenation**: adjacent text runs within one paragraph are joined with no separator (e.g. `slide-16`'s panel cards read as `"NameDesignationCompany"` instead of three lines) — split these back into separate lines/labels yourself when copying.
+- **Category-divider slides are intentionally thin** — `slide-4`, `slide-12`, `slide-17`, `slide-20`, `slide-26`, `slide-38`, `slide-40`, `slide-56`, `slide-78`, `slide-84`, `slide-93`, `slide-96` are single-title section headers in the source deck (e.g. "Agenda", "Tables", "Thank you Slides") — that's correct extraction, not a converter miss; don't reference them expecting real slide content.
+
+**`chart` layout, `type: "pie"`**: the `chart` layout (see Layout Reference table) also accepts `"type": "pie"` alongside its default bar rendering — same `bars` field (`{label, value}`), rendered as a pie/donut instead of a bar comparison. Omit `type` (or set `"bar"`) for the original bar chart.
+
+**`chart` layout, `type: "line"` / `type: "area"`**: also available for trends over an ordered sequence (`bars` doubles as the point series, same `{label, value}` shape and same max-6 cap). Both export as native PowerPoint line/area charts; in the HTML preview `"line"` renders as thin value stems and `"area"` as filled columns along the same left-to-right sequence.
+
+**`icon_grid` layout, real icons**: the `icon` field on each `icon_grid` card is now rendered (previously accepted but ignored). Set it to one of the 12 curated names in `window.DeckIcons.ICON_NAMES`: `check`, `arrow-right`, `star`, `clock`, `chart`, `target`, `lightbulb`, `shield`, `users`, `globe`, `gear`, `flag`. These are inline SVGs bundled in `/libs/icons.js` — no network dependency, no arbitrary icon names.
 
 ---
 

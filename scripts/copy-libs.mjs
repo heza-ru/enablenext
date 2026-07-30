@@ -30,6 +30,10 @@ const LIBS = [
     src:  'node_modules/docx/dist/index.iife.js',
     dest: 'docx.iife.js',
   },
+  {
+    src:  'node_modules/jszip/dist/jszip.min.js',
+    dest: 'jszip.min.js',
+  },
 ];
 
 for (const { src, dest } of LIBS) {

@@ -493,6 +493,59 @@ describe('downloadDocx', () => {
     // Cleanup
     document.createElement = originalCreateElement;
   });
+
+  // Shared setup for the pageSize-option tests below — same shape as the
+  // test above, factored out since both only care about the captured
+  // Document options, not block iteration.
+  function setUpDownloadDocxMocks() {
+    const DocRenderer = loadDocRenderer();
+    let capturedDocumentOpts;
+    class FakeDocument { constructor(opts) { capturedDocumentOpts = opts; } }
+    class FakePacker { static toBlob() { return Promise.resolve(new Blob(['fake docx bytes'])); } }
+    global.docx = {
+      Document: FakeDocument, Packer: FakePacker, Paragraph: class {}, TextRun: class {},
+      HeadingLevel: {}, AlignmentType: {}, BorderStyle: {}, ShadingType: {},
+      TableRow: class {}, TableCell: class {}, Table: class {}, WidthType: {},
+      PageBreak: class {}, ImageRun: class {},
+    };
+    window.docx = global.docx;
+
+    global.URL = { createObjectURL: jest.fn().mockReturnValue('blob:fake-url') };
+    const mockLink = { href: '', download: '', click: jest.fn() };
+    const originalCreateElement = document.createElement;
+    document.createElement = jest.fn((tag) => (tag === 'a' ? mockLink : originalCreateElement.call(document, tag)));
+    document.body.appendChild = jest.fn();
+    document.body.removeChild = jest.fn();
+
+    window.DOC = { blocks: [] };
+
+    return {
+      DocRenderer,
+      getCapturedOpts: () => capturedDocumentOpts,
+      cleanup: () => { document.createElement = originalCreateElement; },
+    };
+  }
+
+  it('downloadDocx defaults to A4 page size when no options are passed (existing behavior unchanged)', async () => {
+    const { DocRenderer, getCapturedOpts, cleanup } = setUpDownloadDocxMocks();
+    await DocRenderer.downloadDocx();
+    expect(getCapturedOpts().sections[0].properties.page.size).toEqual({ width: 11906, height: 16838 });
+    cleanup();
+  });
+
+  it('downloadDocx defaults to A4 when options is an object without pageSize (e.g. {})', async () => {
+    const { DocRenderer, getCapturedOpts, cleanup } = setUpDownloadDocxMocks();
+    await DocRenderer.downloadDocx({});
+    expect(getCapturedOpts().sections[0].properties.page.size).toEqual({ width: 11906, height: 16838 });
+    cleanup();
+  });
+
+  it('downloadDocx uses Letter page size (12240x15840) when options.pageSize is "Letter"', async () => {
+    const { DocRenderer, getCapturedOpts, cleanup } = setUpDownloadDocxMocks();
+    await DocRenderer.downloadDocx({ pageSize: 'Letter' });
+    expect(getCapturedOpts().sections[0].properties.page.size).toEqual({ width: 12240, height: 15840 });
+    cleanup();
+  });
 });
 
 describe('renderDoc: automatic cover section (restores pre-redesign visible title/subtitle/author/date)', () => {

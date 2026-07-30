@@ -1,7 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { Code, Play, RefreshCw, X } from 'lucide-react';
-import { useSetRecoilState, useResetRecoilState } from 'recoil';
+import {
+  Code,
+  Play,
+  RefreshCw,
+  X,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+} from 'lucide-react';
+import { useSetRecoilState, useResetRecoilState, useRecoilValue } from 'recoil';
 import { Button, Spinner, useMediaQuery, Radio } from '@librechat/client';
 import type { SandpackPreviewRef, CodeEditorRef } from '@codesandbox/sandpack-react';
 import { useShareContext, useMutationState } from '~/Providers';
@@ -24,9 +34,14 @@ export default function Artifacts() {
   const isMobile = useMediaQuery('(max-width: 868px)');
   const editorRef = useRef<CodeEditorRef>();
   const previewRef = useRef<SandpackPreviewRef>();
+  const compareEditorRef = useRef<CodeEditorRef>();
+  const comparePreviewRef = useRef<SandpackPreviewRef>();
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [compareVersionId, setCompareVersionId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [height, setHeight] = useState(90);
   const [isDragging, setIsDragging] = useState(false);
@@ -35,6 +50,7 @@ export default function Artifacts() {
   const dragStartHeight = useRef(90);
   const setArtifactsVisible = useSetRecoilState(store.artifactsVisibility);
   const resetCurrentArtifactId = useResetRecoilState(store.currentArtifactId);
+  const allArtifacts = useRecoilValue(store.artifactsState);
 
   const tabOptions = [
     {
@@ -170,6 +186,13 @@ export default function Artifacts() {
     return null;
   }
 
+  const compareArtifact =
+    compareVersionId != null ? (allArtifacts?.[compareVersionId] ?? null) : null;
+
+  const adjustZoom = (delta: number) => {
+    setZoomLevel((prev) => Math.min(2, Math.max(0.5, Math.round((prev + delta) * 100) / 100)));
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     const client = previewRef.current?.getClient();
@@ -237,6 +260,7 @@ export default function Artifacts() {
                   isVisible && !isClosing
                     ? 'duration-350 translate-x-0 opacity-100 transition-all'
                     : 'translate-x-5 opacity-0 transition-all duration-300',
+                  isFullscreen ? 'fixed inset-0 z-[100]' : '',
                 ),
           )}
           style={isMobile ? { height: `${height}vh` } : { overflow: 'hidden' }}
@@ -307,6 +331,16 @@ export default function Artifacts() {
               {activeTab !== 'preview' && isMutating && (
                 <RefreshCw size={16} className="animate-spin text-text-secondary" />
               )}
+              {compareVersionId != null && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setCompareVersionId(null)}
+                  aria-label={localize('com_ui_stop_comparing')}
+                >
+                  <X size={16} aria-hidden="true" />
+                </Button>
+              )}
               {orderedArtifactIds.length > 1 && (
                 <ArtifactVersion
                   currentIndex={currentIndex}
@@ -317,7 +351,59 @@ export default function Artifacts() {
                       setCurrentArtifactId(target);
                     }
                   }}
+                  onCompareVersion={(index) => {
+                    const target = orderedArtifactIds[index];
+                    if (target) {
+                      setCompareVersionId(target);
+                    }
+                  }}
                 />
+              )}
+              {!isMobile && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setIsFullscreen((v) => !v)}
+                  aria-label={
+                    isFullscreen
+                      ? localize('com_ui_fullscreen_exit')
+                      : localize('com_ui_fullscreen')
+                  }
+                >
+                  {isFullscreen ? (
+                    <Minimize2 size={16} aria-hidden="true" />
+                  ) : (
+                    <Maximize2 size={16} aria-hidden="true" />
+                  )}
+                </Button>
+              )}
+              {activeTab === 'preview' && (
+                <>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => adjustZoom(-0.25)}
+                    aria-label={localize('com_ui_zoom_out')}
+                  >
+                    <ZoomOut size={16} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setZoomLevel(1)}
+                    aria-label={localize('com_ui_reset_zoom')}
+                  >
+                    <RotateCcw size={16} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => adjustZoom(0.25)}
+                    aria-label={localize('com_ui_zoom_in')}
+                  >
+                    <ZoomIn size={16} aria-hidden="true" />
+                  </Button>
+                </>
               )}
               <CopyCodeButton content={currentArtifact.content ?? ''} />
               <DownloadArtifact
@@ -336,14 +422,54 @@ export default function Artifacts() {
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-primary">
-            <div className="absolute inset-0 flex flex-col">
-              <ArtifactTabs
-                artifact={currentArtifact}
-                editorRef={editorRef as React.MutableRefObject<CodeEditorRef>}
-                previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
-                isSharedConvo={isSharedConvo}
-              />
-            </div>
+            {compareVersionId != null && compareArtifact ? (
+              <div className="absolute inset-0 flex divide-x divide-border-light">
+                <div
+                  data-testid="artifact-preview-pane"
+                  className="relative flex h-full w-1/2 flex-col overflow-auto"
+                  style={
+                    activeTab === 'preview'
+                      ? { transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }
+                      : undefined
+                  }
+                >
+                  <ArtifactTabs
+                    artifact={currentArtifact}
+                    editorRef={editorRef as React.MutableRefObject<CodeEditorRef>}
+                    previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
+                    isSharedConvo={isSharedConvo}
+                  />
+                </div>
+                <div
+                  data-testid="artifact-preview-pane"
+                  className="relative flex h-full w-1/2 flex-col overflow-auto"
+                >
+                  <ArtifactTabs
+                    artifact={compareArtifact}
+                    editorRef={compareEditorRef as React.MutableRefObject<CodeEditorRef>}
+                    previewRef={comparePreviewRef as React.MutableRefObject<SandpackPreviewRef>}
+                    isSharedConvo={true}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div
+                data-testid="artifact-preview-pane"
+                className="absolute inset-0 flex flex-col overflow-auto"
+                style={
+                  activeTab === 'preview'
+                    ? { transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }
+                    : undefined
+                }
+              >
+                <ArtifactTabs
+                  artifact={currentArtifact}
+                  editorRef={editorRef as React.MutableRefObject<CodeEditorRef>}
+                  previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
+                  isSharedConvo={isSharedConvo}
+                />
+              </div>
+            )}
 
             <div
               className={cn(
