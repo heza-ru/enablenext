@@ -384,6 +384,10 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
     '<script src="/libs/deck-renderer.js"></script>' +
     '<script>window.DECK = {"title":"Old"};</script>';
 
+  // There is no explicit Save button any more (Task 9): an
+  // 'artifact-deck-updated' message (posted by canvas-autosave.js's debounced
+  // trigger) is handed straight to the autosave queue and fires the mutation
+  // immediately (synchronously, since nothing else is in flight).
   function renderAndSave(mockMutate: jest.Mock) {
     mockCurrentCode = FENCE_BODY;
     mockConversation = { conversationId: 'conv-1', model: 'gpt-4' };
@@ -403,7 +407,6 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
         }),
       );
     });
-    fireEvent.click(getByRole('button', { name: /^com_ui_save$/i }));
   }
 
   it('saves a deck edit via useEditArtifact with an artifact-content-only update, not whole-message text', () => {
@@ -454,8 +457,210 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
   // Closes finding M1: without this, artifact.content/the live editor keep
   // showing the pre-edit body until the query cache round-trips.
   it('syncs local editor state with the saved body so the UI does not go stale', () => {
-    renderAndSave(jest.fn());
+    const mockMutate = jest.fn();
+    renderAndSave(mockMutate);
+    // Simulate the mutation resolving successfully.
+    act(() => {
+      mockMutate.mock.calls[0][1].onSuccess();
+    });
     expect(mockSetCurrentCode).toHaveBeenCalledWith(expect.stringContaining('"title":"New"'));
+  });
+
+  it('shows a non-blocking autosave-failed indicator only after both the initial save and its retry fail', () => {
+    const mockMutate = jest.fn();
+    renderAndSave(mockMutate);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+
+    // First failure triggers an automatic retry — indicator not shown yet.
+    act(() => {
+      mockMutate.mock.calls[0][1].onError(new Error('network'));
+    });
+    expect(mockMutate).toHaveBeenCalledTimes(2);
+    expect(document.body.textContent).not.toMatch(/com_ui_autosave_failed/);
+
+    // Second (retry) failure surfaces the indicator, without losing the edit
+    // (the deck was already applied locally via window.DECK/the canvas).
+    act(() => {
+      mockMutate.mock.calls[1][1].onError(new Error('network'));
+    });
+    expect(document.body.textContent).toMatch(/com_ui_autosave_failed/);
+  });
+});
+
+/**
+ * Task 9's core correctness requirement: replaceArtifactContent splices
+ * `updated` into the message's stored text by locating `original` as an exact
+ * substring. Two saves in flight concurrently with out-of-order resolution
+ * could either fail their lookup (edit silently dropped) or let a stale
+ * response clobber a newer save. This suite proves the autosave queue
+ * enforces: at most one mutation in flight at a time, correct original/updated
+ * chaining across coalesced saves, and no silently-dropped edits on failure.
+ */
+describe('DownloadArtifact — autosave queue concurrency (Task 9)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  const FENCE_BODY =
+    '<script src="/libs/deck-renderer.js"></script>' +
+    '<script>window.DECK = {"title":"Old"};</script>';
+
+  /** Mutate mock that resolves asynchronously (realistic network latency),
+   * tracking how many calls are simultaneously "in flight" so the test can
+   * assert that number never exceeds 1. Optionally fails the Nth call once. */
+  function makeAsyncMutate({ failOnCallIndex }: { failOnCallIndex?: number } = {}) {
+    let pending = 0;
+    let maxPending = 0;
+    const failedOnce = new Set<number>();
+    const mutate = jest.fn((vars, options) => {
+      pending += 1;
+      maxPending = Math.max(maxPending, pending);
+      const callIndex = mutate.mock.calls.length - 1;
+      setTimeout(() => {
+        pending -= 1;
+        const shouldFail = callIndex === failOnCallIndex && !failedOnce.has(callIndex);
+        if (shouldFail) {
+          failedOnce.add(callIndex);
+          options.onError(new Error('network error'));
+        } else {
+          options.onSuccess();
+        }
+      }, 75);
+    });
+    return { mutate, getMaxPending: () => maxPending };
+  }
+
+  function renderDeckEditor(mutate: jest.Mock) {
+    (useEditArtifact as jest.Mock).mockReturnValue({ mutate, isLoading: false });
+    mockCurrentCode = FENCE_BODY;
+    const { getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: FENCE_BODY, messageId: 'msg-1', index: 3 } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
+  }
+
+  const postDeckUpdate = (deck: object) => {
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { type: 'artifact-deck-updated', deck } }),
+      );
+    });
+  };
+
+  it('never has more than one mutation in flight, even when two updates arrive within the debounce/latency window', () => {
+    const { mutate, getMaxPending } = makeAsyncMutate();
+    renderDeckEditor(mutate);
+
+    // First update dispatches immediately (nothing in flight yet).
+    postDeckUpdate({ title: 'First' });
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    // Second update arrives well before the first's ~75ms latency resolves —
+    // it must coalesce into the queue, NOT fire a second concurrent mutation.
+    act(() => {
+      jest.advanceTimersByTime(20);
+    });
+    postDeckUpdate({ title: 'Second' });
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    // Let the first mutation resolve — only then should the coalesced second
+    // save fire.
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+
+    expect(getMaxPending()).toBe(1);
+  });
+
+  it("the second save's original is exactly the first save's updated — not a stale pre-first-save snapshot", () => {
+    const { mutate } = makeAsyncMutate();
+    renderDeckEditor(mutate);
+
+    postDeckUpdate({ title: 'First' });
+    act(() => {
+      jest.advanceTimersByTime(20);
+    });
+    postDeckUpdate({ title: 'Second' });
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
+
+    const firstCall = mutate.mock.calls[0][0];
+    const secondCall = mutate.mock.calls[1][0];
+
+    expect(firstCall.original).toBe(FENCE_BODY);
+    expect(firstCall.updated).toContain('"title":"First"');
+    // The invariant under test: original of call 2 === updated of call 1,
+    // NOT artifact.content (FENCE_BODY) and not any other earlier snapshot.
+    expect(secondCall.original).toBe(firstCall.updated);
+    expect(secondCall.updated).toContain('"title":"Second"');
+  });
+
+  it('retries once with the still-correct original after a rejected save, instead of silently dropping the edit', () => {
+    const { mutate } = makeAsyncMutate({ failOnCallIndex: 0 });
+    renderDeckEditor(mutate);
+
+    postDeckUpdate({ title: 'First' });
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const firstOriginal = mutate.mock.calls[0][0].original;
+    const firstUpdated = mutate.mock.calls[0][0].updated;
+
+    // First attempt rejects.
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+    // The queue must have automatically retried — the edit is not dropped.
+    expect(mutate).toHaveBeenCalledTimes(2);
+    const retryCall = mutate.mock.calls[1][0];
+    expect(retryCall.original).toBe(firstOriginal);
+    expect(retryCall.updated).toBe(firstUpdated);
+
+    // Retry succeeds (failOnCallIndex only fails call index 0 once).
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces a third update that arrives while a retry is still in flight, using the correct chained original', () => {
+    const { mutate } = makeAsyncMutate({ failOnCallIndex: 0 });
+    renderDeckEditor(mutate);
+
+    postDeckUpdate({ title: 'First' });
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    // First attempt fails and the retry fires synchronously from onError.
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
+    const retryUpdated = mutate.mock.calls[1][0].updated;
+
+    // A third update arrives while the retry is in flight — it must coalesce
+    // rather than fire concurrently.
+    postDeckUpdate({ title: 'Third' });
+    expect(mutate).toHaveBeenCalledTimes(2);
+
+    // Retry resolves successfully, then the coalesced third save fires.
+    act(() => {
+      jest.advanceTimersByTime(75);
+    });
+    expect(mutate).toHaveBeenCalledTimes(3);
+    expect(mutate.mock.calls[2][0].original).toBe(retryUpdated);
+    expect(mutate.mock.calls[2][0].updated).toContain('"title":"Third"');
   });
 });
 

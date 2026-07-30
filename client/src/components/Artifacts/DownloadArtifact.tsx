@@ -10,6 +10,7 @@ import { apiBaseUrl } from 'librechat-data-provider';
 import { useEditArtifact, useGetStartupConfig } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
+import { useDeckAutosaveQueue } from './useDeckAutosaveQueue';
 
 const LOG = '[DownloadArtifact]';
 
@@ -195,9 +196,7 @@ function patchLibUrls(html: string): string {
   const originTag = `<script>window._BRAND_ORIGIN=${JSON.stringify(origin)};</script>`;
   patched = patched.replace(/<\/head>/i, `${originTag}</head>`);
 
-  console.log(
-    `${LOG} [patchLibUrls] pptxgenjs CDN replaced: ${patched !== html}`,
-  );
+  console.log(`${LOG} [patchLibUrls] pptxgenjs CDN replaced: ${patched !== html}`);
   return patched;
 }
 
@@ -242,7 +241,6 @@ export function runInHiddenIframe(
   iframe.onload = () => {
     console.log(`${LOG} [hiddenIframe] onload fired — waiting 800 ms for post-load init`);
     setTimeout(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const win = iframe.contentWindow as any;
       if (!win) {
         console.error(`${LOG} [hiddenIframe] contentWindow is null after load`);
@@ -276,7 +274,9 @@ export function runInHiddenIframe(
           bridgeInvoked = true;
           try {
             win[fnName].apply(null, args || []);
-            console.log(`${LOG} [hiddenIframe] ${fnName}() invoked — waiting for blob interception`);
+            console.log(
+              `${LOG} [hiddenIframe] ${fnName}() invoked — waiting for blob interception`,
+            );
           } catch (err) {
             console.error(`${LOG} [hiddenIframe] Error invoking ${fnName}:`, err);
             onError?.(err instanceof Error ? err.message : String(err));
@@ -321,7 +321,6 @@ const DownloadArtifact = ({
   const [driveError, setDriveError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [pendingDeck, setPendingDeck] = useState<object | null>(null);
   // Export-options pickers (Task 14): DOCX page size and XLSX sheet
   // selection. Only one of these is ever open at a time in practice (each
   // format has its own button), but they're independent state so opening one
@@ -333,9 +332,19 @@ const DownloadArtifact = ({
   );
   const [selectedSheets, setSelectedSheets] = useState<Set<string>>(new Set());
   // Deck edits are ARTIFACT-CONTENT edits, not whole-message edits: the same
-  // mechanism ArtifactCodeEditor.tsx uses. See saveEditedDeck below for why
-  // useUpdateMessageMutation is the wrong tool here.
+  // mechanism ArtifactCodeEditor.tsx uses. See useDeckAutosaveQueue below for
+  // why useUpdateMessageMutation is the wrong tool here, and for why this
+  // needs its own serialized queue rather than ArtifactCodeEditor.tsx's
+  // debounced-mutation pattern (which drops edits that arrive while a
+  // mutation is in flight, instead of queueing them).
   const editArtifact = useEditArtifact();
+  const { enqueue: enqueueDeckSave, autosaveFailed } = useDeckAutosaveQueue({
+    editArtifact,
+    messageId,
+    artifactIndex: artifact.index,
+    initialContent: artifact.content ?? '',
+    onSaved: setCurrentCode,
+  });
 
   // Timer that arms the hidden-iframe fallback if postMessage gets no response
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -376,9 +385,7 @@ const DownloadArtifact = ({
       if (e.data?.type === 'bridge-ready') {
         bridgeReadyRef.current = true;
         if (fallbackTimerRef.current) {
-          console.log(
-            `${LOG} bridge-ready received — artifact is alive, cancelling fallback race`,
-          );
+          console.log(`${LOG} bridge-ready received — artifact is alive, cancelling fallback race`);
           clearTimeout(fallbackTimerRef.current);
           fallbackTimerRef.current = null;
         }
@@ -428,18 +435,21 @@ const DownloadArtifact = ({
     };
   }, []);
 
-  // Tracks the deck sent up by deck-editor.js's commit handler
-  // (artifact-deck-updated) so the Save button knows what to persist and can
-  // stay disabled until at least one edit has actually been committed.
+  // canvas-autosave.js (Task 9) posts artifact-deck-updated whenever the
+  // canvas editor's debounced autosave trigger fires — there is no longer an
+  // explicit Save button. Every such message is handed to the serialized
+  // autosave queue, which enforces at-most-one-mutation-in-flight and correct
+  // original/updated chaining even if several edits arrive in quick
+  // succession (see useDeckAutosaveQueue.ts).
   useEffect(() => {
     const handle = (e: MessageEvent) => {
       if (e.data?.type === 'artifact-deck-updated') {
-        setPendingDeck(e.data.deck);
+        enqueueDeckSave(e.data.deck);
       }
     };
     window.addEventListener('message', handle);
     return () => window.removeEventListener('message', handle);
-  }, []);
+  }, [enqueueDeckSave]);
 
   // Reset bridgeReadyRef when a genuinely different artifact is shown.
   //
@@ -466,7 +476,6 @@ const DownloadArtifact = ({
     }
     console.log(`${LOG} artifact.id changed — resetting bridgeReadyRef for new artifact`);
     bridgeReadyRef.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId]);
 
   const flash = (key: string) => {
@@ -502,7 +511,12 @@ const DownloadArtifact = ({
 
     const handler = async (e: MessageEvent) => {
       if (e.data?.type !== 'artifact-download') return;
-      if (!String(e.data.filename ?? '').toLowerCase().endsWith(`.${fmt.ext}`)) return;
+      if (
+        !String(e.data.filename ?? '')
+          .toLowerCase()
+          .endsWith(`.${fmt.ext}`)
+      )
+        return;
       if (timeoutId) clearTimeout(timeoutId);
       window.removeEventListener('message', handler);
       try {
@@ -584,8 +598,7 @@ const DownloadArtifact = ({
 }());
 </script>`;
 
-    const printHtml = patchLibUrls(content)
-      .replace(/<\/head>/i, PRINT_SETUP_SCRIPT + '</head>');
+    const printHtml = patchLibUrls(content).replace(/<\/head>/i, PRINT_SETUP_SCRIPT + '</head>');
     const blob = new Blob([printHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     // Use an anchor click instead of window.open — browsers do not block anchor-based
@@ -640,8 +653,7 @@ const DownloadArtifact = ({
 }());
 </script>`;
 
-    const printHtml = patchLibUrls(content)
-      .replace(/<\/head>/i, COMPAT_SETUP_SCRIPT + '</head>');
+    const printHtml = patchLibUrls(content).replace(/<\/head>/i, COMPAT_SETUP_SCRIPT + '</head>');
     const blob = new Blob([printHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -728,7 +740,6 @@ const DownloadArtifact = ({
           });
 
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const win = iframe.contentWindow as any;
             const doc = iframe.contentDocument as Document;
 
@@ -798,7 +809,6 @@ const DownloadArtifact = ({
               if (settled) return;
               const batchPngs = await Promise.all(
                 batch.map((el) =>
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   (win.html2canvas as any)(el, {
                     scale: 2,
                     useCORS: true,
@@ -938,42 +948,6 @@ const DownloadArtifact = ({
     iframeWindow?.postMessage({ type: 'artifact-editor-toggle', enabled: next }, '*');
   };
 
-  // Persists an inline deck edit by rewriting ONLY the artifact's own body.
-  //
-  // This must NOT use useUpdateMessageMutation: that mutation's `text` field
-  // replaces the message's ENTIRE text (see EditMessage.tsx, where `text`
-  // genuinely is the full message). What we have here is only the artifact's
-  // code-fence BODY (`artifact.content`, produced by extractContent() in
-  // Artifact.tsx) — no `:::artifact{...}` header, no closing `:::`, and none
-  // of the assistant's surrounding prose. Posting it as full message text
-  // destroyed the artifact directive and any accompanying prose, and the
-  // message stopped rendering as an artifact at all.
-  //
-  // useEditArtifact is the correct mechanism (same one ArtifactCodeEditor.tsx
-  // uses): it sends {index, messageId, original, updated} and the server's
-  // replaceArtifactContent() locates the fence body inside the FULL stored
-  // message and splices only that region, leaving everything else intact. Its
-  // onSuccess also writes the server's returned content/text back into the
-  // messages query cache, so artifact.content doesn't go stale after a save.
-  const saveEditedDeck = () => {
-    if (!pendingDeck || !messageId) return;
-    // `original` must be the artifact body as the SERVER currently has it, so
-    // the splice can find it; base `updated` on the same string so the two
-    // stay consistent.
-    const original = artifact.content ?? '';
-    if (!original || artifact.index == null) return;
-    const updated = original.replace(
-      /window\.DECK\s*=\s*\{[\s\S]*?\};/,
-      'window.DECK = ' + JSON.stringify(pendingDeck) + ';',
-    );
-    editArtifact.mutate({ index: artifact.index, messageId, original, updated });
-    // Keep the local editor state in sync with what we just persisted, the
-    // same way ArtifactCodeEditor.tsx does, so the preview/editor don't show
-    // the pre-edit body until the query cache round-trips.
-    setCurrentCode?.(updated);
-    setPendingDeck(null);
-  };
-
   const downloadNative = (fmt: NativeFormat, args?: unknown[]) => {
     console.log(`${LOG} Download requested: ${fmt.label} (triggerFn: ${fmt.triggerFn})`);
     console.log(`${LOG} content length: ${content.length}, has previewRef: ${!!previewRef}`);
@@ -1107,99 +1081,99 @@ const DownloadArtifact = ({
               line, and `absolute top-8` relative to the whole toolbar would then
               detach the popover from the button that opened it. */}
           <div className="relative inline-flex">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs font-medium"
-            onClick={() => handleDownloadClick(fmt)}
-            aria-label={`Download as ${fmt.label}`}
-          >
-            {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-            {fmt.label}
-          </Button>
-          {docxPicker?.ext === fmt.ext && (
-            <div
-              role="dialog"
-              aria-label="DOCX page size"
-              className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs font-medium"
+              onClick={() => handleDownloadClick(fmt)}
+              aria-label={`Download as ${fmt.label}`}
             >
-              <div className="mb-2 font-medium">{localize('com_ui_page_size')}</div>
-              {/* A4/Letter are format-name proper nouns, not UI verbs — left as
+              {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+              {fmt.label}
+            </Button>
+            {docxPicker?.ext === fmt.ext && (
+              <div
+                role="dialog"
+                aria-label="DOCX page size"
+                className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+              >
+                <div className="mb-2 font-medium">{localize('com_ui_page_size')}</div>
+                {/* A4/Letter are format-name proper nouns, not UI verbs — left as
                   literal strings, matching how PPTX/XLSX/DOCX (fmt.label) are
                   already handled as literal, unlocalized labels in this file. */}
-              <label className="mb-1 flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="docx-page-size"
-                  aria-label="A4"
-                  checked={docxPageSize === 'A4'}
-                  onChange={() => setDocxPageSize('A4')}
-                />
-                A4
-              </label>
-              <label className="mb-2 flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="docx-page-size"
-                  aria-label="Letter"
-                  checked={docxPageSize === 'Letter'}
-                  onChange={() => setDocxPageSize('Letter')}
-                />
-                Letter
-              </label>
-              <div className="flex gap-2">
-                <Button size="sm" className="h-6 px-2 text-xs" onClick={confirmDocxDownload}>
-                  {localize('com_ui_download')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => setDocxPicker(null)}
-                >
-                  {localize('com_ui_cancel')}
-                </Button>
-              </div>
-            </div>
-          )}
-          {xlsxPicker?.fmt.ext === fmt.ext && (
-            <div
-              role="dialog"
-              aria-label="XLSX sheet selection"
-              className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
-            >
-              <div className="mb-2 font-medium">{localize('com_ui_sheets_to_export')}</div>
-              {xlsxPicker.sheetNames.map((name) => (
-                <label key={name} className="mb-1 flex items-center gap-2">
+                <label className="mb-1 flex items-center gap-2">
                   <input
-                    type="checkbox"
-                    aria-label={name}
-                    checked={selectedSheets.has(name)}
-                    onChange={() => toggleSelectedSheet(name)}
+                    type="radio"
+                    name="docx-page-size"
+                    aria-label="A4"
+                    checked={docxPageSize === 'A4'}
+                    onChange={() => setDocxPageSize('A4')}
                   />
-                  {name}
+                  A4
                 </label>
-              ))}
-              <div className="mt-1 flex gap-2">
-                <Button
-                  size="sm"
-                  className="h-6 px-2 text-xs"
-                  onClick={confirmXlsxDownload}
-                  disabled={selectedSheets.size === 0}
-                >
-                  {localize('com_ui_download')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => setXlsxPicker(null)}
-                >
-                  {localize('com_ui_cancel')}
-                </Button>
+                <label className="mb-2 flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="docx-page-size"
+                    aria-label="Letter"
+                    checked={docxPageSize === 'Letter'}
+                    onChange={() => setDocxPageSize('Letter')}
+                  />
+                  Letter
+                </label>
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-6 px-2 text-xs" onClick={confirmDocxDownload}>
+                    {localize('com_ui_download')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setDocxPicker(null)}
+                  >
+                    {localize('com_ui_cancel')}
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+            {xlsxPicker?.fmt.ext === fmt.ext && (
+              <div
+                role="dialog"
+                aria-label="XLSX sheet selection"
+                className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+              >
+                <div className="mb-2 font-medium">{localize('com_ui_sheets_to_export')}</div>
+                {xlsxPicker.sheetNames.map((name) => (
+                  <label key={name} className="mb-1 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      aria-label={name}
+                      checked={selectedSheets.has(name)}
+                      onChange={() => toggleSelectedSheet(name)}
+                    />
+                    {name}
+                  </label>
+                ))}
+                <div className="mt-1 flex gap-2">
+                  <Button
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={confirmXlsxDownload}
+                    disabled={selectedSheets.size === 0}
+                  >
+                    {localize('com_ui_download')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setXlsxPicker(null)}
+                  >
+                    {localize('com_ui_cancel')}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
           {startupConfig?.googleDrivePickerEnabled && (
             <Button
@@ -1230,10 +1204,7 @@ const DownloadArtifact = ({
             </a>
           )}
           {downloadError && (
-            <span
-              className="flex h-7 items-center px-2 text-xs text-red-500"
-              title={downloadError}
-            >
+            <span className="flex h-7 items-center px-2 text-xs text-red-500" title={downloadError}>
               Download failed
             </span>
           )}
@@ -1284,9 +1255,7 @@ const DownloadArtifact = ({
             aria-label="Export as PPTX (image-based, pixel-perfect)"
             title="Screenshots each slide at 2× resolution and assembles as a full-bleed image PPTX"
           >
-            {done === 'pptx-hd' && (
-              <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
-            )}
+            {done === 'pptx-hd' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
             PPTX (HD)
           </Button>
         </>
@@ -1312,17 +1281,18 @@ const DownloadArtifact = ({
           >
             {isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
           </Button>
-          {isEditing && pendingDeck && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-xs font-medium"
-              onClick={saveEditedDeck}
-              disabled={editArtifact.isLoading}
-              aria-label={localize('com_ui_save')}
+          {/* Non-blocking autosave-failed indicator (Task 9): edits are
+              autosaved via a debounced, serialized queue rather than an
+              explicit Save button. Local edits are never lost when this
+              shows — only server persistence lags — so nothing here disables
+              further editing. */}
+          {autosaveFailed && (
+            <span
+              className="flex h-7 items-center px-2 text-xs text-red-500"
+              title={localize('com_ui_autosave_failed')}
             >
-              {localize('com_ui_save')}
-            </Button>
+              {localize('com_ui_autosave_failed')}
+            </span>
           )}
         </>
       )}
