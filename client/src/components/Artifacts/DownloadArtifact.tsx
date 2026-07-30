@@ -1091,9 +1091,15 @@ const DownloadArtifact = ({
   const isDeckArtifact = nativeFormats.some((f) => f.ext === 'pptx');
 
   return (
-    <div className="relative flex items-center gap-1">
+    <div className="relative flex flex-wrap items-center justify-end gap-1">
       {nativeFormats.map((fmt) => (
         <React.Fragment key={fmt.ext}>
+          {/* Wrapped in its own `relative` container (not the whole, now-wrappable
+              toolbar) so each popover anchors under ITS OWN button — with
+              flex-wrap on the outer row, a later button can land on a second
+              line, and `absolute top-8` relative to the whole toolbar would then
+              detach the popover from the button that opened it. */}
+          <div className="relative inline-flex">
           <Button
             size="sm"
             variant="ghost"
@@ -1187,6 +1193,7 @@ const DownloadArtifact = ({
               </div>
             </div>
           )}
+          </div>
           {startupConfig?.googleDrivePickerEnabled && (
             <Button
               size="sm"

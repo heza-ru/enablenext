@@ -69,6 +69,96 @@ describe('DeckSchemaRenderer.renderSchemaElements', () => {
     expect(img.getAttribute('src')).toBe('/deck-assets/slide-42-image-1.png');
   });
 
+  // Regression test (production bug found in a real generated deck: the LLM
+  // authored image elements as { type:'image', src:'/brand/KEY.png', ... },
+  // a more "natural" HTML-like convention it guessed instead of our actual
+  // brandImage/deckAsset contract. The keys it picked were real, valid brand
+  // assets -- it just used the wrong field name -- so this degraded to an
+  // "Image unavailable" placeholder instead of showing the real image, even
+  // though the correct asset was fully recoverable from the src path. Rather
+  // than relying solely on prompt-following to prevent this recurring, the
+  // renderer now defensively recovers brandImage/deckAsset from a `src` path
+  // when the explicit fields are absent.
+  it('recovers brandImage from a `src` path like "/brand/KEY.ext" when brandImage/deckAsset are absent', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, src: '/brand/product-suite-light.png' }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img).not.toBeNull();
+    // brandImagePath re-derives the correct extension from its own PNG-only
+    // list rather than trusting the LLM's guessed extension in `src` --
+    // 'product-suite-light' is genuinely PNG-only, so .png is still correct
+    // here, but the key (not the raw src) is what actually gets resolved.
+    expect(img.getAttribute('src')).toBe('/brand/product-suite-light.png');
+    expect(container.querySelector('.schema-image-placeholder')).toBeNull();
+  });
+
+  it('recovers deckAsset from a `src` path like "/deck-assets/FILENAME" when brandImage/deckAsset are absent', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, src: '/deck-assets/slide-42-image-1.png' }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img).not.toBeNull();
+    expect(img.getAttribute('src')).toBe('/deck-assets/slide-42-image-1.png');
+  });
+
+  it('falls back to the placeholder for a `src` that matches neither /brand/ nor /deck-assets/', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, src: 'https://example.com/random.png' }],
+      container,
+    );
+    expect(container.querySelector('.schema-image')).toBeNull();
+    expect(container.querySelector('.schema-image-placeholder')).not.toBeNull();
+  });
+
+  // Regression test (same real generated deck): text elements authored with
+  // `bold: true` (a natural boolean convention) instead of our actual
+  // `fontWeight: 'bold'` field silently rendered as normal weight -- every
+  // "bold" label/eyebrow in that deck was silently wrong. `bold: true` must
+  // be honored the same as `fontWeight: 'bold'`.
+  it('honors `bold: true` on a text element the same as fontWeight: "bold"', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Eyebrow', bold: true }],
+      container,
+    );
+    const el = container.querySelector('.schema-text');
+    expect(el.style.fontWeight).toBe('bold');
+  });
+
+  // Regression test (same real generated deck): `opacity` on text/shape
+  // elements (used for subtle eyebrow labels and hairline dividers) was
+  // silently dropped entirely -- every element with opacity < 1 rendered at
+  // full opacity instead, a real, visible fidelity gap from what was
+  // authored.
+  it('applies `opacity` on a text element as CSS opacity', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Faded', opacity: 0.45 }],
+      container,
+    );
+    const el = container.querySelector('.schema-text');
+    expect(el.style.opacity).toBe('0.45');
+  });
+
+  it('applies `opacity` on a shape element as CSS opacity', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'shape', shape: 'rect', x: 0, y: 0, w: 2, h: 1, fill: 'FFFFFF', opacity: 0.18 }],
+      container,
+    );
+    const el = container.querySelector('.schema-shape');
+    expect(el.style.opacity).toBe('0.18');
+  });
+
+  it('defaults to full opacity when the field is absent (no regression to existing elements)', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Normal' }],
+      container,
+    );
+    const el = container.querySelector('.schema-text');
+    expect(el.style.opacity).toBe('');
+  });
+
   // Regression test (production bug: a schema image element missing both
   // brandImage and deckAsset -- an easy real-world authoring slip, especially
   // for componentId-copied library elements -- threw synchronously inside
@@ -147,6 +237,58 @@ describe('DeckSchemaRenderer.exportSchemaElements', () => {
       { type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' },
     ]);
     expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/brand/logo-dark.svg', x: 0, y: 0, w: 2, h: 2 }));
+  });
+
+  // Export-side counterpart of the render-path `src` recovery regression
+  // test: the same real generated deck's images must actually appear in the
+  // exported .pptx too, not just the live preview.
+  it('recovers brandImage from a `src` path for export, same as the render path', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'image', x: 0, y: 0, w: 2, h: 2, src: '/brand/product-suite-light.png' },
+    ]);
+    expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/brand/product-suite-light.png', x: 0, y: 0, w: 2, h: 2 }));
+  });
+
+  it('recovers deckAsset from a `src` path for export, same as the render path', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'image', x: 0, y: 0, w: 2, h: 2, src: '/deck-assets/slide-42-image-1.png' },
+    ]);
+    expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/deck-assets/slide-42-image-1.png', x: 0, y: 0, w: 2, h: 2 }));
+  });
+
+  // Regression test (same real generated deck): `bold: true` must export as
+  // a real bold run, same as the render-path fix.
+  it('honors `bold: true` on export the same as fontWeight: "bold"', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Eyebrow', bold: true },
+    ]);
+    expect(slide.addText).toHaveBeenCalledWith('Eyebrow', expect.objectContaining({ bold: true }));
+  });
+
+  // Regression test (same real generated deck): `opacity` must export as
+  // PptxGenJS's `transparency` (0-100, inverse of opacity 0-1), so subtle
+  // eyebrow labels/hairline dividers actually look subtle in the real .pptx
+  // too, not just the live preview.
+  it('exports `opacity` on a text element as PptxGenJS transparency', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Faded', opacity: 0.45 },
+    ]);
+    expect(slide.addText).toHaveBeenCalledWith('Faded', expect.objectContaining({ transparency: 55 }));
+  });
+
+  it('exports `opacity` on a shape element as PptxGenJS fill.transparency', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'shape', shape: 'rect', x: 0, y: 0, w: 2, h: 1, fill: 'FFFFFF', opacity: 0.18 },
+    ]);
+    expect(slide.addShape).toHaveBeenCalledWith(
+      'rect',
+      expect.objectContaining({ fill: expect.objectContaining({ transparency: 82 }) }),
+    );
   });
 
   // Export-side counterpart of the render-path placeholder regression test

@@ -19,6 +19,39 @@
     return 'rgb(' + r + ', ' + g + ', ' + b + ')';
   }
 
+  // Recovers brandImage/deckAsset from a `src` path when an image element
+  // doesn't set either field explicitly. Production evidence (a real
+  // generated deck): the LLM authored image elements as
+  // { type:'image', src:'/brand/KEY.ext', ... } -- a more "natural" HTML-like
+  // convention it guessed instead of our actual brandImage/deckAsset
+  // contract -- using otherwise-real, valid asset keys. Rather than relying
+  // solely on prompt-following (skill docs) to prevent this recurring, the
+  // renderer defensively recovers the real reference from `src` itself.
+  // Only the KEY is recovered for /brand/ paths (extension is re-derived by
+  // brandImagePath from its own PNG-only list), since the LLM's guessed
+  // extension in `src` isn't necessarily correct.
+  function resolveImageRef(el) {
+    if (el.brandImage || el.deckAsset) {
+      return { brandImage: el.brandImage, deckAsset: el.deckAsset };
+    }
+    if (typeof el.src === 'string') {
+      var brandMatch = el.src.match(/^\/brand\/([^/]+)\.[a-zA-Z0-9]+$/);
+      if (brandMatch) return { brandImage: brandMatch[1] };
+      var assetMatch = el.src.match(/^\/deck-assets\/(.+)$/);
+      if (assetMatch) return { deckAsset: assetMatch[1] };
+    }
+    return {};
+  }
+
+  // Recovers "bold" from either our documented `fontWeight: 'bold'` field or
+  // a plain `bold: true` boolean -- production evidence (same real deck): the
+  // LLM authored `bold: true` on several text elements, a natural boolean
+  // convention it guessed instead of our actual fontWeight contract, and
+  // every one of those silently rendered/exported as normal weight.
+  function isBold(el) {
+    return el.fontWeight === 'bold' || el.bold === true;
+  }
+
   function renderSchemaElements(elements, containerEl) {
     (elements || []).forEach(function (el, elIndex) {
       if (el.type === 'text') {
@@ -37,9 +70,10 @@
         span.style.height = (el.h / SH) * 100 + '%';
         span.style.fontSize = (el.fontSize || 14) + 'pt';
         span.style.color = hexToCss(el.color || 'FFFFFF');
-        span.style.fontWeight = el.fontWeight || 'normal';
+        span.style.fontWeight = isBold(el) ? 'bold' : (el.fontWeight || 'normal');
         span.style.fontFamily = "'" + (el.fontFamily || 'DM Sans') + "',sans-serif";
         span.style.textAlign = el.align || 'left';
+        if (el.opacity != null) span.style.opacity = String(el.opacity);
         span.textContent = el.text || '';
         // Auto-fit is deliberately NOT run here. renderDeck() builds every
         // slide's DOM tree BEFORE attaching it to the document, so at this
@@ -52,7 +86,8 @@
         span.dataset.minFontSize = String(el.minFontSize || 8);
         containerEl.appendChild(span);
       } else if (el.type === 'image') {
-        if (!el.brandImage && !el.deckAsset) {
+        var imageRef = resolveImageRef(el);
+        if (!imageRef.brandImage && !imageRef.deckAsset) {
           // Degrade gracefully instead of throwing: a missing image reference
           // is a common, recoverable authoring slip (especially for
           // componentId-copied library elements) and shouldn't cost the rest
@@ -94,7 +129,7 @@
         img.style.width = (el.w / SW) * 100 + '%';
         img.style.height = (el.h / SH) * 100 + '%';
         img.style.objectFit = 'contain';
-        img.src = el.brandImage ? DR.brandImagePath(el.brandImage) : DR.deckAssetPath(el.deckAsset);
+        img.src = imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset);
         containerEl.appendChild(img);
       } else if (el.type === 'shape') {
         var box = document.createElement('div');
@@ -110,6 +145,7 @@
         } else if (el.shape === 'ellipse') {
           box.style.borderRadius = '50%';
         }
+        if (el.opacity != null) box.style.opacity = String(el.opacity);
         containerEl.appendChild(box);
       } else {
         throw new Error('DeckSchemaRenderer: unknown element type "' + el.type + '"');
@@ -162,17 +198,20 @@
   function exportSchemaElements(pptxSlide, elements) {
     (elements || []).forEach(function (el) {
       if (el.type === 'text') {
-        pptxSlide.addText(el.text || '', {
+        var textOpts = {
           x: el.x, y: el.y, w: el.w, h: el.h,
           fontSize: el.fontSize || 14,
           color: el.color || 'FFFFFF',
-          bold: el.fontWeight === 'bold',
+          bold: isBold(el),
           fontFace: el.fontFamily || 'DM Sans',
           align: el.align || 'left',
           fit: 'shrink',
-        });
+        };
+        if (el.opacity != null) textOpts.transparency = Math.round((1 - el.opacity) * 100);
+        pptxSlide.addText(el.text || '', textOpts);
       } else if (el.type === 'image') {
-        if (!el.brandImage && !el.deckAsset) {
+        var imageRef = resolveImageRef(el);
+        if (!imageRef.brandImage && !imageRef.deckAsset) {
           // Export-side counterpart of the render-path placeholder above:
           // degrade gracefully (a placeholder shape + label) instead of
           // throwing and aborting the rest of this slide's export (and, before
@@ -199,12 +238,14 @@
         // silently dropped every schema-layout image from the exported PPTX.
         // This matches the 3 hand-coded addImage call sites in deck-renderer.js
         // and embedFontsInPptx's origin-aware fetch.
-        var fullPath = el.brandImage ? DR.brandImagePath(el.brandImage) : DR.deckAssetPath(el.deckAsset);
+        var fullPath = imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset);
         pptxSlide.addImage({ path: fullPath, x: el.x, y: el.y, w: el.w, h: el.h });
       } else if (el.type === 'shape') {
+        var shapeFill = { color: el.fill || '4a4560' };
+        if (el.opacity != null) shapeFill.transparency = Math.round((1 - el.opacity) * 100);
         pptxSlide.addShape(el.shape, {
           x: el.x, y: el.y, w: el.w, h: el.h,
-          fill: { color: el.fill || '4a4560' },
+          fill: shapeFill,
           rectRadius: el.shape === 'roundRect' ? (el.rectRadius || 0.06) : undefined,
         });
       } else {
