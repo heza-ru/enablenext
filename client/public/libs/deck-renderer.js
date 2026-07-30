@@ -681,6 +681,30 @@
         return;
       }
 
+      if (spec.type === 'line' || spec.type === 'area') {
+        var lineWrap = document.createElement('div');
+        lineWrap.className = 'chart-line';
+        lineWrap.style.cssText = 'position:relative;height:14rem;display:flex;align-items:flex-end;gap:.5rem;padding:0 .5rem;';
+        var maxVal = Math.max.apply(null, bars.map(function (b) { return b.value; }).concat([1]));
+        bars.forEach(function (bar) {
+          var col = document.createElement('div');
+          col.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;';
+          var fill = document.createElement('div');
+          var pct = Math.round((bar.value / maxVal) * 100);
+          fill.style.cssText = 'width:100%;border-radius:4px 4px 0 0;height:' + pct + '%;' +
+            (spec.type === 'area' ? 'background:rgba(255,107,24,.35);border-top:2px solid #FF6B18;' : 'background:#FF6B18;width:4px;margin:0 auto;');
+          var label = document.createElement('span');
+          label.style.cssText = "font-size:.75rem;color:rgba(255,255,255,.7);margin-top:.4rem;font-family:'DM Sans',sans-serif;";
+          label.textContent = bar.label;
+          col.appendChild(fill);
+          col.appendChild(label);
+          lineWrap.appendChild(col);
+        });
+        slideEl.appendChild(h2);
+        slideEl.appendChild(lineWrap);
+        return;
+      }
+
       var rows = document.createElement('div');
       rows.className = 'chart-rows';
       rows.style.cssText = 'display:flex;flex-direction:column;gap:.9rem;';
@@ -727,6 +751,15 @@
           'pie',
           [{ name: spec.title || '', labels: bars.map(function (b) { return b.label; }), values: bars.map(function (b) { return b.value; }) }],
           { x: g.bars.x, y: g.bars.y, w: g.bars.w, h: g.bars.h, showLegend: true, legendPos: 'r' },
+        );
+        return;
+      }
+
+      if (spec.type === 'line' || spec.type === 'area') {
+        pptxSlide.addChart(
+          spec.type,
+          [{ name: spec.title || '', labels: bars.map(function (b) { return b.label; }), values: bars.map(function (b) { return b.value; }) }],
+          { x: g.bars.x, y: g.bars.y, w: g.bars.w, h: g.bars.h, showLegend: false },
         );
         return;
       }

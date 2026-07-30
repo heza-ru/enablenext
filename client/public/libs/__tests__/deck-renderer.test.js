@@ -571,6 +571,39 @@ describe('layout: chart', () => {
     );
     expect(pptxSlide.addShape).not.toHaveBeenCalled();
   });
+
+  it('renders a simple line/area indicator when type is "line" or "area" (preview treats them the same visually — a connected trend line over the bars, distinguished by fill)', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render({ title: 'T', type: 'line', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }] }, slideEl);
+    expect(slideEl.querySelector('.chart-line')).not.toBeNull();
+  });
+
+  it('exportPptx calls addChart with "line" for type:"line"', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+    DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+      title: 'T', type: 'line', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }],
+    });
+    expect(pptxSlide.addChart).toHaveBeenCalledWith('line', expect.arrayContaining([expect.objectContaining({ labels: ['A', 'B'], values: [5, 8] })]), expect.any(Object));
+  });
+
+  it('exportPptx calls addChart with "area" for type:"area"', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+    DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+      title: 'T', type: 'area', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }],
+    });
+    expect(pptxSlide.addChart).toHaveBeenCalledWith('area', expect.anything(), expect.any(Object));
+  });
+
+  it('bar chart (default/unset type) behavior is unchanged', () => {
+    const DeckRenderer = loadDeckRenderer();
+    const slideEl = document.createElement('section');
+    DeckRenderer.getLayout('chart').render({ title: 'T', bars: [{ label: 'A', value: 5 }] }, slideEl);
+    expect(slideEl.querySelector('.chart-rows')).not.toBeNull();
+    expect(slideEl.querySelector('.chart-line')).toBeNull();
+  });
 });
 
 describe('layout: process', () => {
