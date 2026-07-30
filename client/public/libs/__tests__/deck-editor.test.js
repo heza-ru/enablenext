@@ -221,6 +221,22 @@ describe('DeckEditor.setSlideComponent', () => {
     await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  // Regression test (task-17 fix round 1, Finding 1 -- CRITICAL): setSlideComponent
+  // is async (it awaits a fetch() before calling renderDeck), so the
+  // editing-state-preservation fix must survive across that await boundary too,
+  // not just in the synchronous mutators.
+  it('preserves editor chrome and contenteditable bindings after an awaited setSlideComponent call when editing was active', async () => {
+    window.DeckEditor.enableEditing(mount);
+    expect(mount.querySelectorAll('.deck-editor-slide-bar').length).toBeGreaterThan(0);
+    expect(mount.querySelectorAll('[contenteditable]').length).toBeGreaterThan(0);
+
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+
+    expect(window.DeckEditor.isEditing()).toBe(true);
+    expect(mount.querySelectorAll('.deck-editor-slide-bar').length).toBeGreaterThan(0);
+    expect(mount.querySelectorAll('[contenteditable]').length).toBeGreaterThan(0);
+  });
 });
 
 describe('DeckEditor UI chrome', () => {
@@ -236,7 +252,14 @@ describe('DeckEditor UI chrome', () => {
     };
     window.DeckRenderer.renderDeck(window.DECK, mount);
   });
-  afterEach(() => { delete window.DECK; });
+  afterEach(() => {
+    // Several tests in this block call enableEditing(mount) without a matching
+    // disableEditing() -- explicitly reset the module-level `editing` flag here
+    // so it can't leak into a later test (e.g. the "editing was never enabled"
+    // regression test below, which asserts isEditing() starts false).
+    window.DeckEditor.disableEditing();
+    delete window.DECK;
+  });
 
   it('injects a control bar with reorder/duplicate/delete buttons per slide when editing is enabled', () => {
     window.DeckEditor.enableEditing(mount);
@@ -269,5 +292,34 @@ describe('DeckEditor UI chrome', () => {
     const lastDown = bars[1].querySelector('[data-action="down"]');
     expect(firstUp.disabled).toBe(true);
     expect(lastDown.disabled).toBe(true);
+  });
+
+  // Regression test (task-17 fix round 1, Finding 1 -- CRITICAL): every
+  // mutator (reorderSlide/duplicateSlide/deleteSlide/setSlideImage/
+  // setSlideComponent) calls window.DeckRenderer.renderDeck, which does
+  // `mountEl.innerHTML = ''` and rebuilds the slide DOM from scratch. Before
+  // this fix, none of the mutators re-invoked enableEditing afterward, so a
+  // SINGLE click of any control-bar button silently destroyed all chrome and
+  // all contenteditable bindings -- verified empirically that
+  // `.deck-editor-slide-bar` count and `[contenteditable]` count both dropped
+  // to 0 immediately after, even though isEditing() still reported true.
+  it('duplicateSlide preserves editor chrome and contenteditable bindings when editing was active', () => {
+    window.DeckEditor.enableEditing(mount);
+    expect(mount.querySelectorAll('.deck-editor-slide-bar').length).toBeGreaterThan(0);
+    expect(mount.querySelectorAll('[contenteditable]').length).toBeGreaterThan(0);
+
+    window.DeckEditor.duplicateSlide(0, mount);
+
+    expect(window.DeckEditor.isEditing()).toBe(true);
+    expect(mount.querySelectorAll('.deck-editor-slide-bar').length).toBe(3); // 2 original slides + 1 duplicate
+    expect(mount.querySelectorAll('[contenteditable]').length).toBeGreaterThan(0);
+  });
+
+  it('does not enable editing chrome after a mutation when editing was never enabled', () => {
+    expect(window.DeckEditor.isEditing()).toBe(false);
+    window.DeckEditor.duplicateSlide(0, mount);
+    expect(window.DeckEditor.isEditing()).toBe(false);
+    expect(mount.querySelectorAll('.deck-editor-slide-bar').length).toBe(0);
+    expect(mount.querySelectorAll('[contenteditable]').length).toBe(0);
   });
 });

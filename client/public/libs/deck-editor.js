@@ -31,12 +31,86 @@
     };
   }
 
+  // Injects the chrome stylesheet once per document, mirroring the
+  // injectBaseStyles() guard pattern in deck-renderer.js (a document.getElementById
+  // check, not a module-level flag, so it survives across module re-requires in
+  // tests and works correctly if this file is ever loaded into more than one
+  // document/iframe).
+  //
+  // Color choice (task-17 fix round 1, Finding 2, corrected per human
+  // clarification): this chrome is the CHATBOT APP's own editing tool overlaid
+  // on the deck, not part of the slide content being edited -- so it must look
+  // native to the LibreChat app shell, not to the presentation's own brand
+  // palette (Orange #FF6B18 / Ink #25223B belong to slide content and are
+  // deliberately NOT used here). Values below are hardcoded copies of
+  // LibreChat's own neutral dark-mode tokens (see client/src/style.css's
+  // --gray-850/--gray-900/--gray-100/--gray-600 custom properties) rather than
+  // `var(--...)` references, because this stylesheet is injected into a
+  // cross-origin deck-render iframe that does not inherit the parent
+  // document's CSS custom properties.
+  function injectEditorChromeStyles() {
+    if (document.getElementById('deck-editor-chrome-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'deck-editor-chrome-styles';
+    style.textContent =
+      '.deck-editor-slide-bar{' +
+        'position:absolute;top:10px;right:10px;z-index:1000;' +
+        'display:flex;align-items:center;gap:4px;' +
+        'padding:5px;border-radius:999px;' +
+        'background:rgba(23,23,23,0.85);' + // gray-850, translucent
+        'border:1px solid rgba(255,255,255,0.1);' +
+        '-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);' +
+        'box-shadow:0 2px 10px rgba(0,0,0,0.35);' +
+        "font-family:'DM Sans',-apple-system,sans-serif" +
+      '}' +
+      '.deck-editor-chrome-btn{' +
+        'appearance:none;-webkit-appearance:none;border:none;outline:none;' +
+        'display:inline-flex;align-items:center;justify-content:center;' +
+        'min-width:28px;height:28px;padding:0 10px;' +
+        'border-radius:999px;background:transparent;color:#ececec;' + // gray-100
+        "font-family:'DM Sans',-apple-system,sans-serif;font-size:13px;font-weight:500;" +
+        'line-height:1;cursor:pointer;white-space:nowrap;' +
+        'transition:background-color .12s ease,color .12s ease' +
+      '}' +
+      '.deck-editor-chrome-btn:hover:not(:disabled){background:#424242}' + // gray-600
+      '.deck-editor-chrome-btn:focus-visible{box-shadow:0 0 0 2px rgba(236,236,236,0.6)}' +
+      '.deck-editor-chrome-btn:disabled{color:#8a8a8a;cursor:not-allowed;opacity:.5}' +
+      '.deck-editor-variant-select{' +
+        'appearance:none;-webkit-appearance:none;' +
+        'border:1px solid rgba(255,255,255,0.14);border-radius:999px;' +
+        'background:#212121;color:#ececec;' + // gray-800 / gray-100
+        "font-family:'DM Sans',-apple-system,sans-serif;font-size:12px;font-weight:500;" +
+        'height:28px;padding:0 24px 0 10px;cursor:pointer;' +
+        'background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%23ececec\'/%3E%3C/svg%3E");' +
+        'background-repeat:no-repeat;background-position:right 8px center' +
+      '}' +
+      '.deck-editor-variant-select:hover{border-color:#424242}' + // gray-600
+      '.deck-editor-variant-select:focus-visible{outline:none;border-color:rgba(236,236,236,0.6);box-shadow:0 0 0 2px rgba(236,236,236,0.35)}' +
+      '.deck-editor-variant-select option,.deck-editor-variant-select optgroup{background:#171717;color:#ececec}' + // gray-850
+      '.deck-editor-image-swap{' +
+        'position:absolute;z-index:1000;transform:translate(-4px,-4px);' +
+        'appearance:none;-webkit-appearance:none;border:none;outline:none;' +
+        'display:inline-flex;align-items:center;justify-content:center;' +
+        'height:24px;padding:0 10px;border-radius:999px;' +
+        'background:rgba(13,13,13,0.85);color:#ececec;' + // gray-900, translucent
+        'border:1px solid rgba(255,255,255,0.1);' +
+        '-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);' +
+        "font-family:'DM Sans',-apple-system,sans-serif;font-size:11px;font-weight:500;" +
+        'line-height:1;cursor:pointer;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,0.35);' +
+        'transition:background-color .12s ease' +
+      '}' +
+      '.deck-editor-image-swap:hover{background:#424242}' + // gray-600
+      '.deck-editor-image-swap:focus-visible{box-shadow:0 0 0 2px rgba(236,236,236,0.6)}';
+    document.head.appendChild(style);
+  }
+
   function enableEditing(mountEl) {
     // Clear any bindings left over from a prior enableEditing call (e.g. a
     // previous mount that was never explicitly disabled) before wiring up
     // this mountEl, so re-invoking enableEditing is always idempotent and
     // never silently no-ops against stale elements.
     disableEditing();
+    injectEditorChromeStyles();
     editing = true;
     var slideEls = mountEl.querySelectorAll('.slide');
     slideEls.forEach(function (slideEl, slideIndex) {
@@ -93,23 +167,40 @@
     return window.DECK;
   }
 
+  // Every mutator below re-renders the deck via window.DeckRenderer.renderDeck,
+  // which (deck-renderer.js:163) does `mountEl.innerHTML = ''` and rebuilds the
+  // slide DOM from scratch -- destroying any contenteditable bindings and
+  // injected chrome that enableEditing had wired up. If editing was active
+  // before the mutation, we must call enableEditing(mountEl) again afterward
+  // to restore it, or the deck silently becomes non-editable after exactly one
+  // reorder/duplicate/delete/image-swap/variant-swap (see task-17 fix round 1
+  // review finding -- verified empirically that chrome count and
+  // [contenteditable] count both drop to 0 after a single mutation without
+  // this). We must NOT re-enable editing if it wasn't active already, since
+  // these functions are also callable programmatically outside editor mode.
+  function reRenderPreservingEditingState(mountEl) {
+    var wasEditing = editing;
+    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+    if (wasEditing) enableEditing(mountEl);
+  }
+
   function reorderSlide(fromIndex, toIndex, mountEl) {
     var slides = window.DECK.slides;
     var moved = slides.splice(fromIndex, 1)[0];
     slides.splice(toIndex, 0, moved);
-    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+    reRenderPreservingEditingState(mountEl);
   }
 
   function duplicateSlide(index, mountEl) {
     var slides = window.DECK.slides;
     var copy = JSON.parse(JSON.stringify(slides[index]));
     slides.splice(index + 1, 0, copy);
-    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+    reRenderPreservingEditingState(mountEl);
   }
 
   function deleteSlide(index, mountEl) {
     window.DECK.slides.splice(index, 1);
-    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+    reRenderPreservingEditingState(mountEl);
   }
 
   function setSlideImage(slideIndex, elementIndex, imageRef, mountEl) {
@@ -121,7 +212,7 @@
     delete el.deckAsset;
     if (imageRef.brandImage) el.brandImage = imageRef.brandImage;
     if (imageRef.deckAsset) el.deckAsset = imageRef.deckAsset;
-    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+    reRenderPreservingEditingState(mountEl);
   }
 
   // --- Variant/componentId swap ---------------------------------------
@@ -149,7 +240,12 @@
       slide.layout = 'schema';
       slide.componentId = componentId;
       slide.elements = JSON.parse(JSON.stringify(entry.elements));
-      window.DeckRenderer.renderDeck(window.DECK, mountEl);
+      // Captured just before the re-render (not at the top of this function)
+      // so it reflects editing state at the moment of mutation, same as the
+      // synchronous mutators' reRenderPreservingEditingState -- this is an
+      // async function, so `editing` could in principle change while the
+      // fetch was in flight.
+      reRenderPreservingEditingState(mountEl);
     });
   }
 
@@ -169,7 +265,7 @@
 
   function buildVariantSelect(slideIndex, mountEl) {
     var select = document.createElement('select');
-    select.className = 'deck-editor-chrome';
+    select.className = 'deck-editor-chrome deck-editor-variant-select';
     var placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = 'Change layout…';
@@ -196,7 +292,7 @@
   function makeChromeButton(label, action, onClick, disabled) {
     var b = document.createElement('button');
     b.type = 'button';
-    b.className = 'deck-editor-chrome';
+    b.className = 'deck-editor-chrome deck-editor-chrome-btn';
     b.setAttribute('data-action', action);
     b.textContent = label;
     b.disabled = !!disabled;
@@ -210,7 +306,6 @@
   function injectSlideBar(slideEl, slideIndex, totalSlides, mountEl) {
     var bar = document.createElement('div');
     bar.className = 'deck-editor-chrome deck-editor-slide-bar';
-    bar.style.cssText = 'position:absolute;top:8px;right:8px;z-index:1000;display:flex;gap:4px;';
     bar.appendChild(makeChromeButton('↑', 'up', function () { reorderSlide(slideIndex, slideIndex - 1, mountEl); }, slideIndex === 0));
     bar.appendChild(makeChromeButton('↓', 'down', function () { reorderSlide(slideIndex, slideIndex + 1, mountEl); }, slideIndex === totalSlides - 1));
     bar.appendChild(makeChromeButton('Duplicate', 'duplicate', function () { duplicateSlide(slideIndex, mountEl); }));
@@ -229,7 +324,11 @@
         if (name) setSlideImage(slideIndex, elementIndex, { brandImage: name }, mountEl);
       });
       btn.className += ' deck-editor-image-swap';
-      btn.style.cssText = 'position:absolute;left:' + imgEl.style.left + ';top:' + imgEl.style.top + ';z-index:1000;';
+      // Positioning (left/top) is instance-specific per image element and stays
+      // inline; all other visual styling (background/color/shape/hover) lives in
+      // the .deck-editor-image-swap class from injectEditorChromeStyles() above.
+      btn.style.left = imgEl.style.left;
+      btn.style.top = imgEl.style.top;
       slideEl.appendChild(btn);
       chromeEls.push(btn);
     });
