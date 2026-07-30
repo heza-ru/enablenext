@@ -42,6 +42,12 @@
         span.style.textAlign = el.align || 'left';
         span.textContent = el.text || '';
         containerEl.appendChild(span);
+        var minFontSize = el.minFontSize || 8;
+        var currentSize = el.fontSize || 14;
+        while (span.scrollHeight > span.clientHeight && currentSize > minFontSize) {
+          currentSize -= 1;
+          span.style.fontSize = currentSize + 'pt';
+        }
       } else if (el.type === 'image') {
         if (!el.brandImage && !el.deckAsset) {
           throw new Error('DeckSchemaRenderer: image element must set brandImage or deckAsset');
@@ -87,6 +93,7 @@
           bold: el.fontWeight === 'bold',
           fontFace: el.fontFamily || 'DM Sans',
           align: el.align || 'left',
+          fit: 'shrink',
         });
       } else if (el.type === 'image') {
         if (!el.brandImage && !el.deckAsset) {

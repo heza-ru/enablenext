@@ -123,3 +123,73 @@ describe("registerLayout('schema') integration", () => {
     expect(typeof layout.exportPptx).toBe('function');
   });
 });
+
+describe('DeckSchemaRenderer text auto-fit', () => {
+  it('shrinks fontSize when rendered text overflows its fixed box (real DOM overflow, not estimated)', () => {
+    const container = document.createElement('div');
+    // jsdom doesn't compute real scrollHeight from font metrics, so this test mocks the
+    // element's scrollHeight/clientHeight getters to simulate overflow, then asserts the
+    // shrink loop actually ran and reduced fontSize below the original.
+    const originalCreateElement = document.createElement.bind(document);
+    let capturedEl;
+    jest.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = originalCreateElement(tag);
+      if (tag === 'div' && !capturedEl) {
+        capturedEl = el;
+        Object.defineProperty(el, 'scrollHeight', { get: () => 200, configurable: true });
+        Object.defineProperty(el, 'clientHeight', { get: () => 50, configurable: true });
+      }
+      return el;
+    });
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Very long text that will not fit', fontSize: 20 }],
+      container,
+    );
+    document.createElement.mockRestore();
+    const el = container.querySelector('.schema-text');
+    expect(parseFloat(el.style.fontSize)).toBeLessThan(20);
+  });
+
+  it('never shrinks below minFontSize (default 8pt)', () => {
+    const container = document.createElement('div');
+    // same overflow-mocking technique as above, extreme overflow, confirm floor at 8
+    const originalCreateElement = document.createElement.bind(document);
+    let capturedEl;
+    jest.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = originalCreateElement(tag);
+      if (tag === 'div' && !capturedEl) {
+        capturedEl = el;
+        Object.defineProperty(el, 'scrollHeight', { get: () => 5000, configurable: true });
+        Object.defineProperty(el, 'clientHeight', { get: () => 50, configurable: true });
+      }
+      return el;
+    });
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Extremely long text that never fits no matter what', fontSize: 20 }],
+      container,
+    );
+    document.createElement.mockRestore();
+    const el = container.querySelector('.schema-text');
+    expect(parseFloat(el.style.fontSize)).toBe(8);
+  });
+
+  it('does not shrink text that already fits (no overflow)', () => {
+    const container = document.createElement('div');
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 5, h: 5, text: 'Short', fontSize: 14 }],
+      container,
+    );
+    const el = container.querySelector('.schema-text');
+    expect(el.style.fontSize).toBe('14pt'); // unchanged when there's no overflow
+  });
+});
+
+describe('DeckSchemaRenderer export auto-fit', () => {
+  it('passes fit:"shrink" for every text element', () => {
+    const slide = { addText: jest.fn(), addImage: jest.fn(), addShape: jest.fn() };
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Hello' },
+    ]);
+    expect(slide.addText).toHaveBeenCalledWith('Hello', expect.objectContaining({ fit: 'shrink' }));
+  });
+});
