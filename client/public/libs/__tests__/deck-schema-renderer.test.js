@@ -39,6 +39,18 @@ describe('DeckSchemaRenderer.renderSchemaElements', () => {
     expect(textEls[1].dataset.elIndex).toBe('3');
   });
 
+  it('tags image elements with data-el-index, mirroring text elements', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [
+        { type: 'shape', x: 0, y: 0, w: 1, h: 1, shape: 'rect' },
+        { type: 'image', x: 0, y: 0, w: 1, h: 1, brandImage: 'logo-dark' },
+      ],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img.dataset.elIndex).toBe('1'); // true array index, not loop-among-images index
+  });
+
   it('renders an image element via brandImagePath', () => {
     window.DeckSchemaRenderer.renderSchemaElements(
       [{ type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' }],

@@ -57,6 +57,11 @@
         }
         var img = document.createElement('img');
         img.className = 'schema-image';
+        // Mirrors the .schema-text tagging above: records this element's true
+        // position in the slide's `elements` array so deck-editor.js's
+        // image-swap chrome (and any other future consumer) targets the
+        // correct array slot even when text/shape elements are interleaved.
+        img.dataset.elIndex = String(elIndex);
         img.style.position = 'absolute';
         img.style.left = (el.x / SW) * 100 + '%';
         img.style.top = (el.y / SH) * 100 + '%';

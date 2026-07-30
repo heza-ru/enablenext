@@ -13,6 +13,9 @@
 (function () {
   var editing = false;
   var boundHandlers = []; // { el, handler } pairs, so disableEditing can remove exactly what enableEditing added
+  var chromeEls = []; // elements injected by injectSlideBar/injectImageSwapButtons, tracked directly (not
+  // re-derived via document.querySelectorAll('.deck-editor-chrome')) so removal works even when the
+  // mount hasn't been attached to the live document yet -- mirrors the boundHandlers pattern above.
 
   function commitHandlerFor(slideIndex, elementIndex, el) {
     return function () {
@@ -55,6 +58,8 @@
         el.addEventListener('blur', handler);
         boundHandlers.push({ el: el, handler: handler });
       });
+      injectSlideBar(slideEl, slideIndex, slideEls.length, mountEl);
+      injectImageSwapButtons(slideEl, slideIndex, mountEl);
     });
   }
 
@@ -68,6 +73,15 @@
       pair.el.removeEventListener('blur', pair.handler);
     });
     boundHandlers = [];
+    // Removes chrome injected by injectSlideBar/injectImageSwapButtons below.
+    // Not scoped to mountEl, matching the boundHandlers design above: chrome
+    // isn't tracked per-mount because only one mount is ever "active" for
+    // editing at a time in this singleton-DECK architecture. Elements are
+    // removed via the tracked chromeEls array (not a document-wide
+    // `.deck-editor-chrome` query) so this works correctly even before the
+    // mount has been attached to the live document.
+    chromeEls.forEach(function (el) { el.remove(); });
+    chromeEls = [];
     editing = false;
   }
 
@@ -110,6 +124,117 @@
     window.DeckRenderer.renderDeck(window.DECK, mountEl);
   }
 
+  // --- Variant/componentId swap ---------------------------------------
+  //
+  // Fetches the master-deck library (origin-aware, same pattern as
+  // brandImagePath/deckAssetPath) and swaps a slide's `elements` for a
+  // curated master-deck variant's, in place. Cached for the session: the
+  // library is a static, pre-built JSON asset that does not change during
+  // a single editing session, so a one-time fetch-and-cache is a deliberate
+  // simplification, not an oversight.
+  var libraryCache = null;
+  function fetchLibrary() {
+    if (libraryCache) return Promise.resolve(libraryCache);
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    return fetch(origin + '/brand/master-deck-library.json')
+      .then(function (r) { return r.json(); })
+      .then(function (data) { libraryCache = data; return data; });
+  }
+
+  function setSlideComponent(slideIndex, componentId, mountEl) {
+    return fetchLibrary().then(function (library) {
+      var entry = (library.slides || []).filter(function (s) { return s.componentId === componentId; })[0];
+      if (!entry) throw new Error('DeckEditor.setSlideComponent: unknown componentId "' + componentId + '"');
+      var slide = window.DECK.slides[slideIndex];
+      slide.layout = 'schema';
+      slide.componentId = componentId;
+      slide.elements = JSON.parse(JSON.stringify(entry.elements));
+      window.DeckRenderer.renderDeck(window.DECK, mountEl);
+    });
+  }
+
+  // Curated, known-good componentId ranges for the variant-swap picker --
+  // deliberately NOT exposing all 104 master-deck slides (many are
+  // dividers/tip-slides/known-broken per Task 6/10's documented
+  // limitations). These match the corrected ranges in
+  // agents/presentation-creator.skill.md's componentId preference table
+  // (Title 5-9, Agenda 18-19, Section 21-25, Closing 97-100) as of this
+  // plan's final review.
+  var CURATED_VARIANTS = [
+    { category: 'Title', ids: ['slide-5', 'slide-6', 'slide-7', 'slide-8', 'slide-9'] },
+    { category: 'Agenda', ids: ['slide-18', 'slide-19'] },
+    { category: 'Section', ids: ['slide-21', 'slide-22', 'slide-23', 'slide-24', 'slide-25'] },
+    { category: 'Closing', ids: ['slide-97', 'slide-98', 'slide-99', 'slide-100'] },
+  ];
+
+  function buildVariantSelect(slideIndex, mountEl) {
+    var select = document.createElement('select');
+    select.className = 'deck-editor-chrome';
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Change layout…';
+    select.appendChild(placeholder);
+    CURATED_VARIANTS.forEach(function (group) {
+      var optgroup = document.createElement('optgroup');
+      optgroup.label = group.category;
+      group.ids.forEach(function (id) {
+        var opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        optgroup.appendChild(opt);
+      });
+      select.appendChild(optgroup);
+    });
+    select.addEventListener('click', function (e) { e.stopPropagation(); });
+    select.addEventListener('change', function () {
+      if (!select.value) return;
+      setSlideComponent(slideIndex, select.value, mountEl);
+    });
+    return select;
+  }
+
+  function makeChromeButton(label, action, onClick, disabled) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'deck-editor-chrome';
+    b.setAttribute('data-action', action);
+    b.textContent = label;
+    b.disabled = !!disabled;
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      onClick();
+    });
+    return b;
+  }
+
+  function injectSlideBar(slideEl, slideIndex, totalSlides, mountEl) {
+    var bar = document.createElement('div');
+    bar.className = 'deck-editor-chrome deck-editor-slide-bar';
+    bar.style.cssText = 'position:absolute;top:8px;right:8px;z-index:1000;display:flex;gap:4px;';
+    bar.appendChild(makeChromeButton('↑', 'up', function () { reorderSlide(slideIndex, slideIndex - 1, mountEl); }, slideIndex === 0));
+    bar.appendChild(makeChromeButton('↓', 'down', function () { reorderSlide(slideIndex, slideIndex + 1, mountEl); }, slideIndex === totalSlides - 1));
+    bar.appendChild(makeChromeButton('Duplicate', 'duplicate', function () { duplicateSlide(slideIndex, mountEl); }));
+    bar.appendChild(makeChromeButton('Delete', 'delete', function () { deleteSlide(slideIndex, mountEl); }, totalSlides <= 1));
+    bar.appendChild(buildVariantSelect(slideIndex, mountEl));
+    slideEl.appendChild(bar);
+    chromeEls.push(bar); // children (buttons/select) are removed along with their parent
+  }
+
+  function injectImageSwapButtons(slideEl, slideIndex, mountEl) {
+    var images = slideEl.querySelectorAll('.schema-image');
+    images.forEach(function (imgEl, loopIndex) {
+      var elementIndex = imgEl.dataset.elIndex !== undefined ? parseInt(imgEl.dataset.elIndex, 10) : loopIndex;
+      var btn = makeChromeButton('Swap image', 'swap-image', function () {
+        var name = window.prompt('Brand image key (e.g. logo-dark, logo-light):');
+        if (name) setSlideImage(slideIndex, elementIndex, { brandImage: name }, mountEl);
+      });
+      btn.className += ' deck-editor-image-swap';
+      btn.style.cssText = 'position:absolute;left:' + imgEl.style.left + ';top:' + imgEl.style.top + ';z-index:1000;';
+      slideEl.appendChild(btn);
+      chromeEls.push(btn);
+    });
+  }
+
   window.DeckEditor = {
     enableEditing: enableEditing,
     disableEditing: disableEditing,
@@ -119,5 +244,6 @@
     duplicateSlide: duplicateSlide,
     deleteSlide: deleteSlide,
     setSlideImage: setSlideImage,
+    setSlideComponent: setSlideComponent,
   };
 })();

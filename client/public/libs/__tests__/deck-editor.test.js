@@ -183,3 +183,91 @@ describe('DeckEditor slide operations', () => {
     expect(() => window.DeckEditor.setSlideImage(0, 0, { brandImage: 'x' }, mount)).toThrow(/not an image element/);
   });
 });
+
+describe('DeckEditor.setSlideComponent', () => {
+  let mount;
+  beforeEach(() => {
+    // setSlideComponent caches the fetched library in module-level state
+    // (libraryCache) for the lifetime of the module, by design (see
+    // deck-editor.js) -- so each test here needs a fresh module instance to
+    // observe fetch call counts in isolation, rather than inheriting a warm
+    // cache from an earlier test in this same describe block.
+    jest.resetModules();
+    require('../deck-renderer.js');
+    require('../deck-schema-renderer.js');
+    require('../deck-editor.js');
+    mount = document.createElement('div');
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Old' }] }] };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ slides: [{ componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] }] }),
+    });
+  });
+  afterEach(() => { delete window.DECK; delete global.fetch; });
+
+  it('replaces the slide elements with the fetched componentId entry and re-renders', async () => {
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+    expect(window.DECK.slides[0].elements[0].text).toBe('Thank you!');
+    expect(window.DECK.slides[0].componentId).toBe('slide-97');
+    expect(window.DECK.slides[0].layout).toBe('schema');
+  });
+
+  it('rejects with a clear error for an unknown componentId', async () => {
+    await expect(window.DeckEditor.setSlideComponent(0, 'slide-9999', mount)).rejects.toThrow(/unknown componentId/);
+  });
+
+  it('caches the fetched library across calls (fetch only called once)', async () => {
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DeckEditor UI chrome', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = {
+      title: 'T',
+      slides: [
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 1' }, { type: 'image', x: 0, y: 0, w: 1, h: 1, brandImage: 'logo-dark' }] },
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 2' }] },
+      ],
+    };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+  });
+  afterEach(() => { delete window.DECK; });
+
+  it('injects a control bar with reorder/duplicate/delete buttons per slide when editing is enabled', () => {
+    window.DeckEditor.enableEditing(mount);
+    const bars = mount.querySelectorAll('.deck-editor-slide-bar');
+    expect(bars.length).toBe(2);
+  });
+
+  it('injects an image-swap button for every schema-image element', () => {
+    window.DeckEditor.enableEditing(mount);
+    expect(mount.querySelectorAll('.deck-editor-image-swap').length).toBe(1);
+  });
+
+  it('injects a variant-swap select populated with curated componentId options', () => {
+    window.DeckEditor.enableEditing(mount);
+    const select = mount.querySelector('.deck-editor-slide-bar select');
+    expect(select).not.toBeNull();
+    expect(select.querySelectorAll('option').length).toBeGreaterThan(1);
+  });
+
+  it('removes all injected chrome on disableEditing', () => {
+    window.DeckEditor.enableEditing(mount);
+    window.DeckEditor.disableEditing(mount);
+    expect(mount.querySelectorAll('.deck-editor-chrome').length).toBe(0);
+  });
+
+  it('the first slide\'s "move up" button is disabled and the last slide\'s "move down" button is disabled', () => {
+    window.DeckEditor.enableEditing(mount);
+    const bars = mount.querySelectorAll('.deck-editor-slide-bar');
+    const firstUp = bars[0].querySelector('[data-action="up"]');
+    const lastDown = bars[1].querySelector('[data-action="down"]');
+    expect(firstUp.disabled).toBe(true);
+    expect(lastDown.disabled).toBe(true);
+  });
+});
