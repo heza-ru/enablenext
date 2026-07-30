@@ -96,12 +96,44 @@ describe('DeckSchemaRenderer.exportSchemaElements', () => {
     );
   });
 
-  it('calls addImage with an origin-free path (export never runs in the Sandpack iframe)', () => {
+  afterEach(() => {
+    delete window._BRAND_ORIGIN;
+  });
+
+  it('calls addImage with the path as-is when no _BRAND_ORIGIN is injected', () => {
     const slide = fakeSlide();
     window.DeckSchemaRenderer.exportSchemaElements(slide, [
       { type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' },
     ]);
     expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/brand/logo-dark.svg', x: 0, y: 0, w: 2, h: 2 }));
+  });
+
+  /**
+   * Regression test for finding C1. The primary export trigger posts
+   * 'artifact-download-request' into the live Sandpack preview iframe, which
+   * is CROSS-ORIGIN from the app — that is exactly why window._BRAND_ORIGIN is
+   * injected. exportSchemaElements used to strip the origin off the resolved
+   * path ("export runs same-origin"), producing a bare /brand/... or
+   * /deck-assets/... path that resolved against the Sandpack origin, so every
+   * schema-layout image was silently missing from the exported PPTX. The path
+   * must stay origin-prefixed, matching the 3 hand-coded addImage call sites
+   * in deck-renderer.js and embedFontsInPptx's origin-aware font fetch.
+   */
+  it('keeps the ORIGIN-PREFIXED path when _BRAND_ORIGIN is injected (cross-origin export path)', () => {
+    window._BRAND_ORIGIN = 'https://app.example.com';
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' },
+      { type: 'image', x: 1, y: 1, w: 2, h: 2, deckAsset: 'slide-42-image-1.png' },
+    ]);
+    expect(slide.addImage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ path: 'https://app.example.com/brand/logo-dark.svg' }),
+    );
+    expect(slide.addImage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ path: 'https://app.example.com/deck-assets/slide-42-image-1.png' }),
+    );
   });
 
   it('calls addShape for a shape element', () => {
@@ -124,94 +156,201 @@ describe("registerLayout('schema') integration", () => {
   });
 });
 
+/**
+ * Auto-fit tests (finding I1).
+ *
+ * TESTING-ENVIRONMENT LIMITATION, STATED UP FRONT: jsdom does no CSS layout at
+ * all, so scrollHeight/clientHeight are 0 on every element whether it is
+ * attached to the document or not. These tests therefore still have to mock
+ * those two properties to simulate overflow — jsdom cannot validate the real
+ * browser behaviour either way.
+ *
+ * What these tests CAN and DO verify (and what the previous version of them
+ * did not) is the *timing* bug: the fit pass must run against elements that
+ * are ATTACHED to the live document, driven by renderDeck's post-mount pass,
+ * not during the detached synchronous render() build phase where a real
+ * browser reports 0/0 and the shrink loop is a silent no-op. Every test below
+ * either attaches its container to document.body or asserts the build phase
+ * deliberately leaves fitting alone.
+ */
 describe('DeckSchemaRenderer text auto-fit', () => {
-  it('shrinks fontSize when rendered text overflows its fixed box (real DOM overflow, not estimated)', () => {
-    const container = document.createElement('div');
-    // jsdom doesn't compute real scrollHeight from font metrics, so this test mocks the
-    // element's scrollHeight/clientHeight getters to simulate overflow, then asserts the
-    // shrink loop actually ran and reduced fontSize below the original.
-    const originalCreateElement = document.createElement.bind(document);
-    let capturedEl;
-    jest.spyOn(document, 'createElement').mockImplementation((tag) => {
-      const el = originalCreateElement(tag);
-      if (tag === 'div' && !capturedEl) {
-        capturedEl = el;
-        Object.defineProperty(el, 'scrollHeight', { get: () => 200, configurable: true });
-        Object.defineProperty(el, 'clientHeight', { get: () => 50, configurable: true });
-      }
-      return el;
-    });
-    window.DeckSchemaRenderer.renderSchemaElements(
-      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Very long text that will not fit', fontSize: 20 }],
-      container,
-    );
-    document.createElement.mockRestore();
-    const el = container.querySelector('.schema-text');
-    expect(parseFloat(el.style.fontSize)).toBeLessThan(20);
+  let mountEl;
+
+  beforeEach(() => {
+    mountEl = document.createElement('div');
+    document.body.appendChild(mountEl);
+  });
+  afterEach(() => {
+    mountEl.remove();
   });
 
-  it('stops shrinking as soon as the text fits, not just at the floor (dynamic overflow that resolves at an intermediate size)', () => {
-    const container = document.createElement('div');
-    // Unlike the static mocks above (which stay "overflowing" forever and thus can't
-    // distinguish "shrink until it fits" from "always shrink to the floor"), this mock's
-    // clientHeight is a getter derived from the element's *current* fontSize: overflow
-    // resolves once fontSize drops to 16pt or below, well above the 8pt floor. This proves
-    // the loop's overflow check is actually re-evaluated each iteration and halts as soon
-    // as the (simulated) box fits, rather than unconditionally bottoming out.
+  /** Mock overflow on an ALREADY-ATTACHED .schema-text element. */
+  function mockOverflow(el, scrollHeight, clientHeight) {
+    expect(el.isConnected).toBe(true); // guards the whole point of these tests
+    Object.defineProperty(el, 'scrollHeight', {
+      get: typeof scrollHeight === 'function' ? scrollHeight : () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(el, 'clientHeight', {
+      get: typeof clientHeight === 'function' ? clientHeight : () => clientHeight,
+      configurable: true,
+    });
+  }
+
+  function schemaDeck(el) {
+    return { slides: [{ layout: 'schema', elements: [el] }] };
+  }
+
+  /**
+   * The core regression test for I1. renderDeck builds each slide's DOM tree
+   * BEFORE appending it to mountEl, so a fit pass performed inside render()
+   * measures a detached subtree. This drives the REAL renderDeck path with a
+   * genuinely document-attached mount point and proves the fit still engages,
+   * which is only possible if it happens after attachment.
+   */
+  it('engages the shrink pass through the real renderDeck path on a document-attached mount', () => {
+    // Overflow has to be stubbed at element-creation time (there is no hook
+    // between renderDeck's build and its post-mount fit), but the getters
+    // record WHETHER the element was attached when the fit actually read them
+    // — which is the property under test.
     const originalCreateElement = document.createElement.bind(document);
-    let capturedEl;
+    let measuredWhileConnected = null;
     jest.spyOn(document, 'createElement').mockImplementation((tag) => {
       const el = originalCreateElement(tag);
-      if (tag === 'div' && !capturedEl) {
-        capturedEl = el;
-        Object.defineProperty(el, 'scrollHeight', { get: () => 100, configurable: true });
-        Object.defineProperty(el, 'clientHeight', {
-          get: () => (parseFloat(el.style.fontSize) <= 16 ? 150 : 50),
+      if (tag === 'div') {
+        Object.defineProperty(el, 'scrollHeight', {
           configurable: true,
+          get() {
+            if (this.classList.contains('schema-text')) {
+              measuredWhileConnected = this.isConnected;
+              return 200;
+            }
+            return 0;
+          },
+        });
+        Object.defineProperty(el, 'clientHeight', {
+          configurable: true,
+          get() {
+            return this.classList.contains('schema-text') ? 50 : 0;
+          },
         });
       }
       return el;
     });
-    window.DeckSchemaRenderer.renderSchemaElements(
-      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Text that fits once shrunk to 16pt', fontSize: 20 }],
-      container,
+
+    window.DeckRenderer.renderDeck(
+      schemaDeck({ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Very long text that will not fit', fontSize: 20 }),
+      mountEl,
     );
     document.createElement.mockRestore();
-    const el = container.querySelector('.schema-text');
+
+    const el = mountEl.querySelector('.schema-text');
+    // The measurement happened, and it happened on live, attached content.
+    expect(measuredWhileConnected).toBe(true);
+    expect(parseFloat(el.style.fontSize)).toBeLessThan(20);
+  });
+
+  /**
+   * The inverse of the above, and the assertion that actually pins the bug:
+   * the synchronous build phase must NOT try to fit. If it did, in a real
+   * browser it would measure 0/0 and no-op — so we assert here that the
+   * detached build leaves the authored size untouched and stashes the base
+   * sizes for the later, attached pass instead.
+   */
+  it('does not attempt to fit during the detached build phase (leaves authored size + base metadata)', () => {
+    const detached = document.createElement('div');
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Long text', fontSize: 20, minFontSize: 10 }],
+      detached,
+    );
+    const el = detached.querySelector('.schema-text');
+    // Even with overflow simulated, nothing shrank: no fit ran at build time.
+    Object.defineProperty(el, 'scrollHeight', { get: () => 200, configurable: true });
+    Object.defineProperty(el, 'clientHeight', { get: () => 50, configurable: true });
+    expect(el.style.fontSize).toBe('20pt');
+    expect(el.dataset.baseFontSize).toBe('20');
+    expect(el.dataset.minFontSize).toBe('10');
+  });
+
+  it('stops shrinking as soon as the text fits, not just at the floor (attached element)', () => {
+    // clientHeight is derived from the element's *current* fontSize: overflow
+    // resolves once fontSize drops to 16pt, well above the 8pt floor. Proves
+    // the loop re-evaluates each iteration instead of bottoming out.
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Text that fits once shrunk to 16pt', fontSize: 20 }],
+      mountEl,
+    );
+    const el = mountEl.querySelector('.schema-text');
+    mockOverflow(el, 100, () => (parseFloat(el.style.fontSize) <= 16 ? 150 : 50));
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
     expect(parseFloat(el.style.fontSize)).toBe(16);
   });
 
-  it('never shrinks below minFontSize (default 8pt)', () => {
-    const container = document.createElement('div');
-    // same overflow-mocking technique as above, extreme overflow, confirm floor at 8
-    const originalCreateElement = document.createElement.bind(document);
-    let capturedEl;
-    jest.spyOn(document, 'createElement').mockImplementation((tag) => {
-      const el = originalCreateElement(tag);
-      if (tag === 'div' && !capturedEl) {
-        capturedEl = el;
-        Object.defineProperty(el, 'scrollHeight', { get: () => 5000, configurable: true });
-        Object.defineProperty(el, 'clientHeight', { get: () => 50, configurable: true });
-      }
-      return el;
-    });
+  it('never shrinks below minFontSize (default 8pt) (attached element)', () => {
     window.DeckSchemaRenderer.renderSchemaElements(
-      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Extremely long text that never fits no matter what', fontSize: 20 }],
-      container,
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Extremely long text that never fits', fontSize: 20 }],
+      mountEl,
     );
-    document.createElement.mockRestore();
-    const el = container.querySelector('.schema-text');
+    const el = mountEl.querySelector('.schema-text');
+    mockOverflow(el, 5000, 50);
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
     expect(parseFloat(el.style.fontSize)).toBe(8);
   });
 
   it('does not shrink text that already fits (no overflow)', () => {
-    const container = document.createElement('div');
     window.DeckSchemaRenderer.renderSchemaElements(
       [{ type: 'text', x: 0, y: 0, w: 5, h: 5, text: 'Short', fontSize: 14 }],
-      container,
+      mountEl,
     );
-    const el = container.querySelector('.schema-text');
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
+    const el = mountEl.querySelector('.schema-text');
     expect(el.style.fontSize).toBe('14pt'); // unchanged when there's no overflow
+  });
+
+  /**
+   * Re-fitting must restart from the authored base size rather than compound
+   * on the previous shrink, so that goTo() can re-run the pass on every view
+   * without the text ratcheting permanently smaller (and so it can grow back
+   * when the box gets bigger).
+   */
+  it('re-fitting is idempotent: restarts from the authored base size, never ratchets down', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Long text', fontSize: 20 }],
+      mountEl,
+    );
+    const el = mountEl.querySelector('.schema-text');
+    mockOverflow(el, 100, () => (parseFloat(el.style.fontSize) <= 16 ? 150 : 50));
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
+    expect(parseFloat(el.style.fontSize)).toBe(16);
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
+    expect(parseFloat(el.style.fontSize)).toBe(16); // not 12
+    // Box grows (no overflow at any size) -> text returns to its authored size.
+    mockOverflow(el, 10, 500);
+    window.DeckSchemaRenderer.fitAllSchemaText(mountEl);
+    expect(parseFloat(el.style.fontSize)).toBe(20);
+  });
+
+  /**
+   * Non-active .slide elements carry content-visibility:auto, which skips
+   * their layout entirely, so off-screen slides cannot be measured reliably.
+   * The fit is therefore re-run per active slide on navigation.
+   */
+  it('re-fits the newly active slide on goTo (per-view autofit, like PowerPoint)', () => {
+    window.DeckRenderer.renderDeck(
+      {
+        slides: [
+          { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'One', fontSize: 20 }] },
+          { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Two', fontSize: 20 }] },
+        ],
+      },
+      mountEl,
+    );
+    const second = mountEl.querySelectorAll('.slide')[1].querySelector('.schema-text');
+    // Slide 2 was never measurable while inactive; simulate it overflowing now.
+    mockOverflow(second, 200, 50);
+    expect(parseFloat(second.style.fontSize)).toBe(20); // untouched while off-screen
+    window.DeckRenderer.goTo(1);
+    expect(parseFloat(second.style.fontSize)).toBeLessThan(20);
   });
 });
 

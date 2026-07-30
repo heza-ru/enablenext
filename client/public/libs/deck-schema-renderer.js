@@ -41,13 +41,16 @@
         span.style.fontFamily = "'" + (el.fontFamily || 'DM Sans') + "',sans-serif";
         span.style.textAlign = el.align || 'left';
         span.textContent = el.text || '';
+        // Auto-fit is deliberately NOT run here. renderDeck() builds every
+        // slide's DOM tree BEFORE attaching it to the document, so at this
+        // point `span` lives in a detached subtree with no computed layout:
+        // scrollHeight and clientHeight are both 0 and the shrink loop can
+        // never engage. The base/min sizes are stashed on the element instead,
+        // and fitAllSchemaText() does the measuring once the tree is live
+        // (called by renderDeck after mount, and by goTo per active slide).
+        span.dataset.baseFontSize = String(el.fontSize || 14);
+        span.dataset.minFontSize = String(el.minFontSize || 8);
         containerEl.appendChild(span);
-        var minFontSize = el.minFontSize || 8;
-        var currentSize = el.fontSize || 14;
-        while (span.scrollHeight > span.clientHeight && currentSize > minFontSize) {
-          currentSize -= 1;
-          span.style.fontSize = currentSize + 'pt';
-        }
       } else if (el.type === 'image') {
         if (!el.brandImage && !el.deckAsset) {
           throw new Error('DeckSchemaRenderer: image element must set brandImage or deckAsset');
@@ -83,6 +86,39 @@
     });
   }
 
+  /**
+   * Shrink one .schema-text element's font size until its content stops
+   * overflowing its fixed box, down to a floor. Always restarts from the
+   * element's authored base size so repeated calls (e.g. re-fitting on every
+   * goTo) are idempotent and can grow the text back if the box got bigger.
+   *
+   * Only meaningful on an element that is attached to the document AND
+   * visible — an element inside a `content-visibility:auto` non-active slide
+   * skips layout, so callers must only fit the currently active slide.
+   */
+  function fitSchemaText(span) {
+    var base = parseFloat(span.dataset.baseFontSize || '') || 14;
+    var min = parseFloat(span.dataset.minFontSize || '') || 8;
+    var currentSize = base;
+    span.style.fontSize = currentSize + 'pt';
+    while (span.scrollHeight > span.clientHeight && currentSize > min) {
+      currentSize -= 1;
+      span.style.fontSize = currentSize + 'pt';
+    }
+  }
+
+  /**
+   * Run the auto-fit pass over every .schema-text element under rootEl.
+   * Call this only after rootEl is attached to the live document.
+   */
+  function fitAllSchemaText(rootEl) {
+    if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return;
+    var nodes = rootEl.querySelectorAll('.schema-text');
+    for (var i = 0; i < nodes.length; i++) {
+      fitSchemaText(nodes[i]);
+    }
+  }
+
   function exportSchemaElements(pptxSlide, elements) {
     (elements || []).forEach(function (el) {
       if (el.type === 'text') {
@@ -99,9 +135,17 @@
         if (!el.brandImage && !el.deckAsset) {
           throw new Error('DeckSchemaRenderer: image element must set brandImage or deckAsset');
         }
+        // Use the origin-prefixed path as-is. The primary export trigger
+        // (triggerViaPreviewIframe in DownloadArtifact.tsx) runs downloadPptx()
+        // INSIDE the Sandpack preview iframe, which is cross-origin from the
+        // app — that is precisely why window._BRAND_ORIGIN is injected
+        // (useArtifactProps.ts). Stripping the origin here produced a bare
+        // /deck-assets/... path that resolved against the Sandpack origin and
+        // silently dropped every schema-layout image from the exported PPTX.
+        // This matches the 3 hand-coded addImage call sites in deck-renderer.js
+        // and embedFontsInPptx's origin-aware fetch.
         var fullPath = el.brandImage ? DR.brandImagePath(el.brandImage) : DR.deckAssetPath(el.deckAsset);
-        var path = fullPath.replace(/^https?:\/\/[^/]+/, ''); // export runs same-origin; strip any injected _BRAND_ORIGIN
-        pptxSlide.addImage({ path: path, x: el.x, y: el.y, w: el.w, h: el.h });
+        pptxSlide.addImage({ path: fullPath, x: el.x, y: el.y, w: el.w, h: el.h });
       } else if (el.type === 'shape') {
         pptxSlide.addShape(el.shape, {
           x: el.x, y: el.y, w: el.w, h: el.h,
@@ -127,5 +171,7 @@
   window.DeckSchemaRenderer = {
     renderSchemaElements: renderSchemaElements,
     exportSchemaElements: exportSchemaElements,
+    fitSchemaText: fitSchemaText,
+    fitAllSchemaText: fitAllSchemaText,
   };
 })();

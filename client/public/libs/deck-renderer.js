@@ -93,11 +93,38 @@
       // width-constrained-by-viewport-width or height-constrained-by-viewport-height is
       // smaller, so the deck always fits inside the container without stretching/distorting,
       // letterboxing (via the flex-centered html/body above) instead.
-      '.deck{width:min(100vw,177.78vh);height:min(100vh,56.25vw);aspect-ratio:16/9;position:relative;overflow:hidden;flex-shrink:0}' +
+      // `container-type:size; container-name:deck` makes the deck box itself the
+      // containment context for every layout inside it, so the layouts' type/spacing
+      // scale can use cqw/cqh (1cqw = 1% of the DECK's width) instead of vw/vh
+      // (one vw = one percent of the raw VIEWPORT width). Before Task 11 those were
+      // identical because .deck filled the full viewport width; now it is aspect-locked and
+      // letterboxed it is narrower than the viewport whenever the container is
+      // wider than 16:9 (fullscreen on a wide monitor being the common case), which
+      // left all 19 hand-coded layouts' clamp() type proportionally oversized inside
+      // a smaller box. Container units re-couple internal scale to the actual box.
+      '.deck{width:min(100vw,177.78vh);height:min(100vh,56.25vw);aspect-ratio:16/9;' +
+      'container-type:size;container-name:deck;' +
+      'position:relative;overflow:hidden;flex-shrink:0}' +
       '.slide{position:absolute;inset:0;opacity:0;background:#25223B;' +
       'content-visibility:auto;contain:layout style paint}' +
       '.slide.active{opacity:1;content-visibility:visible}';
     document.head.appendChild(style);
+  }
+
+  /**
+   * Run the schema-layout text auto-fit pass over a slide that is currently
+   * active and attached to the document. Non-active .slide elements carry
+   * `content-visibility:auto`, which skips their layout entirely, so their
+   * scrollHeight/clientHeight are unusable — the fit is therefore done
+   * per-active-slide (on mount and on every goTo), mirroring how PowerPoint's
+   * own autofit recalculates per view rather than once at build time.
+   */
+  function fitActiveSlide(slideEl) {
+    if (!slideEl) return;
+    var schema = window.DeckSchemaRenderer;
+    if (schema && typeof schema.fitAllSchemaText === 'function') {
+      schema.fitAllSchemaText(slideEl);
+    }
   }
 
   function goTo(index) {
@@ -108,6 +135,7 @@
     currentIndex = index;
     var nextEl = currentSlides[currentIndex];
     if (nextEl) nextEl.classList.add('active');
+    fitActiveSlide(nextEl);
   }
 
   function next() {
@@ -135,6 +163,12 @@
     mountEl.innerHTML = '';
     mountEl.appendChild(deckEl);
 
+    // Auto-fit schema text only now that the tree is in the live DOM. Doing it
+    // during the layout.render() build phase above would measure a detached
+    // subtree, where scrollHeight/clientHeight are both 0 and the shrink loop
+    // can never engage (it would be a silent no-op in a real browser).
+    fitActiveSlide(currentSlides[currentIndex]);
+
     if (!keyListenerAttached) {
       keyListenerAttached = true;
       document.addEventListener('keydown', function (e) {
@@ -160,10 +194,10 @@
       eyebrow.style.cssText = "font-size:.65rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#FF6B18;margin-bottom:.85rem;font-family:'DM Sans',sans-serif;";
       eyebrow.textContent = spec.eyebrow || '';
       var h1 = document.createElement('h1');
-      h1.style.cssText = "font-size:clamp(2.2rem,4.5vw,3.8rem);font-weight:500;color:#fff;line-height:1.12;max-width:14ch;margin-bottom:1rem;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
+      h1.style.cssText = "font-size:clamp(2.2rem,4.5cqw,3.8rem);font-weight:500;color:#fff;line-height:1.12;max-width:14ch;margin-bottom:1rem;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
       h1.textContent = spec.title || '';
       var subtitle = document.createElement('p');
-      subtitle.style.cssText = "font-size:clamp(.9rem,1.5vw,1.1rem);font-weight:300;color:rgba(255,255,255,.5);max-width:40ch;line-height:1.65;font-family:'DM Sans',sans-serif;";
+      subtitle.style.cssText = "font-size:clamp(.9rem,1.5cqw,1.1rem);font-weight:300;color:rgba(255,255,255,.5);max-width:40ch;line-height:1.65;font-family:'DM Sans',sans-serif;";
       subtitle.textContent = spec.subtitle || '';
       slideEl.appendChild(eyebrow);
       slideEl.appendChild(h1);
@@ -198,7 +232,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2.5rem 4rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.3rem,2.4vw,2rem);font-weight:500;color:#FF6B18;line-height:1.2;margin-bottom:1.75rem;max-width:30ch;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.3rem,2.4cqw,2rem);font-weight:500;color:#FF6B18;line-height:1.2;margin-bottom:1.75rem;max-width:30ch;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       var ul = document.createElement('ul');
       ul.style.cssText = 'list-style:none;display:flex;flex-direction:column;gap:.8rem;';
@@ -207,7 +241,7 @@
       // rule impossible to violate rather than merely documented.
       (spec.bullets || []).slice(0, 3).forEach(function (text) {
         var li = document.createElement('li');
-        li.style.cssText = "display:flex;align-items:flex-start;gap:1rem;font-size:clamp(.85rem,1.5vw,1.05rem);font-weight:300;color:rgba(255,255,255,.82);line-height:1.6;font-family:'DM Sans',sans-serif;";
+        li.style.cssText = "display:flex;align-items:flex-start;gap:1rem;font-size:clamp(.85rem,1.5cqw,1.05rem);font-weight:300;color:rgba(255,255,255,.82);line-height:1.6;font-family:'DM Sans',sans-serif;";
         var dot = document.createElement('span');
         dot.style.cssText = 'width:5px;height:5px;border-radius:50%;background:#FF6B18;flex-shrink:0;margin-top:.5rem;';
         li.appendChild(dot);
@@ -240,16 +274,16 @@
       slideEl.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;background:#3f3a56;text-align:center;';
       var grid = document.createElement('div');
       grid.className = 'kpi-grid';
-      grid.style.cssText = 'display:flex;gap:clamp(2rem,6vw,6rem);align-items:flex-end;flex-wrap:wrap;justify-content:center;';
+      grid.style.cssText = 'display:flex;gap:clamp(2rem,6cqw,6rem);align-items:flex-end;flex-wrap:wrap;justify-content:center;';
       (spec.stats || []).slice(0, 3).forEach(function (stat) { // structural cap: max 3
         var kpi = document.createElement('div');
         kpi.className = 'kpi';
         kpi.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:.4rem;';
         var big = document.createElement('span');
-        big.style.cssText = "font-size:clamp(3rem,8vw,5.5rem);font-weight:700;color:#FF6B18;font-family:'DM Sans',sans-serif;";
+        big.style.cssText = "font-size:clamp(3rem,8cqw,5.5rem);font-weight:700;color:#FF6B18;font-family:'DM Sans',sans-serif;";
         big.textContent = stat.value;
         var label = document.createElement('span');
-        label.style.cssText = "font-size:clamp(.72rem,1.2vw,.9rem);color:rgba(255,255,255,.45);max-width:13ch;text-align:center;font-family:'DM Sans',sans-serif;";
+        label.style.cssText = "font-size:clamp(.72rem,1.2cqw,.9rem);color:rgba(255,255,255,.45);max-width:13ch;text-align:center;font-family:'DM Sans',sans-serif;";
         label.textContent = stat.label;
         kpi.appendChild(big);
         kpi.appendChild(label);
@@ -283,16 +317,16 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2.5rem 4rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.3rem,2.4vw,2rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;max-width:34ch;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.3rem,2.4cqw,2rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;max-width:34ch;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       var cols = document.createElement('div');
-      cols.style.cssText = 'display:flex;gap:3vw;align-items:stretch;';
+      cols.style.cssText = 'display:flex;gap:3cqw;align-items:stretch;';
       var left = document.createElement('ul');
       left.className = 'col-left';
       left.style.cssText = 'list-style:none;flex:1.1;display:flex;flex-direction:column;gap:.75rem;';
       (spec.bullets || []).slice(0, 4).forEach(function (text) {
         var li = document.createElement('li');
-        li.style.cssText = "font-size:clamp(.82rem,1.45vw,1.02rem);font-weight:300;color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;";
+        li.style.cssText = "font-size:clamp(.82rem,1.45cqw,1.02rem);font-weight:300;color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;";
         li.textContent = text;
         left.appendChild(li);
       });
@@ -341,7 +375,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2rem 3.5rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.2rem,2.2vw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.25rem;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.2rem,2.2cqw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.25rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       var table = document.createElement('table');
       table.style.cssText = 'width:100%;border-collapse:collapse;';
@@ -408,7 +442,7 @@
       // Structural cap: max 12 items (master-deck-verified range for session+time pairs)
       (spec.items || []).slice(0, 12).forEach(function (text, i) {
         var li = document.createElement('li');
-        li.style.cssText = "display:flex;align-items:center;gap:1.25rem;padding:.65rem 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:clamp(.9rem,1.75vw,1.25rem);font-weight:400;color:rgba(255,255,255,.82);font-family:'DM Sans',sans-serif;";
+        li.style.cssText = "display:flex;align-items:center;gap:1.25rem;padding:.65rem 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:clamp(.9rem,1.75cqw,1.25rem);font-weight:400;color:rgba(255,255,255,.82);font-family:'DM Sans',sans-serif;";
         var num = document.createElement('span');
         num.className = 'agenda-num';
         num.style.cssText = "font-size:.65rem;font-weight:700;color:#FF6B18;background:rgba(255,107,24,.1);border:1px solid rgba(255,107,24,.25);width:1.9rem;height:1.9rem;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;";
@@ -473,7 +507,7 @@
         left.appendChild(secNum);
       }
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.7rem,3.2vw,2.8rem);font-weight:500;color:#fff;line-height:1.15;max-width:18ch;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.7rem,3.2cqw,2.8rem);font-weight:500;color:#fff;line-height:1.15;max-width:18ch;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       left.appendChild(h2);
       var right = document.createElement('div');
@@ -513,7 +547,7 @@
       qmark.style.cssText = "font-size:5rem;color:rgba(255,107,24,.15);line-height:.6;font-family:Georgia,serif;margin-bottom:1.5rem;";
       qmark.textContent = '“';
       var bq = document.createElement('blockquote');
-      bq.style.cssText = "font-size:clamp(1rem,1.8vw,1.5rem);font-weight:300;font-style:italic;color:#fff;max-width:640px;line-height:1.7;text-align:center;font-family:'DM Sans',sans-serif;";
+      bq.style.cssText = "font-size:clamp(1rem,1.8cqw,1.5rem);font-weight:300;font-style:italic;color:#fff;max-width:640px;line-height:1.7;text-align:center;font-family:'DM Sans',sans-serif;";
       bq.textContent = spec.quote || '';
       var cite = document.createElement('cite');
       cite.style.cssText = "display:block;margin-top:1.75rem;font-size:.78rem;font-weight:500;font-style:normal;color:#FF6B18;letter-spacing:.1em;text-transform:uppercase;font-family:'DM Sans',sans-serif;";
@@ -561,12 +595,12 @@
         left.appendChild(eyebrow);
       }
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.7rem,3.2vw,2.8rem);font-weight:500;color:#fff;line-height:1.15;max-width:18ch;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.7rem,3.2cqw,2.8rem);font-weight:500;color:#fff;line-height:1.15;max-width:18ch;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       left.appendChild(h2);
       if (spec.body) {
         var body = document.createElement('p');
-        body.style.cssText = "font-size:clamp(.85rem,1.5vw,1.05rem);font-weight:300;color:rgba(255,255,255,.6);margin-top:1rem;max-width:32ch;line-height:1.6;font-family:'DM Sans',sans-serif;";
+        body.style.cssText = "font-size:clamp(.85rem,1.5cqw,1.05rem);font-weight:300;color:rgba(255,255,255,.6);margin-top:1rem;max-width:32ch;line-height:1.6;font-family:'DM Sans',sans-serif;";
         body.textContent = spec.body;
         left.appendChild(body);
       }
@@ -615,7 +649,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2.5rem 4rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.2rem,2.2vw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.2rem,2.2cqw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
 
       var bars = (spec.bars || []).slice(0, 6);
@@ -727,7 +761,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2.5rem 4.5rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.2rem,2.2vw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.75rem;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.2rem,2.2cqw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.75rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       var row = document.createElement('div');
       row.className = 'process-row';
@@ -743,11 +777,11 @@
         num.textContent = step.num || ((i + 1 < 10 ? '0' : '') + (i + 1));
         var label = document.createElement('div');
         label.className = 'ps-label';
-        label.style.cssText = "font-size:clamp(.72rem,1.2vw,.88rem);font-weight:500;color:#fff;margin-bottom:.3rem;line-height:1.3;font-family:'DM Sans',sans-serif;";
+        label.style.cssText = "font-size:clamp(.72rem,1.2cqw,.88rem);font-weight:500;color:#fff;margin-bottom:.3rem;line-height:1.3;font-family:'DM Sans',sans-serif;";
         label.textContent = step.label || '';
         var desc = document.createElement('div');
         desc.className = 'ps-desc';
-        desc.style.cssText = "font-size:clamp(.62rem,.95vw,.75rem);font-weight:300;color:rgba(255,255,255,.45);line-height:1.5;max-width:14ch;margin:0 auto;font-family:'DM Sans',sans-serif;";
+        desc.style.cssText = "font-size:clamp(.62rem,.95cqw,.75rem);font-weight:300;color:rgba(255,255,255,.45);line-height:1.5;max-width:14ch;margin:0 auto;font-family:'DM Sans',sans-serif;";
         desc.textContent = step.desc || '';
         stepEl.appendChild(num);
         stepEl.appendChild(label);
@@ -800,7 +834,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2rem 4rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.2rem,2.2vw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.2rem,2.2cqw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.5rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       var cols = spec.cols === 2 ? 2 : 3; // structural cap: only 2 or 3 columns are supported
       var grid = document.createElement('div');
@@ -822,11 +856,11 @@
         text.className = 'ig-text';
         var title = document.createElement('div');
         title.className = 'ig-title';
-        title.style.cssText = "font-size:clamp(.78rem,1.2vw,.9rem);font-weight:500;color:#fff;margin-bottom:.2rem;font-family:'DM Sans',sans-serif;";
+        title.style.cssText = "font-size:clamp(.78rem,1.2cqw,.9rem);font-weight:500;color:#fff;margin-bottom:.2rem;font-family:'DM Sans',sans-serif;";
         title.textContent = card.title || '';
         var desc = document.createElement('div');
         desc.className = 'ig-desc';
-        desc.style.cssText = "font-size:clamp(.65rem,1vw,.75rem);font-weight:300;color:rgba(255,255,255,.45);line-height:1.5;font-family:'DM Sans',sans-serif;";
+        desc.style.cssText = "font-size:clamp(.65rem,1cqw,.75rem);font-weight:300;color:rgba(255,255,255,.45);line-height:1.5;font-family:'DM Sans',sans-serif;";
         desc.textContent = card.desc || '';
         text.appendChild(title);
         text.appendChild(desc);
@@ -879,7 +913,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2.5rem 4.5rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.2rem,2.2vw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.25rem;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.2rem,2.2cqw,1.8rem);font-weight:500;color:#FF6B18;margin-bottom:1.25rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       var track = document.createElement('div');
       track.className = 'tl-track';
@@ -900,11 +934,11 @@
         content.className = 'tl-content';
         var title = document.createElement('div');
         title.className = 'tl-title';
-        title.style.cssText = "font-size:clamp(.78rem,1.2vw,.9rem);font-weight:500;color:#fff;margin-bottom:.15rem;font-family:'DM Sans',sans-serif;";
+        title.style.cssText = "font-size:clamp(.78rem,1.2cqw,.9rem);font-weight:500;color:#fff;margin-bottom:.15rem;font-family:'DM Sans',sans-serif;";
         title.textContent = m.title || '';
         var body = document.createElement('div');
         body.className = 'tl-body';
-        body.style.cssText = "font-size:clamp(.65rem,1vw,.75rem);font-weight:300;color:rgba(255,255,255,.45);line-height:1.5;font-family:'DM Sans',sans-serif;";
+        body.style.cssText = "font-size:clamp(.65rem,1cqw,.75rem);font-weight:300;color:rgba(255,255,255,.45);line-height:1.5;font-family:'DM Sans',sans-serif;";
         body.textContent = m.body || '';
         content.appendChild(title);
         content.appendChild(body);
@@ -955,7 +989,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(2rem,4vw,3.6rem);font-weight:500;color:#fff;line-height:1.1;margin-bottom:.8rem;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(2rem,4cqw,3.6rem);font-weight:500;color:#fff;line-height:1.1;margin-bottom:.8rem;letter-spacing:-.02em;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || 'Thank you';
       var bar = document.createElement('div');
       bar.className = 'closing-bar';
@@ -1197,7 +1231,7 @@
     render: function (spec, slideEl) {
       slideEl.style.cssText = 'display:flex;flex-direction:column;justify-content:center;padding:2rem 3rem;';
       var h2 = document.createElement('h2');
-      h2.style.cssText = "font-size:clamp(1.1rem,2vw,1.6rem);font-weight:500;color:#FF6B18;margin-bottom:1rem;font-family:'DM Sans',sans-serif;";
+      h2.style.cssText = "font-size:clamp(1.1rem,2cqw,1.6rem);font-weight:500;color:#FF6B18;margin-bottom:1rem;font-family:'DM Sans',sans-serif;";
       h2.textContent = spec.title || '';
       slideEl.appendChild(h2);
       var axes = document.createElement('div');
@@ -1344,7 +1378,7 @@
       } else {
         var name2 = document.createElement('h1');
         name2.className = 'ev-name';
-        name2.style.cssText = "font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:500;color:#fff;margin-bottom:.6rem;font-family:'DM Sans',sans-serif;";
+        name2.style.cssText = "font-size:clamp(1.8rem,3.5cqw,2.8rem);font-weight:500;color:#fff;margin-bottom:.6rem;font-family:'DM Sans',sans-serif;";
         name2.textContent = spec.eventName || '';
         var datetime = document.createElement('p');
         datetime.className = 'ev-datetime';
@@ -1410,7 +1444,7 @@
       label.textContent = spec.label || '';
       var body = document.createElement('p');
       body.className = 'obj-body';
-      body.style.cssText = "font-size:clamp(.95rem,1.7vw,1.3rem);font-weight:300;color:rgba(255,255,255,.82);line-height:1.7;max-width:56ch;font-family:'DM Sans',sans-serif;";
+      body.style.cssText = "font-size:clamp(.95rem,1.7cqw,1.3rem);font-weight:300;color:rgba(255,255,255,.82);line-height:1.7;max-width:56ch;font-family:'DM Sans',sans-serif;";
       body.textContent = spec.body || '';
       slideEl.appendChild(label);
       slideEl.appendChild(body);
