@@ -361,4 +361,116 @@ describe('DeckEditor visual variant picker', () => {
     expect(window.DECK.slides[0].componentId).toBe('slide-97');
     expect(mount.querySelector('.deck-editor-variant-popover')).toBeNull();
   });
+
+  // Regression test (final review 2, Finding I1 -- IMPORTANT): the popover was
+  // appended as a sibling of the slide bar but never tracked in chromeEls, so
+  // disableEditing left it in the DOM, fully interactive, even in view mode.
+  it('disableEditing removes an open variant popover', () => {
+    window.DeckEditor.enableEditing(mount);
+    mount.querySelector('[data-action="change-layout"]').click();
+    expect(mount.querySelector('.deck-editor-variant-popover')).not.toBeNull();
+
+    window.DeckEditor.disableEditing(mount);
+
+    expect(mount.querySelector('.deck-editor-variant-popover')).toBeNull();
+  });
+
+  // Regression test (final review 2, Finding M2 -- the duplicate-popover guard
+  // originally used `document.querySelector`, the same document-wide-query
+  // anti-pattern Task 17's chromeEls fix removed elsewhere in this file; it only
+  // worked by accident for an attached mount). Attaching to document.body here
+  // mirrors the real production shape (download-bridge.js passes document.body).
+  it('clicking "Change layout" twice in a row leaves exactly one popover (attached mount)', () => {
+    document.body.appendChild(mount);
+    try {
+      window.DeckEditor.enableEditing(mount);
+      const btn = mount.querySelector('[data-action="change-layout"]');
+      btn.click();
+      btn.click();
+      expect(mount.querySelectorAll('.deck-editor-variant-popover').length).toBe(1);
+    } finally {
+      window.DeckEditor.disableEditing(mount);
+      mount.remove();
+    }
+  });
+
+  // Regression test (final review 2, Finding M1): Escape dismisses an open
+  // popover without requiring a layout pick or another mutation.
+  it('Escape key closes an open variant popover', () => {
+    window.DeckEditor.enableEditing(mount);
+    mount.querySelector('[data-action="change-layout"]').click();
+    expect(mount.querySelector('.deck-editor-variant-popover')).not.toBeNull();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(mount.querySelector('.deck-editor-variant-popover')).toBeNull();
+  });
+});
+
+describe('DeckEditor mutators notify the host of unsaved edits', () => {
+  // Regression test (final review 2, Finding C1 -- CRITICAL): before this fix,
+  // only the inline-text-edit blur handler (commitHandlerFor) ever posted
+  // 'artifact-deck-updated' to window.parent. DownloadArtifact.tsx sets its
+  // `pendingDeck` state from that message and only renders the Save button
+  // when `isEditing && pendingDeck` is true -- so every structural mutation
+  // (reorder/duplicate/delete/image-swap/variant-swap), now clickable via
+  // Task 17/19's chrome, silently could never be saved: the preview updated
+  // but no Save button ever appeared.
+  let mount;
+  let realParent;
+  let postMessage;
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = {
+      title: 'T',
+      slides: [
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 1' }] },
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 2' }] },
+      ],
+    };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+    postMessage = jest.fn();
+    realParent = window.parent;
+    // window.parent === window by default in jsdom; simulate the artifact
+    // iframe's actual cross-window relationship so the `window.parent !==
+    // window` guard (shared with commitHandlerFor) takes the "post" branch.
+    Object.defineProperty(window, 'parent', { value: { postMessage }, configurable: true });
+  });
+  afterEach(() => {
+    // Several tests here call enableEditing(mount) without a matching
+    // disableEditing() -- reset the module-level `editing` flag explicitly so
+    // it can't leak into the next test (mirrors the same cleanup already done
+    // in the 'DeckEditor UI chrome' describe block above).
+    window.DeckEditor.disableEditing();
+    Object.defineProperty(window, 'parent', { value: realParent, configurable: true });
+    delete window.DECK;
+  });
+
+  it('duplicateSlide posts artifact-deck-updated when editing was active', () => {
+    window.DeckEditor.enableEditing(mount);
+    postMessage.mockClear(); // enableEditing's own render pass shouldn't count
+
+    window.DeckEditor.duplicateSlide(0, mount);
+
+    expect(postMessage).toHaveBeenCalledWith({ type: 'artifact-deck-updated', deck: window.DECK }, '*');
+  });
+
+  it('does not post artifact-deck-updated when editing was not active', () => {
+    window.DeckEditor.duplicateSlide(0, mount);
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('setSlideComponent posts artifact-deck-updated after its awaited fetch resolves', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ slides: [{ componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] }] }),
+    });
+    window.DeckEditor.enableEditing(mount);
+    postMessage.mockClear();
+
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+
+    expect(postMessage).toHaveBeenCalledWith({ type: 'artifact-deck-updated', deck: window.DECK }, '*');
+    delete global.fetch;
+  });
 });

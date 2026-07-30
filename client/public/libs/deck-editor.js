@@ -13,9 +13,12 @@
 (function () {
   var editing = false;
   var boundHandlers = []; // { el, handler } pairs, so disableEditing can remove exactly what enableEditing added
-  var chromeEls = []; // elements injected by injectSlideBar/injectImageSwapButtons, tracked directly (not
-  // re-derived via document.querySelectorAll('.deck-editor-chrome')) so removal works even when the
-  // mount hasn't been attached to the live document yet -- mirrors the boundHandlers pattern above.
+  var chromeEls = []; // elements injected by injectSlideBar/injectImageSwapButtons/openVariantPopover, tracked
+  // directly (not re-derived via document.querySelectorAll('.deck-editor-chrome')) so removal works even when
+  // the mount hasn't been attached to the live document yet -- mirrors the boundHandlers pattern above.
+  var docListeners = []; // { type, handler } pairs added on `document` by chrome (currently only the variant
+  // popover's Escape-to-dismiss). Tracked so disableEditing tears them down alongside the chrome elements
+  // themselves, since removing an element does not unregister a document-level listener that closes over it.
 
   function commitHandlerFor(slideIndex, elementIndex, el) {
     return function () {
@@ -25,9 +28,7 @@
       if (slide.elements && slide.elements[elementIndex]) {
         slide.elements[elementIndex].text = el.textContent;
       }
-      if (typeof window.parent !== 'undefined' && window.parent !== window) {
-        window.parent.postMessage({ type: 'artifact-deck-updated', deck: window.DECK }, '*');
-      }
+      notifyDeckUpdated();
     };
   }
 
@@ -144,6 +145,8 @@
     // mount has been attached to the live document.
     chromeEls.forEach(function (el) { el.remove(); });
     chromeEls = [];
+    docListeners.forEach(function (l) { document.removeEventListener(l.type, l.handler); });
+    docListeners = [];
     editing = false;
   }
 
@@ -166,10 +169,31 @@
   // [contenteditable] count both drop to 0 after a single mutation without
   // this). We must NOT re-enable editing if it wasn't active already, since
   // these functions are also callable programmatically outside editor mode.
+  //
+  // This is also the single place the host is notified that an unsaved edit
+  // exists (final review 2, Finding C1 -- CRITICAL): DownloadArtifact.tsx sets
+  // its `pendingDeck` state from the `artifact-deck-updated` message and only
+  // renders the Save button when `isEditing && pendingDeck`, so before this
+  // fix every structural mutation (reorder/duplicate/delete/image-swap/
+  // variant-swap) was silently unsavable -- only inline text edits
+  // (commitHandlerFor) ever posted the message. Posting it here covers all
+  // five mutators at once since they all route through this helper. Gated on
+  // `wasEditing` for the same reason the enableEditing call is: outside editor
+  // mode there is no Save affordance to notify, mirroring how
+  // commitHandlerFor only ever runs while editing.
   function reRenderPreservingEditingState(mountEl) {
     var wasEditing = editing;
     window.DeckRenderer.renderDeck(window.DECK, mountEl);
-    if (wasEditing) enableEditing(mountEl);
+    if (wasEditing) {
+      enableEditing(mountEl);
+      notifyDeckUpdated();
+    }
+  }
+
+  function notifyDeckUpdated() {
+    if (typeof window.parent !== 'undefined' && window.parent !== window) {
+      window.parent.postMessage({ type: 'artifact-deck-updated', deck: window.DECK }, '*');
+    }
   }
 
   function reorderSlide(fromIndex, toIndex, mountEl) {
@@ -267,14 +291,39 @@
     thumb.addEventListener('click', function (e) {
       e.stopPropagation();
       setSlideComponent(slideIndex, componentId, mountEl);
-      popover.remove();
+      closeVariantPopover(popover);
     });
     return thumb;
   }
 
+  // Single teardown path for the variant popover: removes the element, drops it
+  // from chromeEls, and unregisters its Escape listener (both from `document`
+  // and from docListeners). Used by every close trigger (thumbnail pick,
+  // Escape, re-opening the picker) so no path can leave a half-removed popover
+  // or an orphaned document listener behind.
+  function closeVariantPopover(popover) {
+    popover.remove();
+    var i = chromeEls.indexOf(popover);
+    if (i !== -1) chromeEls.splice(i, 1);
+    var handler = popover._deckEditorKeyHandler;
+    if (handler) {
+      document.removeEventListener('keydown', handler);
+      for (var j = docListeners.length - 1; j >= 0; j--) {
+        if (docListeners[j].handler === handler) docListeners.splice(j, 1);
+      }
+      delete popover._deckEditorKeyHandler;
+    }
+  }
+
   function openVariantPopover(anchorBtn, slideIndex, mountEl) {
-    var existing = document.querySelector('.deck-editor-variant-popover');
-    if (existing) existing.remove();
+    // Scoped to the anchor's own subtree rather than `document` (final review 2,
+    // Finding M2 -- the same document-wide-query anti-pattern Task 17's chromeEls
+    // fix removed elsewhere in this file): the popover is appended as a sibling of
+    // the slide bar, so its parent is the only place a prior one can be, and this
+    // guard then works identically whether or not the mount is attached to the
+    // live document.
+    var existing = anchorBtn.parentElement.querySelector('.deck-editor-variant-popover');
+    if (existing) closeVariantPopover(existing);
     var popover = document.createElement('div');
     popover.className = 'deck-editor-chrome deck-editor-variant-popover';
     popover.style.cssText = 'position:absolute;top:32px;right:8px;z-index:1001;background:#171717;border:1px solid rgba(255,255,255,.2);padding:8px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;';
@@ -296,7 +345,17 @@
         popover.appendChild(row);
       });
     });
+    var onKeyDown = function (e) {
+      if (e.key === 'Escape') closeVariantPopover(popover);
+    };
+    popover._deckEditorKeyHandler = onKeyDown;
+    document.addEventListener('keydown', onKeyDown);
+    docListeners.push({ type: 'keydown', handler: onKeyDown });
     anchorBtn.parentElement.appendChild(popover);
+    // Tracked as chrome (final review 2, Finding I1 -- IMPORTANT): without this,
+    // disableEditing left an open popover in the DOM and fully interactive, so
+    // clicking a thumbnail after leaving edit mode still mutated window.DECK.
+    chromeEls.push(popover);
   }
 
   function makeChromeButton(label, action, onClick, disabled) {
@@ -322,7 +381,7 @@
     bar.appendChild(makeChromeButton('Delete', 'delete', function () { deleteSlide(slideIndex, mountEl); }, totalSlides <= 1));
     bar.appendChild(makeChromeButton('Change layout…', 'change-layout', function () { openVariantPopover(bar, slideIndex, mountEl); }));
     slideEl.appendChild(bar);
-    chromeEls.push(bar); // children (buttons/select) are removed along with their parent
+    chromeEls.push(bar); // child buttons are removed along with their parent
   }
 
   function injectImageSwapButtons(slideEl, slideIndex, mountEl) {

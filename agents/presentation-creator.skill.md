@@ -113,7 +113,7 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 | `stat` | `stats` (up to 3, each `{value, label}`) | KPI callout |
 | `quote` | `quote`, `cite?` | Pull quote |
 | `split` | `title`, `eyebrow?`, `body`, `rightColor?` (hex, defaults to orange), `rightBrandImage?` | Full-bleed two-panel |
-| `chart` | `title`, `bars` (up to 6, each `{label, value}`), `type?` (`"bar"` default or `"pie"`) | Simple bar or pie comparison |
+| `chart` | `title`, `bars` (up to 6, each `{label, value}`), `type?` (`"bar"` default, `"pie"`, `"line"`, or `"area"`) | Simple bar, pie, line, or area comparison |
 | `comparison` | `title`, `headers` (up to 4 columns), `rows` (up to 5, each row sliced to 4 cells) | Feature/competitor table |
 | `process` | `title`, `steps` (up to 5, each `{label, desc, num?}`) | Sequential workflow |
 | `icon_grid` | `title`, `cols?` (2 or 3, default 3), `cards` (up to 6, each `{title, desc, icon?}` — see `window.DeckIcons.ICON_NAMES` below for valid `icon` values) | Feature/capability grid |
@@ -179,6 +179,8 @@ Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to 
 - **Category-divider slides are intentionally thin** — `slide-4`, `slide-12`, `slide-17`, `slide-20`, `slide-26`, `slide-38`, `slide-40`, `slide-56`, `slide-78`, `slide-84`, `slide-93`, `slide-96` are single-title section headers in the source deck (e.g. "Agenda", "Tables", "Thank you Slides") — that's correct extraction, not a converter miss; don't reference them expecting real slide content.
 
 **`chart` layout, `type: "pie"`**: the `chart` layout (see Layout Reference table) also accepts `"type": "pie"` alongside its default bar rendering — same `bars` field (`{label, value}`), rendered as a pie/donut instead of a bar comparison. Omit `type` (or set `"bar"`) for the original bar chart.
+
+**`chart` layout, `type: "line"` / `type: "area"`**: also available for trends over an ordered sequence (`bars` doubles as the point series, same `{label, value}` shape and same max-6 cap). Both export as native PowerPoint line/area charts; in the HTML preview `"line"` renders as thin value stems and `"area"` as filled columns along the same left-to-right sequence.
 
 **`icon_grid` layout, real icons**: the `icon` field on each `icon_grid` card is now rendered (previously accepted but ignored). Set it to one of the 12 curated names in `window.DeckIcons.ICON_NAMES`: `check`, `arrow-right`, `star`, `clock`, `chart`, `target`, `lightbulb`, `shield`, `users`, `globe`, `gear`, `flag`. These are inline SVGs bundled in `/libs/icons.js` — no network dependency, no arbitrary icon names.
 
