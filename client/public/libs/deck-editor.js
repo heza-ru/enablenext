@@ -75,18 +75,6 @@
       '.deck-editor-chrome-btn:hover:not(:disabled){background:#424242}' + // gray-600
       '.deck-editor-chrome-btn:focus-visible{box-shadow:0 0 0 2px rgba(236,236,236,0.6)}' +
       '.deck-editor-chrome-btn:disabled{color:#8a8a8a;cursor:not-allowed;opacity:.5}' +
-      '.deck-editor-variant-select{' +
-        'appearance:none;-webkit-appearance:none;' +
-        'border:1px solid rgba(255,255,255,0.14);border-radius:999px;' +
-        'background:#212121;color:#ececec;' + // gray-800 / gray-100
-        "font-family:'DM Sans',-apple-system,sans-serif;font-size:12px;font-weight:500;" +
-        'height:28px;padding:0 24px 0 10px;cursor:pointer;' +
-        'background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%23ececec\'/%3E%3C/svg%3E");' +
-        'background-repeat:no-repeat;background-position:right 8px center' +
-      '}' +
-      '.deck-editor-variant-select:hover{border-color:#424242}' + // gray-600
-      '.deck-editor-variant-select:focus-visible{outline:none;border-color:rgba(236,236,236,0.6);box-shadow:0 0 0 2px rgba(236,236,236,0.35)}' +
-      '.deck-editor-variant-select option,.deck-editor-variant-select optgroup{background:#171717;color:#ececec}' + // gray-850
       '.deck-editor-image-swap{' +
         'position:absolute;z-index:1000;transform:translate(-4px,-4px);' +
         'appearance:none;-webkit-appearance:none;border:none;outline:none;' +
@@ -271,7 +259,7 @@
     // Fixed small box at the deck's real 16:9 ratio; render the real elements at full
     // scale inside an inner div, then CSS-scale the whole thing down -- reuses
     // DeckSchemaRenderer verbatim, so the thumbnail can never drift from the real render.
-    thumb.style.cssText = 'width:96px;height:54px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.2);background:#25223B;padding:0;cursor:pointer;';
+    thumb.style.cssText = 'width:96px;height:54px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.2);background:#171717;padding:0;cursor:pointer;';
     var inner = document.createElement('div');
     inner.style.cssText = 'width:960px;height:540px;position:relative;transform:scale(0.1);transform-origin:top left;';
     window.DeckSchemaRenderer.renderSchemaElements(elements, inner);
@@ -289,7 +277,7 @@
     if (existing) existing.remove();
     var popover = document.createElement('div');
     popover.className = 'deck-editor-chrome deck-editor-variant-popover';
-    popover.style.cssText = 'position:absolute;top:32px;right:8px;z-index:1001;background:#1a1728;border:1px solid rgba(255,255,255,.2);padding:8px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;';
+    popover.style.cssText = 'position:absolute;top:32px;right:8px;z-index:1001;background:#171717;border:1px solid rgba(255,255,255,.2);padding:8px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;';
     fetchLibrary().then(function (library) {
       CURATED_VARIANTS.forEach(function (group) {
         var groupLabel = document.createElement('div');
