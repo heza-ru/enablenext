@@ -150,6 +150,37 @@ describe('DeckSchemaRenderer text auto-fit', () => {
     expect(parseFloat(el.style.fontSize)).toBeLessThan(20);
   });
 
+  it('stops shrinking as soon as the text fits, not just at the floor (dynamic overflow that resolves at an intermediate size)', () => {
+    const container = document.createElement('div');
+    // Unlike the static mocks above (which stay "overflowing" forever and thus can't
+    // distinguish "shrink until it fits" from "always shrink to the floor"), this mock's
+    // clientHeight is a getter derived from the element's *current* fontSize: overflow
+    // resolves once fontSize drops to 16pt or below, well above the 8pt floor. This proves
+    // the loop's overflow check is actually re-evaluated each iteration and halts as soon
+    // as the (simulated) box fits, rather than unconditionally bottoming out.
+    const originalCreateElement = document.createElement.bind(document);
+    let capturedEl;
+    jest.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = originalCreateElement(tag);
+      if (tag === 'div' && !capturedEl) {
+        capturedEl = el;
+        Object.defineProperty(el, 'scrollHeight', { get: () => 100, configurable: true });
+        Object.defineProperty(el, 'clientHeight', {
+          get: () => (parseFloat(el.style.fontSize) <= 16 ? 150 : 50),
+          configurable: true,
+        });
+      }
+      return el;
+    });
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Text that fits once shrunk to 16pt', fontSize: 20 }],
+      container,
+    );
+    document.createElement.mockRestore();
+    const el = container.querySelector('.schema-text');
+    expect(parseFloat(el.style.fontSize)).toBe(16);
+  });
+
   it('never shrinks below minFontSize (default 8pt)', () => {
     const container = document.createElement('div');
     // same overflow-mocking technique as above, extreme overflow, confirm floor at 8
