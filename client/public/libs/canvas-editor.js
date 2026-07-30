@@ -395,9 +395,16 @@
     var allZ = elements.map(function (el) { return el.zIndex; });
     var extreme = toFront ? Math.max.apply(null, allZ) : Math.min.apply(null, allZ);
     var nextVal = toFront ? extreme + 1 : extreme - 1;
-    // Ascending selection order preserves selected elements' relative order
-    // among themselves when several are sent to the same extreme together.
-    selectedIndices.slice().sort(function (a, b) { return a - b; }).forEach(function (elIndex) {
+    // Bring-to-front assigns ascending zIndex values while walking selected
+    // indices in ascending order, so the lowest origIndex gets the lowest
+    // (furthest back, among the group) new zIndex — relative order preserved.
+    // Send-to-back assigns descending zIndex values (nextVal keeps
+    // decrementing), so it must walk selected indices in DESCENDING order:
+    // the highest origIndex gets the smallest decrement (ends up furthest
+    // back among the group) and the lowest origIndex ends up closest to the
+    // rest of the stack — this again preserves the selected elements'
+    // relative order among themselves.
+    selectedIndices.slice().sort(function (a, b) { return toFront ? a - b : b - a; }).forEach(function (elIndex) {
       var el = elements[elIndex];
       if (!el) return;
       el.zIndex = nextVal;

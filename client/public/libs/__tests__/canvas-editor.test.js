@@ -463,6 +463,28 @@ describe('CanvasEditor keyboard shortcuts', () => {
     expect(elements[2].zIndex).toBe(-1); // min(0,1,2) - 1
   });
 
+  it('Shift+Alt+] with multiple adjacent selected elements preserves their relative order at the front', () => {
+    window.CanvasEditor.selectElement(0); // origIndex 0
+    window.CanvasEditor.toggleSelectElement(1); // origIndex 1, adjacent
+    dispatchKey({ key: ']', altKey: true, shiftKey: true });
+    const elements = window.DECK.slides[0].elements;
+    // Both moved to the front, but 0 must still stack behind 1 (its
+    // pre-existing relative order), not swapped.
+    expect(elements[0].zIndex).toBeLessThan(elements[1].zIndex);
+    expect(elements[2].zIndex).toBeLessThan(elements[0].zIndex);
+  });
+
+  it('Shift+Alt+[ with multiple adjacent selected elements preserves their relative order at the back', () => {
+    window.CanvasEditor.selectElement(0); // origIndex 0
+    window.CanvasEditor.toggleSelectElement(1); // origIndex 1, adjacent
+    dispatchKey({ key: '[', altKey: true, shiftKey: true });
+    const elements = window.DECK.slides[0].elements;
+    // Both moved to the back, but 0 must still stack behind 1 (its
+    // pre-existing relative order), not swapped.
+    expect(elements[0].zIndex).toBeLessThan(elements[1].zIndex);
+    expect(elements[1].zIndex).toBeLessThan(elements[2].zIndex);
+  });
+
   it('ignores keyboard shortcuts when an input element has focus', () => {
     const input = document.createElement('input');
     document.body.appendChild(input);
