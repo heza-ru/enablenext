@@ -519,6 +519,14 @@
     deselect: deselect,
     getSelectedIndices: getSelectedIndices,
     onChange: onChange,
+    // Real actions (not test-only internals) — same functions Task 5's
+    // keyboard shortcuts call, exposed so the context menu (Task 6) and
+    // toolbar (Task 7) can invoke them directly instead of synthesizing
+    // fake KeyboardEvents.
+    deleteSelected: deleteSelected,
+    duplicateSelected: duplicateSelected,
+    moveZOrder: moveZOrder,
+    moveZOrderExtreme: moveZOrderExtreme,
     // Task 8 installs _undoRedoHook = {undo, redo}; until then this is a no-op.
     _undoRedoHook: null,
     // Exposed for direct unit testing without a real canvas.
