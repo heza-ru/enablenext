@@ -272,11 +272,10 @@ describe('DeckEditor UI chrome', () => {
     expect(mount.querySelectorAll('.deck-editor-image-swap').length).toBe(1);
   });
 
-  it('injects a variant-swap select populated with curated componentId options', () => {
+  it('injects a "Change layout" button (superseded by the visual thumbnail picker in task 19)', () => {
     window.DeckEditor.enableEditing(mount);
-    const select = mount.querySelector('.deck-editor-slide-bar select');
-    expect(select).not.toBeNull();
-    expect(select.querySelectorAll('option').length).toBeGreaterThan(1);
+    const btn = mount.querySelector('.deck-editor-slide-bar [data-action="change-layout"]');
+    expect(btn).not.toBeNull();
   });
 
   it('removes all injected chrome on disableEditing', () => {
@@ -321,5 +320,45 @@ describe('DeckEditor UI chrome', () => {
     expect(window.DeckEditor.isEditing()).toBe(false);
     expect(mount.querySelectorAll('.deck-editor-slide-bar').length).toBe(0);
     expect(mount.querySelectorAll('[contenteditable]').length).toBe(0);
+  });
+});
+
+describe('DeckEditor visual variant picker', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'S1' }] }] };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ slides: [{ componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] }] }),
+    });
+  });
+  afterEach(() => { delete window.DECK; delete global.fetch; });
+
+  it('shows a "Change layout" button instead of a native select', () => {
+    window.DeckEditor.enableEditing(mount);
+    expect(mount.querySelector('.deck-editor-slide-bar select')).toBeNull();
+    expect(mount.querySelector('[data-action="change-layout"]')).not.toBeNull();
+  });
+
+  it('opens a thumbnail grid with a rendered mini-preview per curated componentId when clicked', async () => {
+    window.DeckEditor.enableEditing(mount);
+    mount.querySelector('[data-action="change-layout"]').click();
+    await Promise.resolve(); // let the library fetch + thumbnail render settle
+    const thumbs = mount.querySelectorAll('.deck-editor-variant-thumb');
+    expect(thumbs.length).toBeGreaterThan(0);
+    // each thumbnail actually contains rendered schema content, not just a label
+    expect(thumbs[0].querySelector('.schema-text, .schema-shape, .schema-image')).not.toBeNull();
+  });
+
+  it('clicking a thumbnail calls setSlideComponent and closes the popover', async () => {
+    window.DeckEditor.enableEditing(mount);
+    mount.querySelector('[data-action="change-layout"]').click();
+    await Promise.resolve();
+    const thumb = Array.from(mount.querySelectorAll('.deck-editor-variant-thumb')).find((t) => t.dataset.componentId === 'slide-97');
+    thumb.click();
+    await Promise.resolve();
+    expect(window.DECK.slides[0].componentId).toBe('slide-97');
+    expect(mount.querySelector('.deck-editor-variant-popover')).toBeNull();
   });
 });

@@ -263,30 +263,52 @@
     { category: 'Closing', ids: ['slide-97', 'slide-98', 'slide-99', 'slide-100'] },
   ];
 
-  function buildVariantSelect(slideIndex, mountEl) {
-    var select = document.createElement('select');
-    select.className = 'deck-editor-chrome deck-editor-variant-select';
-    var placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Change layout…';
-    select.appendChild(placeholder);
-    CURATED_VARIANTS.forEach(function (group) {
-      var optgroup = document.createElement('optgroup');
-      optgroup.label = group.category;
-      group.ids.forEach(function (id) {
-        var opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = id;
-        optgroup.appendChild(opt);
+  function buildThumbnail(componentId, elements, slideIndex, mountEl, popover) {
+    var thumb = document.createElement('button');
+    thumb.type = 'button';
+    thumb.className = 'deck-editor-chrome deck-editor-variant-thumb';
+    thumb.dataset.componentId = componentId;
+    // Fixed small box at the deck's real 16:9 ratio; render the real elements at full
+    // scale inside an inner div, then CSS-scale the whole thing down -- reuses
+    // DeckSchemaRenderer verbatim, so the thumbnail can never drift from the real render.
+    thumb.style.cssText = 'width:96px;height:54px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.2);background:#25223B;padding:0;cursor:pointer;';
+    var inner = document.createElement('div');
+    inner.style.cssText = 'width:960px;height:540px;position:relative;transform:scale(0.1);transform-origin:top left;';
+    window.DeckSchemaRenderer.renderSchemaElements(elements, inner);
+    thumb.appendChild(inner);
+    thumb.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setSlideComponent(slideIndex, componentId, mountEl);
+      popover.remove();
+    });
+    return thumb;
+  }
+
+  function openVariantPopover(anchorBtn, slideIndex, mountEl) {
+    var existing = document.querySelector('.deck-editor-variant-popover');
+    if (existing) existing.remove();
+    var popover = document.createElement('div');
+    popover.className = 'deck-editor-chrome deck-editor-variant-popover';
+    popover.style.cssText = 'position:absolute;top:32px;right:8px;z-index:1001;background:#1a1728;border:1px solid rgba(255,255,255,.2);padding:8px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;';
+    fetchLibrary().then(function (library) {
+      CURATED_VARIANTS.forEach(function (group) {
+        var groupLabel = document.createElement('div');
+        groupLabel.className = 'deck-editor-chrome';
+        groupLabel.style.cssText = "font-size:10px;color:rgba(255,255,255,.6);font-family:'DM Sans',sans-serif;";
+        groupLabel.textContent = group.category;
+        var row = document.createElement('div');
+        row.className = 'deck-editor-chrome';
+        row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+        group.ids.forEach(function (id) {
+          var entry = (library.slides || []).filter(function (s) { return s.componentId === id; })[0];
+          if (!entry) return; // skip silently if a curated id is somehow missing from the library
+          row.appendChild(buildThumbnail(id, entry.elements, slideIndex, mountEl, popover));
+        });
+        popover.appendChild(groupLabel);
+        popover.appendChild(row);
       });
-      select.appendChild(optgroup);
     });
-    select.addEventListener('click', function (e) { e.stopPropagation(); });
-    select.addEventListener('change', function () {
-      if (!select.value) return;
-      setSlideComponent(slideIndex, select.value, mountEl);
-    });
-    return select;
+    anchorBtn.parentElement.appendChild(popover);
   }
 
   function makeChromeButton(label, action, onClick, disabled) {
@@ -310,7 +332,7 @@
     bar.appendChild(makeChromeButton('↓', 'down', function () { reorderSlide(slideIndex, slideIndex + 1, mountEl); }, slideIndex === totalSlides - 1));
     bar.appendChild(makeChromeButton('Duplicate', 'duplicate', function () { duplicateSlide(slideIndex, mountEl); }));
     bar.appendChild(makeChromeButton('Delete', 'delete', function () { deleteSlide(slideIndex, mountEl); }, totalSlides <= 1));
-    bar.appendChild(buildVariantSelect(slideIndex, mountEl));
+    bar.appendChild(makeChromeButton('Change layout…', 'change-layout', function () { openVariantPopover(bar, slideIndex, mountEl); }));
     slideEl.appendChild(bar);
     chromeEls.push(bar); // children (buttons/select) are removed along with their parent
   }
