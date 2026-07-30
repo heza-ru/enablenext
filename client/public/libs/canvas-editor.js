@@ -15,6 +15,7 @@
   var selectedIndices = []; // kept sorted ascending
   var changeListeners = [];
   var keydownHandler = null;
+  var lastMountEl = null;
   var NUDGE_STEP = 0.05; // inches
   var NUDGE_STEP_SHIFT = 0.2; // inches
   var DUPLICATE_OFFSET = 0.2; // inches
@@ -178,6 +179,7 @@
   }
 
   function handleDragEnd(e) {
+    if (window.CanvasHistory) window.CanvasHistory.push();
     updateElementFromNode(e.target);
   }
 
@@ -186,6 +188,7 @@
   // absolute width/height and reset scale to 1, so the next transform starts
   // from a clean baseline instead of compounding scale factors.
   function handleTransformEnd(e) {
+    if (window.CanvasHistory) window.CanvasHistory.push();
     var node = e.target;
     var scaleX = node.scaleX();
     var scaleY = node.scaleY();
@@ -286,6 +289,7 @@
     if (selectedIndices.length === 0) return;
     var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
     if (!slide || !slide.elements) return;
+    if (window.CanvasHistory) window.CanvasHistory.push();
     // Highest index first so lower indices don't shift under us mid-splice.
     var toDelete = selectedIndices.slice().sort(function (a, b) { return b - a; });
     toDelete.forEach(function (idx) {
@@ -324,6 +328,7 @@
     if (selectedIndices.length === 0) return;
     var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
     if (!slide || !slide.elements) return;
+    if (window.CanvasHistory) window.CanvasHistory.push();
     var newIndices = [];
     // Process in ascending order; each duplicate is appended, so earlier
     // duplicates don't affect later original indices.
@@ -345,6 +350,7 @@
 
   function nudgeSelected(dx, dy) {
     if (selectedIndices.length === 0) return;
+    if (window.CanvasHistory) window.CanvasHistory.push();
     selectedIndices.forEach(function (idx) {
       var node = findNodeByIndex(idx);
       if (!node) return;
@@ -378,6 +384,7 @@
   function moveZOrder(direction) { // direction: +1 forward, -1 backward
     var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
     if (!slide || !slide.elements || selectedIndices.length === 0) return;
+    if (window.CanvasHistory) window.CanvasHistory.push();
     var elements = slide.elements;
     ensureZIndices(elements);
     // For each selected element (stable ascending order), find the nearest
@@ -405,6 +412,7 @@
   function moveZOrderExtreme(toFront) {
     var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
     if (!slide || !slide.elements || selectedIndices.length === 0) return;
+    if (window.CanvasHistory) window.CanvasHistory.push();
     var elements = slide.elements;
     ensureZIndices(elements);
     var allZ = elements.map(function (el) { return el.zIndex; });
@@ -481,6 +489,7 @@
 
   function mount(mountEl, slideIndex) {
     unmount(); // idempotent re-mount, mirrors deck-editor.js's enableEditing discipline
+    lastMountEl = mountEl;
     activeSlideIndex = slideIndex || 0;
     var rect = mountEl.getBoundingClientRect();
     scale = Math.min(rect.width / SW, rect.height / SH) || 1;
@@ -525,9 +534,20 @@
     // navigates between slides.
   }
 
+  // Full rebuild of the Konva stage from the current window.DECK state.
+  // mount() already calls unmount() first, so this is a clean re-render —
+  // used by CanvasHistory's undo()/redo() after mutating window.DECK.slides
+  // in place, since old Konva node references would otherwise point at
+  // stale geometry.
+  function remount() {
+    if (!lastMountEl) return;
+    mount(lastMountEl, activeSlideIndex);
+  }
+
   window.CanvasEditor = {
     mount: mount,
     unmount: unmount,
+    remount: remount,
     isMounted: isMounted,
     getStage: getStage,
     selectElement: selectElement,

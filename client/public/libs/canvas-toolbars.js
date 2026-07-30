@@ -86,6 +86,7 @@
     if (!slide || !slide.elements) return;
     var deckEl = slide.elements[elIndex];
     if (!deckEl) return;
+    if (window.CanvasHistory) window.CanvasHistory.push();
     mutator(deckEl);
     window.CanvasEditor.notifyChange();
   }
