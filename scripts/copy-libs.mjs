@@ -39,6 +39,10 @@ const LIBS = [
     src:  'node_modules/html2canvas/dist/html2canvas.min.js',
     dest: 'html2canvas.min.js',
   },
+  {
+    src:  'node_modules/konva/konva.min.js',
+    dest: 'konva.min.js',
+  },
 ];
 
 for (const { src, dest } of LIBS) {

@@ -209,6 +209,49 @@ describe('DeckSchemaRenderer.renderSchemaElements', () => {
       window.DeckSchemaRenderer.renderSchemaElements([{ type: 'bogus' }], container),
     ).toThrow(/unknown element type/i);
   });
+
+  it('applies `rotation` on a text element as a CSS transform', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Tilted', rotation: 15 }],
+      container,
+    );
+    const el = container.querySelector('.schema-text');
+    expect(el.style.transform).toBe('rotate(15deg)');
+  });
+
+  it('applies `rotation` on a shape element as a CSS transform', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'shape', shape: 'rect', x: 0, y: 0, w: 2, h: 1, fill: 'FFFFFF', rotation: -8 }],
+      container,
+    );
+    const el = container.querySelector('.schema-shape');
+    expect(el.style.transform).toBe('rotate(-8deg)');
+  });
+
+  it('renders elements in zIndex order when present, array order otherwise', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [
+        { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'C', zIndex: 3 },
+        { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'A', zIndex: 1 },
+        { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'B', zIndex: 2 },
+      ],
+      container,
+    );
+    const texts = [...container.querySelectorAll('.schema-text')].map((el) => el.textContent);
+    expect(texts).toEqual(['A', 'B', 'C']);
+  });
+
+  it('elements without zIndex render in array order, unaffected by zIndex-bearing siblings (backward compatible)', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [
+        { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'First' },
+        { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'Second' },
+      ],
+      container,
+    );
+    const texts = [...container.querySelectorAll('.schema-text')].map((el) => el.textContent);
+    expect(texts).toEqual(['First', 'Second']);
+  });
 });
 
 describe('DeckSchemaRenderer.exportSchemaElements', () => {
@@ -351,6 +394,26 @@ describe('DeckSchemaRenderer.exportSchemaElements', () => {
       'roundRect',
       expect.objectContaining({ x: 0, y: 0, w: 3, h: 0.5, fill: { color: '4a4560' }, rectRadius: 0.1 }),
     );
+  });
+
+  it('exports `rotation` as PptxGenJS rotate', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Tilted', rotation: 15 },
+    ]);
+    expect(slide.addText).toHaveBeenCalledWith('Tilted', expect.objectContaining({ rotate: 15 }));
+  });
+
+  it('exports elements in zIndex order when present', () => {
+    const slide = fakeSlide();
+    const calls = [];
+    slide.addText = jest.fn((text) => calls.push(text));
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'C', zIndex: 3 },
+      { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'A', zIndex: 1 },
+      { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'B', zIndex: 2 },
+    ]);
+    expect(calls).toEqual(['A', 'B', 'C']);
   });
 });
 

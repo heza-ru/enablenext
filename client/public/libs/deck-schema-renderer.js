@@ -52,8 +52,26 @@
     return el.fontWeight === 'bold' || el.bold === true;
   }
 
+  // Stably sorts a copy of `elements` by `zIndex` (paint order) while
+  // preserving each element's true original array index for callers that
+  // need to key back into the source array (data-el-index tagging, edit
+  // commit handlers, etc.) -- the exact "true array index, not sorted-loop
+  // position" discipline already established for text-among-shapes tagging
+  // above must not regress when sorting is introduced.
+  function sortByZIndex(elements) {
+    return (elements || [])
+      .map(function (el, i) { return { el: el, origIndex: i }; })
+      .sort(function (a, b) {
+        var az = a.el.zIndex != null ? a.el.zIndex : a.origIndex;
+        var bz = b.el.zIndex != null ? b.el.zIndex : b.origIndex;
+        return az - bz;
+      });
+  }
+
   function renderSchemaElements(elements, containerEl) {
-    (elements || []).forEach(function (el, elIndex) {
+    sortByZIndex(elements).forEach(function (item) {
+      var el = item.el;
+      var elIndex = item.origIndex;
       if (el.type === 'text') {
         var span = document.createElement('div');
         span.className = 'schema-text';
@@ -74,6 +92,7 @@
         span.style.fontFamily = "'" + (el.fontFamily || 'DM Sans') + "',sans-serif";
         span.style.textAlign = el.align || 'left';
         if (el.opacity != null) span.style.opacity = String(el.opacity);
+        if (el.rotation) span.style.transform = 'rotate(' + el.rotation + 'deg)';
         span.textContent = el.text || '';
         // Auto-fit is deliberately NOT run here. renderDeck() builds every
         // slide's DOM tree BEFORE attaching it to the document, so at this
@@ -146,6 +165,7 @@
           box.style.borderRadius = '50%';
         }
         if (el.opacity != null) box.style.opacity = String(el.opacity);
+        if (el.rotation) box.style.transform = 'rotate(' + el.rotation + 'deg)';
         containerEl.appendChild(box);
       } else {
         throw new Error('DeckSchemaRenderer: unknown element type "' + el.type + '"');
@@ -196,7 +216,8 @@
   }
 
   function exportSchemaElements(pptxSlide, elements) {
-    (elements || []).forEach(function (el) {
+    sortByZIndex(elements).forEach(function (item) {
+      var el = item.el;
       if (el.type === 'text') {
         var textOpts = {
           x: el.x, y: el.y, w: el.w, h: el.h,
@@ -208,6 +229,7 @@
           fit: 'shrink',
         };
         if (el.opacity != null) textOpts.transparency = Math.round((1 - el.opacity) * 100);
+        if (el.rotation) textOpts.rotate = el.rotation;
         pptxSlide.addText(el.text || '', textOpts);
       } else if (el.type === 'image') {
         var imageRef = resolveImageRef(el);
@@ -243,11 +265,13 @@
       } else if (el.type === 'shape') {
         var shapeFill = { color: el.fill || '4a4560' };
         if (el.opacity != null) shapeFill.transparency = Math.round((1 - el.opacity) * 100);
-        pptxSlide.addShape(el.shape, {
+        var shapeOpts = {
           x: el.x, y: el.y, w: el.w, h: el.h,
           fill: shapeFill,
           rectRadius: el.shape === 'roundRect' ? (el.rectRadius || 0.06) : undefined,
-        });
+        };
+        if (el.rotation) shapeOpts.rotate = el.rotation;
+        pptxSlide.addShape(el.shape, shapeOpts);
       } else {
         throw new Error('DeckSchemaRenderer: unknown element type "' + el.type + '"');
       }
