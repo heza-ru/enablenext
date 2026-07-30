@@ -12,8 +12,12 @@
   var transformer = null;
   var activeSlideIndex = 0;
   var scale = 1;
-  var selectedIndex = null;
+  var selectedIndices = []; // kept sorted ascending
   var changeListeners = [];
+  var keydownHandler = null;
+  var NUDGE_STEP = 0.05; // inches
+  var NUDGE_STEP_SHIFT = 0.2; // inches
+  var DUPLICATE_OFFSET = 0.2; // inches
 
   function isMounted() {
     return stage !== null;
@@ -188,23 +192,269 @@
     updateElementFromNode(node);
   }
 
-  function selectElement(elIndex) {
+  function findNodeByIndex(elIndex) {
+    if (!layer) return null;
+    return layer.getChildren().find(function (n) { return n._elIndex === elIndex; });
+  }
+
+  function applySelection() {
     if (!layer || !transformer) return;
-    var node = layer.getChildren().find(function (n) { return n._elIndex === elIndex; });
-    if (!node) return;
-    selectedIndex = elIndex;
-    transformer.nodes([node]);
+    var nodes = selectedIndices
+      .map(findNodeByIndex)
+      .filter(function (n) { return !!n; });
+    transformer.nodes(nodes);
+    transformer.moveToTop();
     layer.batchDraw();
   }
 
+  // Plain click: replace selection with just this element.
+  function selectElement(elIndex) {
+    if (!layer || !transformer) return;
+    var node = findNodeByIndex(elIndex);
+    if (!node) return;
+    selectedIndices = [elIndex];
+    applySelection();
+  }
+
+  // Shift-click: toggle this element in/out of the current selection.
+  function toggleSelectElement(elIndex) {
+    if (!layer || !transformer) return;
+    var node = findNodeByIndex(elIndex);
+    if (!node) return;
+    var pos = selectedIndices.indexOf(elIndex);
+    if (pos === -1) {
+      selectedIndices = selectedIndices.concat([elIndex]).sort(function (a, b) { return a - b; });
+    } else {
+      selectedIndices = selectedIndices.slice(0, pos).concat(selectedIndices.slice(pos + 1));
+    }
+    applySelection();
+  }
+
   function deselect() {
-    selectedIndex = null;
+    selectedIndices = [];
     if (transformer) transformer.nodes([]);
     if (layer) layer.batchDraw();
   }
 
-  function getSelectedIndex() {
-    return selectedIndex;
+  function getSelectedIndices() {
+    return selectedIndices.slice();
+  }
+
+  // Creates a Konva node for a DECK element at the given origIndex and wires
+  // its standard event handlers, adding it to the layer. Shared by mount()
+  // (initial render) and duplicateSelected() (rendering new nodes for
+  // duplicated elements) so the per-node setup logic lives in one place.
+  function createAndAddNode(el, origIndex) {
+    var node = elementToKonvaNode(el, scale);
+    if (!node) return null;
+    node._elIndex = origIndex;
+    node.on('click tap', function (e) {
+      if (e.evt && e.evt.shiftKey) {
+        toggleSelectElement(node._elIndex);
+      } else {
+        selectElement(node._elIndex);
+      }
+    });
+    node.on('dragend', handleDragEnd);
+    node.on('transformend', handleTransformEnd);
+    layer.add(node);
+    return node;
+  }
+
+  function isEditableFocused() {
+    var active = document.activeElement;
+    if (!active) return false;
+    var tag = active.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA';
+  }
+
+  function deleteSelected() {
+    if (selectedIndices.length === 0) return;
+    var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
+    if (!slide || !slide.elements) return;
+    // Highest index first so lower indices don't shift under us mid-splice.
+    var toDelete = selectedIndices.slice().sort(function (a, b) { return b - a; });
+    toDelete.forEach(function (idx) {
+      var node = findNodeByIndex(idx);
+      if (node) node.destroy();
+      slide.elements.splice(idx, 1);
+    });
+    // Remaining nodes' _elIndex values are now stale wherever they pointed
+    // past a deleted index — rebuild node tags to match the new array.
+    reindexNodesAfterSplice(toDelete);
+    selectedIndices = [];
+    if (transformer) transformer.nodes([]);
+    if (layer) layer.batchDraw();
+    notifyChange();
+  }
+
+  // After splicing out `deletedIndices` (original indices, any order) from
+  // window.DECK's elements array, every remaining node's _elIndex must shift
+  // down by however many deleted indices were below it, so node._elIndex
+  // keeps matching its element's new position in the array.
+  function reindexNodesAfterSplice(deletedIndices) {
+    if (!layer) return;
+    var sortedDeleted = deletedIndices.slice().sort(function (a, b) { return a - b; });
+    layer.getChildren().forEach(function (node) {
+      if (typeof node._elIndex !== 'number') return; // Transformer, etc.
+      var shift = 0;
+      for (var i = 0; i < sortedDeleted.length; i++) {
+        if (sortedDeleted[i] < node._elIndex) shift++;
+      }
+      node._elIndex -= shift;
+    });
+  }
+
+  function duplicateSelected() {
+    if (selectedIndices.length === 0) return;
+    var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
+    if (!slide || !slide.elements) return;
+    var newIndices = [];
+    // Process in ascending order; each duplicate is appended, so earlier
+    // duplicates don't affect later original indices.
+    selectedIndices.slice().sort(function (a, b) { return a - b; }).forEach(function (idx) {
+      var original = slide.elements[idx];
+      if (!original) return;
+      var copy = JSON.parse(JSON.stringify(original));
+      copy.x = (copy.x || 0) + DUPLICATE_OFFSET;
+      copy.y = (copy.y || 0) + DUPLICATE_OFFSET;
+      var newIndex = slide.elements.length;
+      slide.elements.push(copy);
+      createAndAddNode(copy, newIndex);
+      newIndices.push(newIndex);
+    });
+    selectedIndices = newIndices.sort(function (a, b) { return a - b; });
+    applySelection();
+    notifyChange();
+  }
+
+  function nudgeSelected(dx, dy) {
+    if (selectedIndices.length === 0) return;
+    selectedIndices.forEach(function (idx) {
+      var node = findNodeByIndex(idx);
+      if (!node) return;
+      node.x(node.x() + inchesToPx(dx));
+      node.y(node.y() + inchesToPx(dy));
+      updateElementFromNode(node);
+    });
+    if (layer) layer.batchDraw();
+  }
+
+  // Ensures every element on the active slide has an explicit zIndex (its
+  // current array index) before z-order shortcuts swap values around —
+  // "forward"/"backward" is only well-defined relative to siblings once
+  // every sibling has a concrete number to compare against.
+  function ensureZIndices(elements) {
+    elements.forEach(function (el, i) {
+      if (el.zIndex == null) el.zIndex = i;
+    });
+  }
+
+  function relayerNodes(elements) {
+    if (!layer) return;
+    sortByZIndex(elements).forEach(function (item) {
+      var node = findNodeByIndex(item.origIndex);
+      if (node) node.moveToTop();
+    });
+    if (transformer) transformer.moveToTop();
+    layer.batchDraw();
+  }
+
+  function moveZOrder(direction) { // direction: +1 forward, -1 backward
+    var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
+    if (!slide || !slide.elements || selectedIndices.length === 0) return;
+    var elements = slide.elements;
+    ensureZIndices(elements);
+    // For each selected element (stable ascending order), find the nearest
+    // unselected sibling immediately above (forward) / below (backward) in
+    // current sort order and swap zIndex values with it.
+    selectedIndices.slice().sort(function (a, b) { return direction > 0 ? b - a : a - b; }).forEach(function (elIndex) {
+      var currentSorted = sortByZIndex(elements);
+      var pos = currentSorted.findIndex(function (item) { return item.origIndex === elIndex; });
+      if (pos === -1) return;
+      var neighborPos = pos + direction;
+      while (neighborPos >= 0 && neighborPos < currentSorted.length && selectedIndices.indexOf(currentSorted[neighborPos].origIndex) !== -1) {
+        neighborPos += direction;
+      }
+      if (neighborPos < 0 || neighborPos >= currentSorted.length) return;
+      var a = currentSorted[pos].el;
+      var b = currentSorted[neighborPos].el;
+      var tmp = a.zIndex;
+      a.zIndex = b.zIndex;
+      b.zIndex = tmp;
+    });
+    relayerNodes(elements);
+    notifyChange();
+  }
+
+  function moveZOrderExtreme(toFront) {
+    var slide = window.DECK && window.DECK.slides && window.DECK.slides[activeSlideIndex];
+    if (!slide || !slide.elements || selectedIndices.length === 0) return;
+    var elements = slide.elements;
+    ensureZIndices(elements);
+    var allZ = elements.map(function (el) { return el.zIndex; });
+    var extreme = toFront ? Math.max.apply(null, allZ) : Math.min.apply(null, allZ);
+    var nextVal = toFront ? extreme + 1 : extreme - 1;
+    // Ascending selection order preserves selected elements' relative order
+    // among themselves when several are sent to the same extreme together.
+    selectedIndices.slice().sort(function (a, b) { return a - b; }).forEach(function (elIndex) {
+      var el = elements[elIndex];
+      if (!el) return;
+      el.zIndex = nextVal;
+      nextVal = toFront ? nextVal + 1 : nextVal - 1;
+    });
+    relayerNodes(elements);
+    notifyChange();
+  }
+
+  function handleKeydown(e) {
+    if (!isMounted()) return;
+    if (isEditableFocused()) return;
+    var meta = e.metaKey || e.ctrlKey;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      deleteSelected();
+      return;
+    }
+    if (meta && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault();
+      duplicateSelected();
+      return;
+    }
+    if (meta && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      // Task 8 installs _undoRedoHook = {undo, redo}; until then this is a no-op.
+      if (window.CanvasEditor._undoRedoHook) {
+        if (e.shiftKey) window.CanvasEditor._undoRedoHook.redo();
+        else window.CanvasEditor._undoRedoHook.undo();
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      var step = e.shiftKey ? NUDGE_STEP_SHIFT : NUDGE_STEP;
+      var dx = 0, dy = 0;
+      if (e.key === 'ArrowUp') dy = -step;
+      else if (e.key === 'ArrowDown') dy = step;
+      else if (e.key === 'ArrowLeft') dx = -step;
+      else if (e.key === 'ArrowRight') dx = step;
+      nudgeSelected(dx, dy);
+      notifyChange();
+      return;
+    }
+    if (e.altKey && e.key === ']') {
+      e.preventDefault();
+      if (e.shiftKey) moveZOrderExtreme(true);
+      else moveZOrder(1);
+      return;
+    }
+    if (e.altKey && e.key === '[') {
+      e.preventDefault();
+      if (e.shiftKey) moveZOrderExtreme(false);
+      else moveZOrder(-1);
+      return;
+    }
   }
 
   function mount(mountEl, slideIndex) {
@@ -224,27 +474,28 @@
     var slide = window.DECK.slides[activeSlideIndex];
     var elements = (slide && slide.elements) || [];
     sortByZIndex(elements).forEach(function (item) {
-      var node = elementToKonvaNode(item.el, scale);
-      if (node) {
-        node._elIndex = item.origIndex;
-        node.on('click tap', function () { selectElement(node._elIndex); });
-        node.on('dragend', handleDragEnd);
-        node.on('transformend', handleTransformEnd);
-        layer.add(node);
-      }
+      createAndAddNode(item.el, item.origIndex);
     });
     // Clicking empty stage area deselects, matching standard Konva
-    // Transformer UX (click-away clears selection).
+    // Transformer UX (click-away clears selection). Shift-click on empty
+    // stage is a no-op (does not clear an existing multi-selection).
     stage.on('click tap', function (e) {
-      if (e.target === stage) deselect();
+      if (e.target === stage && !(e.evt && e.evt.shiftKey)) deselect();
     });
     transformer.moveToTop();
     layer.draw();
+
+    keydownHandler = handleKeydown;
+    document.addEventListener('keydown', keydownHandler);
   }
 
   function unmount() {
     if (stage) { stage.destroy(); stage = null; layer = null; transformer = null; }
-    selectedIndex = null;
+    selectedIndices = [];
+    if (keydownHandler) {
+      document.removeEventListener('keydown', keydownHandler);
+      keydownHandler = null;
+    }
     // Note: change listeners are intentionally NOT cleared here — a consumer
     // (e.g. the future autosave queue) subscribes once and expects to keep
     // hearing about changes across mount/unmount cycles as the user
@@ -257,9 +508,12 @@
     isMounted: isMounted,
     getStage: getStage,
     selectElement: selectElement,
+    toggleSelectElement: toggleSelectElement,
     deselect: deselect,
-    getSelectedIndex: getSelectedIndex,
+    getSelectedIndices: getSelectedIndices,
     onChange: onChange,
+    // Task 8 installs _undoRedoHook = {undo, redo}; until then this is a no-op.
+    _undoRedoHook: null,
     // Exposed for direct unit testing without a real canvas.
     _pxToInches: pxToInches,
     _inchesToPx: inchesToPx,

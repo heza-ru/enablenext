@@ -139,12 +139,12 @@ describe('CanvasEditor selection + geometry sync on drag/transform end', () => {
     delete window.DECK;
   });
 
-  it('selectElement/getSelectedIndex/deselect track selection state', () => {
-    expect(window.CanvasEditor.getSelectedIndex()).toBe(null);
+  it('selectElement/getSelectedIndices/deselect track selection state', () => {
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([]);
     window.CanvasEditor.selectElement(0);
-    expect(window.CanvasEditor.getSelectedIndex()).toBe(0);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([0]);
     window.CanvasEditor.deselect();
-    expect(window.CanvasEditor.getSelectedIndex()).toBe(null);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([]);
   });
 
   it('_updateElementFromNode converts a mock node\'s px geometry to the correct inch values on window.DECK', () => {
@@ -275,5 +275,234 @@ describe('CanvasEditor ellipse x/y: Konva center vs. DECK top-left semantics', (
     expect(el.y).toBe(3); // 2 + 1.0in
     expect(el.w).toBe(2);
     expect(el.h).toBe(1.5);
+  });
+});
+
+describe('CanvasEditor multi-select (shift-click)', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    Object.defineProperty(mount, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      configurable: true,
+    });
+    document.body.appendChild(mount);
+    window.DECK = {
+      title: 'T',
+      slides: [{
+        layout: 'schema',
+        elements: [
+          { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'A' },
+          { type: 'text', x: 1, y: 1, w: 1, h: 1, text: 'B' },
+          { type: 'text', x: 2, y: 2, w: 1, h: 1, text: 'C' },
+        ],
+      }],
+    };
+    window.CanvasEditor.mount(mount, 0);
+  });
+  afterEach(() => {
+    window.CanvasEditor.unmount();
+    mount.remove();
+    delete window.DECK;
+  });
+
+  function nodeFor(idx) {
+    const stage = window.CanvasEditor.getStage();
+    const layer = stage.getLayers()[0];
+    return layer.getChildren().find((n) => n._elIndex === idx);
+  }
+
+  it('plain click selects only the clicked element, replacing prior selection', () => {
+    window.CanvasEditor.selectElement(0);
+    nodeFor(1).fire('click', { target: nodeFor(1), evt: {} }, true);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([1]);
+  });
+
+  it('shift-click toggles an element into the selection', () => {
+    nodeFor(0).fire('click', { target: nodeFor(0), evt: { shiftKey: true } }, true);
+    nodeFor(1).fire('click', { target: nodeFor(1), evt: { shiftKey: true } }, true);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([0, 1]);
+  });
+
+  it('shift-click toggles an element back out of the selection', () => {
+    nodeFor(0).fire('click', { target: nodeFor(0), evt: { shiftKey: true } }, true);
+    nodeFor(1).fire('click', { target: nodeFor(1), evt: { shiftKey: true } }, true);
+    nodeFor(0).fire('click', { target: nodeFor(0), evt: { shiftKey: true } }, true);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([1]);
+  });
+
+  it('shift-click on empty stage is a no-op (does not clear selection)', () => {
+    nodeFor(0).fire('click', { target: nodeFor(0), evt: { shiftKey: true } }, true);
+    nodeFor(1).fire('click', { target: nodeFor(1), evt: { shiftKey: true } }, true);
+    const stage = window.CanvasEditor.getStage();
+    stage.fire('click', { target: stage, evt: { shiftKey: true } }, true);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([0, 1]);
+  });
+
+  it('plain click on empty stage deselects everything', () => {
+    nodeFor(0).fire('click', { target: nodeFor(0), evt: { shiftKey: true } }, true);
+    nodeFor(1).fire('click', { target: nodeFor(1), evt: { shiftKey: true } }, true);
+    const stage = window.CanvasEditor.getStage();
+    stage.fire('click', { target: stage, evt: {} }, true);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([]);
+  });
+});
+
+describe('CanvasEditor keyboard shortcuts', () => {
+  let mount;
+  const SCALE = 80; // 800px / 10in
+
+  function dispatchKey(opts) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...opts }));
+  }
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    Object.defineProperty(mount, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      configurable: true,
+    });
+    document.body.appendChild(mount);
+    window.DECK = {
+      title: 'T',
+      slides: [{
+        layout: 'schema',
+        elements: [
+          { type: 'text', x: 0, y: 0, w: 1, h: 1, text: 'A' },
+          { type: 'text', x: 1, y: 1, w: 1, h: 1, text: 'B' },
+          { type: 'text', x: 2, y: 2, w: 1, h: 1, text: 'C' },
+        ],
+      }],
+    };
+    window.CanvasEditor.mount(mount, 0);
+  });
+  afterEach(() => {
+    window.CanvasEditor.unmount();
+    mount.remove();
+    delete window.DECK;
+  });
+
+  it('Delete removes the selected element and leaves other elements\' identity/order intact', () => {
+    window.CanvasEditor.selectElement(1); // element B
+    dispatchKey({ key: 'Delete' });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements.length).toBe(2);
+    expect(elements.map((e) => e.text)).toEqual(['A', 'C']);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([]);
+  });
+
+  it('Delete with multiple selected removes all selected elements (highest index first)', () => {
+    window.CanvasEditor.selectElement(0);
+    window.CanvasEditor.toggleSelectElement(2);
+    dispatchKey({ key: 'Backspace' });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements.length).toBe(1);
+    expect(elements[0].text).toBe('B');
+  });
+
+  it('Cmd/Ctrl+D duplicates the selected element with a +0.2in offset, without mutating the original', () => {
+    window.CanvasEditor.selectElement(0);
+    const originalBefore = { ...window.DECK.slides[0].elements[0] };
+    dispatchKey({ key: 'd', ctrlKey: true });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements.length).toBe(4);
+    const original = elements[0];
+    const dup = elements[3];
+    expect(original).toEqual(originalBefore);
+    expect(dup.x).toBeCloseTo(original.x + 0.2, 10);
+    expect(dup.y).toBeCloseTo(original.y + 0.2, 10);
+    expect(dup).not.toBe(original);
+    expect(window.CanvasEditor.getSelectedIndices()).toEqual([3]);
+  });
+
+  it('ArrowRight nudges the selected element by 0.05in normally', () => {
+    window.CanvasEditor.selectElement(0);
+    dispatchKey({ key: 'ArrowRight' });
+    const el = window.DECK.slides[0].elements[0];
+    expect(el.x).toBeCloseTo(0.05, 10);
+    expect(el.y).toBeCloseTo(0, 10);
+  });
+
+  it('Shift+ArrowDown nudges the selected element by 0.2in', () => {
+    window.CanvasEditor.selectElement(0);
+    dispatchKey({ key: 'ArrowDown', shiftKey: true });
+    const el = window.DECK.slides[0].elements[0];
+    expect(el.x).toBeCloseTo(0, 10);
+    expect(el.y).toBeCloseTo(0.2, 10);
+  });
+
+  it('Alt+] initializes zIndex on all elements and brings the selected element forward one step', () => {
+    window.CanvasEditor.selectElement(0); // origIndex 0, currently lowest stacking
+    dispatchKey({ key: ']', altKey: true });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements[0].zIndex).toBe(1);
+    expect(elements[1].zIndex).toBe(0);
+    expect(elements[2].zIndex).toBe(2);
+  });
+
+  it('Alt+[ sends the selected element backward one step', () => {
+    window.CanvasEditor.selectElement(2); // origIndex 2, currently highest stacking
+    dispatchKey({ key: '[', altKey: true });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements[2].zIndex).toBe(1);
+    expect(elements[1].zIndex).toBe(2);
+    expect(elements[0].zIndex).toBe(0);
+  });
+
+  it('Shift+Alt+] brings the selected element to the very front', () => {
+    window.CanvasEditor.selectElement(0);
+    dispatchKey({ key: ']', altKey: true, shiftKey: true });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements[0].zIndex).toBe(3); // max(0,1,2) + 1
+  });
+
+  it('Shift+Alt+[ sends the selected element to the very back', () => {
+    window.CanvasEditor.selectElement(2);
+    dispatchKey({ key: '[', altKey: true, shiftKey: true });
+    const elements = window.DECK.slides[0].elements;
+    expect(elements[2].zIndex).toBe(-1); // min(0,1,2) - 1
+  });
+
+  it('ignores keyboard shortcuts when an input element has focus', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    window.CanvasEditor.selectElement(0);
+    dispatchKey({ key: 'Delete' });
+    expect(window.DECK.slides[0].elements.length).toBe(3);
+    input.remove();
+  });
+
+  it('ignores keyboard shortcuts when a textarea element has focus', () => {
+    const textarea = document.createElement('textarea');
+    document.body.appendChild(textarea);
+    textarea.focus();
+    window.CanvasEditor.selectElement(0);
+    dispatchKey({ key: 'ArrowRight' });
+    expect(window.DECK.slides[0].elements[0].x).toBe(0);
+    textarea.remove();
+  });
+
+  it('fires onChange when deleting, duplicating, nudging, and z-ordering', () => {
+    const cb = jest.fn();
+    window.CanvasEditor.onChange(cb);
+    window.CanvasEditor.selectElement(0);
+    dispatchKey({ key: 'ArrowRight' });
+    expect(cb).toHaveBeenCalled();
+  });
+
+  it('Cmd+Z is a no-op when no _undoRedoHook is installed (does not throw)', () => {
+    expect(() => dispatchKey({ key: 'z', ctrlKey: true })).not.toThrow();
+  });
+
+  it('Cmd+Z/Cmd+Shift+Z call the installed _undoRedoHook', () => {
+    const undo = jest.fn();
+    const redo = jest.fn();
+    window.CanvasEditor._undoRedoHook = { undo, redo };
+    dispatchKey({ key: 'z', ctrlKey: true });
+    expect(undo).toHaveBeenCalledTimes(1);
+    dispatchKey({ key: 'z', ctrlKey: true, shiftKey: true });
+    expect(redo).toHaveBeenCalledTimes(1);
+    window.CanvasEditor._undoRedoHook = null;
   });
 });
