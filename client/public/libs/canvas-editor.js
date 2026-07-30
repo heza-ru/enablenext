@@ -66,11 +66,24 @@
       });
     }
     if (el.type === 'shape') {
-      var ShapeCtor = el.shape === 'ellipse' ? window.Konva.Ellipse : window.Konva.Rect;
+      var isEllipse = el.shape === 'ellipse';
+      var ShapeCtor = isEllipse ? window.Konva.Ellipse : window.Konva.Rect;
+      var radiusX = (el.w * s) / 2, radiusY = (el.h * s) / 2;
+      // Every other element type (Rect/Text/Image) treats x/y as its
+      // top-left corner, matching deck-schema-renderer.js's CSS
+      // left/top positioning — including for ellipses, which it draws via
+      // border-radius:50% on a top-left-positioned box, NOT a center-based
+      // transform. Konva.Ellipse, however, treats x/y as the shape's
+      // CENTER. Offset by the radius here so the schema's top-left x/y
+      // renders in the same place a real DOM/CSS re-render would put it;
+      // updateElementFromNode() below applies the exact inverse when
+      // writing geometry back out.
+      var shapeX = isEllipse ? common.x + radiusX : common.x;
+      var shapeY = isEllipse ? common.y + radiusY : common.y;
       return new ShapeCtor({
-        x: common.x, y: common.y, rotation: common.rotation, draggable: true,
+        x: shapeX, y: shapeY, rotation: common.rotation, draggable: true,
         width: el.w * s, height: el.h * s,
-        radiusX: (el.w * s) / 2, radiusY: (el.h * s) / 2, // only used by Ellipse
+        radiusX: radiusX, radiusY: radiusY, // only used by Ellipse
         fill: '#' + (el.fill || '4a4560'),
         cornerRadius: el.shape === 'roundRect' ? (el.rectRadius || 0.06) * s : 0,
         opacity: el.opacity != null ? el.opacity : 1,
@@ -135,8 +148,19 @@
     var el = slide.elements[node._elIndex];
     if (!el) return;
     var size = getNodeSizePx(node);
-    el.x = pxToInches(node.x());
-    el.y = pxToInches(node.y());
+    var nodeX = node.x(), nodeY = node.y();
+    // Inverse of the center-offset applied in elementToKonvaNode: a
+    // Konva.Ellipse's x()/y() are its center, but every DECK element
+    // (ellipses included) stores/expects top-left x/y (see
+    // deck-schema-renderer.js's CSS left/top + border-radius:50%
+    // positioning). Only Ellipse needs correcting back to top-left before
+    // writing to window.DECK.
+    if (typeof node.radiusX === 'function') {
+      nodeX -= size.w / 2;
+      nodeY -= size.h / 2;
+    }
+    el.x = pxToInches(nodeX);
+    el.y = pxToInches(nodeY);
     el.w = pxToInches(size.w);
     el.h = pxToInches(size.h);
     el.rotation = node.rotation() || 0;

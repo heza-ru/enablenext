@@ -208,3 +208,72 @@ describe('CanvasEditor selection + geometry sync on drag/transform end', () => {
     expect(el.y).toBe(3);
   });
 });
+
+describe('CanvasEditor ellipse x/y: Konva center vs. DECK top-left semantics', () => {
+  // Regression coverage for the Critical review finding: Konva.Ellipse
+  // treats x/y as its CENTER, but every DECK element (ellipses included)
+  // stores/expects top-left x/y — deck-schema-renderer.js positions an
+  // ellipse via CSS left/top + border-radius:50%, not a center-based
+  // transform. elementToKonvaNode() must offset by the radius when
+  // constructing the node, and updateElementFromNode() must apply the exact
+  // inverse when writing geometry back out, so an untouched ellipse
+  // round-trips to its original top-left x/y rather than drifting by half
+  // its width/height.
+  let mount;
+  const ELLIPSE = { type: 'shape', shape: 'ellipse', x: 1, y: 2, w: 2, h: 1.5, fill: 'e94560' };
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    Object.defineProperty(mount, 'getBoundingClientRect', {
+      // 800x450 over a 10 x 5.625in canvas => scale === 80 px/in exactly.
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      configurable: true,
+    });
+    document.body.appendChild(mount);
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ ...ELLIPSE }] }] };
+    window.CanvasEditor.mount(mount, 0);
+  });
+  afterEach(() => {
+    window.CanvasEditor.unmount();
+    mount.remove();
+    delete window.DECK;
+  });
+
+  it('positions the Konva node at top-left + radius (its center), not directly at the schema top-left x/y', () => {
+    const stage = window.CanvasEditor.getStage();
+    const layer = stage.getLayers()[0];
+    const node = layer.getChildren().find((n) => n._elIndex === 0);
+    // radiusX = (2in * 80) / 2 = 80px, radiusY = (1.5in * 80) / 2 = 60px.
+    expect(node.x()).toBe(1 * 80 + 80); // 160
+    expect(node.y()).toBe(2 * 80 + 60); // 220
+  });
+
+  it('round-trips an untouched ellipse to its exact original top-left x/y (no half-width/height drift)', () => {
+    const stage = window.CanvasEditor.getStage();
+    const layer = stage.getLayers()[0];
+    const node = layer.getChildren().find((n) => n._elIndex === 0);
+    // Fire dragend without moving the node at all.
+    node.fire('dragend', { target: node }, true);
+    const el = window.DECK.slides[0].elements[0];
+    expect(el.x).toBe(1);
+    expect(el.y).toBe(2);
+    expect(el.w).toBe(2);
+    expect(el.h).toBe(1.5);
+  });
+
+  it('a real drag on the ellipse writes back top-left semantics matching the pixel delta moved', () => {
+    const stage = window.CanvasEditor.getStage();
+    const layer = stage.getLayers()[0];
+    const node = layer.getChildren().find((n) => n._elIndex === 0);
+    // Move the node's (center) position by +40px/+80px (0.5in/1.0in at
+    // scale 80) — simulating what Konva's own drag would do to x()/y().
+    node.x(node.x() + 40);
+    node.y(node.y() + 80);
+    node.fire('dragend', { target: node }, true);
+    const el = window.DECK.slides[0].elements[0];
+    expect(el.x).toBe(1.5); // 1 + 0.5in, top-left, not center
+    expect(el.y).toBe(3); // 2 + 1.0in
+    expect(el.w).toBe(2);
+    expect(el.h).toBe(1.5);
+  });
+});
