@@ -1549,6 +1549,1147 @@ git commit -m "docs: finalize presentation engine v2 script list and editor usag
 
 ---
 
-## Final Whole-Branch Review
+## Tasks 11-14: Artifacts panel capability additions (added mid-execution, folded into this plan per user request)
 
-After Task 10, dispatch the final code reviewer (per subagent-driven-development) against the full diff from Task 1's BASE through Task 10's HEAD, with this plan's Global Constraints as its attention lens — specifically checking: (a) no existing 19-layout behavior changed, (b) every new image reference is origin-aware, (c) the converter's regex extraction has no un-flagged silent gaps, (d) the editor's save path reconstructs `window.DECK` text losslessly (no truncation/escaping bugs in the `JSON.stringify` substitution), (e) the `.mutate()` call shape in Task 9 matches `EditMessage.tsx`'s proven usage exactly.
+These four tasks were added after Task 6 started, in response to a request to make the artifacts panel "more capable" as a whole (all artifact types, not just decks), plus a specific correctness bug: the user reported that "the initial view is a bit distorted based on how much space the artifact panel covers" — i.e. the preview doesn't account for the artifacts panel's actual (resizable) width/height, so it visually distorts. Task 11 fixes that root bug; Tasks 12-14 are the general panel QOL additions. Scoped to what's tractable without contradicting this plan's existing Global Constraints. **Explicitly deferred, not built here:** a per-format PPTX aspect-ratio option (e.g. 4:3) — the plan's Global Constraints fix the canvas at `SW=10, SH=5.625` (16:9) across all 19 hand-coded layouts plus the new schema layout (Task 2) and the master-deck library (Task 6); supporting a second aspect ratio would mean re-deriving geometry for every layout, which is a separate, much larger project, not a "while we're at it" addition. This limitation is called out explicitly in Task 14 rather than silently dropped.
+
+---
+
+## Task 11: Fix preview distortion — lock deck aspect ratio regardless of artifacts panel size
+
+**Files:**
+- Modify: `client/public/libs/deck-renderer.js` (`injectBaseStyles()`, currently `client/public/libs/deck-renderer.js:75-86`)
+- Test: extend `client/public/libs/__tests__/deck-renderer.test.js`
+
+**Root cause:** the artifacts panel is a resizable `react-resizable-panels` pane (`client/src/components/SidePanel/SidePanelGroup.tsx`) that can be dragged to any width, and the deck preview renders inside a Sandpack iframe whose viewport exactly matches whatever size that panel currently is. `deck-renderer.js`'s base styles set `.deck{width:100vw;height:100vh}` with `.slide{position:absolute;inset:0}` — this stretches the deck to fill the iframe's full viewport with NO aspect-ratio lock, so whenever the panel isn't exactly 16:9 (its default/common state, since the panel is user-resizable and often narrower or squarer than 16:9), the 16:9-designed slide layouts visually distort/cramp relative to their intended design. Compare with `doc-renderer.js`, which already does this correctly via `.doc-page{aspect-ratio:...;max-width:800px}` (`client/public/libs/doc-renderer.js:39`) — decks need the equivalent treatment.
+
+**Interfaces:** no new public API — this is a pure CSS fix inside the existing `injectBaseStyles()` function. `renderDeck`/`goTo`/`downloadPptx` signatures and behavior are unchanged.
+
+- [ ] **Step 1: Write the failing test**
+
+```js
+// client/public/libs/__tests__/deck-renderer.test.js
+describe('deck aspect-ratio lock (preview distortion fix)', () => {
+  it('sets the .deck element to a fixed 16/9 aspect-ratio that fits within the viewport regardless of container shape', () => {
+    document.body.innerHTML = '';
+    window.DeckRenderer.renderDeck({ title: 'T', slides: [{ layout: 'title', title: 'X' }] }, document.body);
+    const styleEl = document.getElementById('deck-renderer-base-styles');
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*aspect-ratio:\s*16\s*\/\s*9/);
+    // must use min()-style clamping against both viewport dimensions, not just width or just height
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*width:\s*min\(/);
+    expect(styleEl.textContent).toMatch(/\.deck\{[^}]*height:\s*min\(/);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-renderer.test.js -t "distortion"`
+Expected: FAIL — current `.deck` CSS has no `aspect-ratio` or `min()` clamping.
+
+- [ ] **Step 3: Implement**
+
+In `injectBaseStyles()` (`client/public/libs/deck-renderer.js:75-86`), change the `html,body` and `.deck` rules to center-and-letterbox instead of stretch-fill. Replace:
+
+```javascript
+'html,body{width:100%;height:100%;overflow:hidden;background:#1a1728;' +
+"font-family:'DM Sans','IBM Plex Sans',-apple-system,sans-serif}" +
+'.deck{width:100vw;height:100vh;position:relative;overflow:hidden}' +
+```
+
+with:
+
+```javascript
+'html,body{width:100%;height:100%;overflow:hidden;background:#1a1728;' +
+'display:flex;align-items:center;justify-content:center;' +
+"font-family:'DM Sans','IBM Plex Sans',-apple-system,sans-serif}" +
+// Locks the deck to its designed 16:9 (SW=10 / SH=5.625) aspect ratio regardless of
+// the artifacts panel's actual resizable width/height -- min() picks whichever of
+// width-constrained-by-viewport-width or height-constrained-by-viewport-height is
+// smaller, so the deck always fits inside the container without stretching/distorting,
+// letterboxing (via the flex-centered html/body above) instead.
+'.deck{width:min(100vw,177.78vh);height:min(100vh,56.25vw);aspect-ratio:16/9;position:relative;overflow:hidden;flex-shrink:0}' +
+```
+
+(`177.78vh` = `100vh * 16/9`; `56.25vw` = `100vw * 9/16` — both are the standard CSS `min()`-based aspect-ratio-locked-fit-inside-viewport technique. Keep every other rule in `injectBaseStyles()`, including `.slide{position:absolute;inset:0;...}`, unchanged — slides continue to fill the now-correctly-shaped `.deck` box exactly as before.)
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-renderer.test.js`
+Expected: PASS, full suite green (this is a pure CSS-string change, so no other existing test should be affected — confirm that's actually true, since some existing tests may assert on the base-styles string content and need their expectations widened rather than broken).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/public/libs/deck-renderer.js client/public/libs/__tests__/deck-renderer.test.js
+git commit -m "fix: lock deck preview to 16:9 aspect ratio regardless of artifacts panel size"
+```
+
+---
+
+## Task 12: Fullscreen + zoom preview mode
+
+**Files:**
+- Modify: `client/src/components/Artifacts/Artifacts.tsx`
+- Test: `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` (create if it doesn't already exist — check first)
+
+**Interfaces:**
+- Produces: a `isFullscreen` boolean state and a header toggle button (Maximize2/Minimize2 icons from `lucide-react`, already a project dependency — confirm the exact import path matches other icon imports already in this file, e.g. `import { Code, Play, RefreshCw, X, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';`) plus a `zoomLevel` number state (default `1`, clamped `0.5`-`2`, step `0.25`) with ZoomIn/ZoomOut/reset buttons, shown only when `activeTab === 'preview'`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Read the existing `Artifacts.tsx` test setup conventions first (check for an existing test file in `client/src/components/Artifacts/__tests__/` for a sibling component, e.g. `DownloadArtifact.test.tsx`, and match its mocking pattern for `useArtifacts`, `useMediaQuery`, Recoil state, etc. — do not invent a different setup). Then write:
+
+```tsx
+it('renders a fullscreen toggle button in the header', () => {
+  const { getByRole } = renderArtifacts(); // use this file's established render helper
+  expect(getByRole('button', { name: /fullscreen|maximize/i })).toBeInTheDocument();
+});
+
+it('applies a fixed inset-0 full-viewport class when fullscreen is toggled on (desktop)', () => {
+  const { getByRole, container } = renderArtifacts();
+  getByRole('button', { name: /fullscreen|maximize/i }).click();
+  expect(container.querySelector('.fixed.inset-0')).not.toBeNull();
+});
+
+it('shows zoom controls only on the preview tab', () => {
+  const { getByRole, queryByRole } = renderArtifacts({ activeTab: 'code' });
+  expect(queryByRole('button', { name: /zoom in/i })).not.toBeInTheDocument();
+});
+
+it('clamps zoom level between 0.5 and 2 in steps of 0.25', () => {
+  const { getByRole } = renderArtifacts({ activeTab: 'preview' });
+  const zoomOut = getByRole('button', { name: /zoom out/i });
+  for (let i = 0; i < 10; i++) zoomOut.click();
+  // whatever internal state exposure this test file's convention uses (e.g. a data-zoom attribute
+  // on the preview wrapper) — confirm against how ArtifactTabs/ArtifactPreview expose testable state
+  // in existing tests before picking the exact assertion here.
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest components/Artifacts/__tests__/Artifacts.test.tsx`
+Expected: FAIL — no fullscreen/zoom UI exists yet.
+
+- [ ] **Step 3: Implement**
+
+In `Artifacts.tsx`, add state near the existing `isVisible`/`isClosing` state block:
+
+```tsx
+const [isFullscreen, setIsFullscreen] = useState(false);
+const [zoomLevel, setZoomLevel] = useState(1);
+
+const adjustZoom = (delta: number) => {
+  setZoomLevel((prev) => Math.min(2, Math.max(0.5, Math.round((prev + delta) * 100) / 100)));
+};
+```
+
+Add a toggle button next to the existing close button in the header's button group (around `Artifacts.tsx:322-334`, right before the `DownloadArtifact`/close `Button`):
+
+```tsx
+{!isMobile && (
+  <Button
+    size="icon"
+    variant="ghost"
+    onClick={() => setIsFullscreen((v) => !v)}
+    aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+  >
+    {isFullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+  </Button>
+)}
+{activeTab === 'preview' && (
+  <>
+    <Button size="icon" variant="ghost" onClick={() => adjustZoom(-0.25)} aria-label="Zoom out">
+      <ZoomOut size={16} aria-hidden="true" />
+    </Button>
+    <Button size="icon" variant="ghost" onClick={() => adjustZoom(0.25)} aria-label="Zoom in">
+      <ZoomIn size={16} aria-hidden="true" />
+    </Button>
+  </>
+)}
+```
+
+For the fullscreen container, reuse the exact same escape-hatch pattern this file already uses for the mobile case (`Artifacts.tsx:147-148`'s `<div className="fixed inset-0 z-[100]">` equivalent, rendered by the parent `SidePanelGroup` — for desktop fullscreen, wrap this component's own root return value): change the outer wrapper's className (currently at `Artifacts.tsx:224-241`) to add `isFullscreen && !isMobile ? 'fixed inset-0 z-[100]' : ''` via the existing `cn(...)` call, alongside the existing mobile/desktop branch — do not replace the mobile logic, only add a fullscreen branch that applies when `!isMobile`.
+
+For zoom, wrap the existing preview content (`Artifacts.tsx:339-346`'s `<div className="absolute inset-0 flex flex-col">...</div>`) with a scaling wrapper active only for the preview tab:
+
+```tsx
+<div
+  className="absolute inset-0 flex flex-col overflow-auto"
+  style={activeTab === 'preview' ? { transform: `scale(${zoomLevel})`, transformOrigin: 'top center' } : undefined}
+>
+  <ArtifactTabs ... />
+</div>
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest components/Artifacts/__tests__/Artifacts.test.tsx`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/src/components/Artifacts/Artifacts.tsx client/src/components/Artifacts/__tests__/Artifacts.test.tsx
+git commit -m "feat: add fullscreen and zoom controls to artifacts panel"
+```
+
+---
+
+## Task 13: Version history — side-by-side compare
+
+**Files:**
+- Modify: `client/src/components/Artifacts/ArtifactVersion.tsx`
+- Modify: `client/src/components/Artifacts/Artifacts.tsx` (render a second, read-only preview pane when compare mode is active)
+- Test: extend/create the corresponding test files for both.
+
+**Interfaces:**
+- Produces: `ArtifactVersion` gains a "Compare with..." entry per version in its existing `DropdownPopup` (`ArtifactVersion.tsx:38-48`'s `dropdownItems`), which calls a new `onCompareVersion: (index: number) => void` prop (added alongside the existing `onVersionChange` prop) instead of switching the current version. `Artifacts.tsx` holds a new `compareVersionId: string | null` state; when set, it renders a second `ArtifactPreview`-equivalent pane side-by-side with the current one (split 50/50 via a simple flex row), showing the artifact content at that version, read-only (no download/edit controls on the comparison pane). A "Stop comparing" close button (reuse the existing `X` icon pattern) clears `compareVersionId`.
+
+Scope note (deliberately conservative — do not exceed this): this is a side-by-side **rendered preview** comparison (two artifacts shown next to each other so the user can visually spot differences), NOT a text/semantic diff engine. Building real content-level diffing for arbitrary LLM-generated HTML/PPTX-driving-JSON is a substantially larger, separate project and is out of scope here.
+
+- [ ] **Step 1: Write the failing tests**
+
+```tsx
+// ArtifactVersion.test.tsx additions — match this file's existing test conventions
+it('includes a "Compare with" action for every non-current version', () => {
+  const onCompareVersion = jest.fn();
+  const { getByText } = renderArtifactVersion({ currentIndex: 0, totalVersions: 3, onCompareVersion });
+  // open dropdown per this file's existing pattern, then:
+  fireEvent.click(getByText(/compare with version 2/i));
+  expect(onCompareVersion).toHaveBeenCalledWith(1);
+});
+```
+
+```tsx
+// Artifacts.test.tsx additions
+it('renders a second read-only preview pane when a comparison version is selected', () => {
+  const { container } = renderArtifacts({ compareVersionId: 'version-2-id' });
+  expect(container.querySelectorAll('[data-testid="artifact-preview-pane"]').length).toBe(2);
+});
+
+it('clears the comparison pane when "Stop comparing" is clicked', () => {
+  const { getByRole, queryAllByTestId } = renderArtifacts({ compareVersionId: 'version-2-id' });
+  getByRole('button', { name: /stop comparing/i }).click();
+  expect(queryAllByTestId('artifact-preview-pane').length).toBe(1);
+});
+```
+
+(Add a `data-testid="artifact-preview-pane"` to whatever wrapper element already hosts a single preview instance today, so both the existing single-pane case and this task's two-pane case are identifiable in tests — confirm the current DOM structure in `ArtifactTabs.tsx`/`ArtifactPreview.tsx` before deciding exactly where this testid belongs.)
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest components/Artifacts/__tests__/ArtifactVersion.test.tsx components/Artifacts/__tests__/Artifacts.test.tsx`
+Expected: FAIL — no compare action, no second pane.
+
+- [ ] **Step 3: Implement**
+
+In `ArtifactVersion.tsx`, add the new prop and extend `dropdownItems` (`ArtifactVersion.tsx:9-16` props, `:38-48` items):
+
+```tsx
+interface ArtifactVersionProps {
+  currentIndex: number;
+  totalVersions: number;
+  onVersionChange: (index: number) => void;
+  onCompareVersion: (index: number) => void;
+}
+```
+
+Add one more menu entry per version (skip the current index) that calls `onCompareVersion(index)` instead of `handleValueChange`, labeled e.g. `Compare with version ${index + 1}` — keep the existing version-switch entries unchanged, this is additive.
+
+In `Artifacts.tsx`, add `const [compareVersionId, setCompareVersionId] = useState<string | null>(null);`, pass `onCompareVersion={(index) => setCompareVersionId(orderedArtifactIds[index])}` to the existing `<ArtifactVersion .../>` usage (`Artifacts.tsx:311-320`), and in the main content area (`Artifacts.tsx:338-346`), when `compareVersionId` is set, render a flex row with two panes: the existing `ArtifactTabs` (current artifact) on the left, and a second, read-only preview of `artifacts?.[compareVersionId]` on the right (look up the artifact object the same way `useArtifacts`/Recoil already does — check `useArtifacts.ts` for the exact `artifacts` accessor shape before wiring this, since this task needs direct access to a NON-current artifact's content, which the existing hook doesn't currently expose — you may need to read `store.artifactsState` directly via `useRecoilValue` in `Artifacts.tsx` itself, the same store the existing `useArtifacts` hook already reads from).
+
+Add a "Stop comparing" button (reuse the `X` icon) that calls `setCompareVersionId(null)`, visible only when `compareVersionId` is set.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest components/Artifacts/__tests__/ArtifactVersion.test.tsx components/Artifacts/__tests__/Artifacts.test.tsx`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/src/components/Artifacts/ArtifactVersion.tsx client/src/components/Artifacts/Artifacts.tsx client/src/components/Artifacts/__tests__/ArtifactVersion.test.tsx client/src/components/Artifacts/__tests__/Artifacts.test.tsx
+git commit -m "feat: add side-by-side version comparison to artifacts panel"
+```
+
+---
+
+## Task 14: Export options picker (DOCX page size, XLSX sheet selection)
+
+**Files:**
+- Modify: `client/src/components/Artifacts/DownloadArtifact.tsx`
+- Modify: `agents/doc-creator.skill.md` (`downloadDocx()` gains an optional page-size parameter)
+- Modify: `agents/excel-creator.skill.md` (`downloadExcel()` gains an optional sheet-selection parameter)
+- Test: extend `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx`, `client/public/libs/__tests__/doc-renderer.test.js`, and wherever excel-creator's `downloadExcel` has existing test coverage (check first — if none exists yet, per this repo's established pattern for the other renderers, add a small one alongside this change).
+
+**Interfaces:**
+- **PPTX**: no new option in this task — the fixed 16:9 canvas is a Global Constraint of this whole plan (see the note at the top of this Tasks 11-13 section); do not add a PPTX aspect-ratio picker here.
+- **DOCX**: `downloadDocx(options)` where `options` is optional, `{ pageSize?: 'A4' | 'Letter' }` (default `'A4'`, preserving current behavior exactly when omitted). `'Letter'` uses twips `12240 x 15840` (8.5in x 11in) instead of the current hardcoded `11906 x 16838` (A4). This affects only the exported `.docx`'s page-size section property — the live HTML preview's `@page{size:A4}` CSS (added in a prior phase) is a print-preview convenience and is NOT changed by this task (it stays A4-only for on-screen preview; only the real exported file's page size changes) — call this scoping decision out explicitly in the report if it feels like it should also change the preview, since that's a larger, separate concern (this task is about the export function's parameter, not the live preview's CSS).
+- **XLSX**: `downloadExcel(selectedSheetNames)` where `selectedSheetNames` is an optional `string[]` (default: all sheets, preserving current behavior exactly when omitted). When provided, only sheets whose `.name` is in the array get `wb.addWorksheet(...)`'d.
+- **UI**: `DownloadArtifact.tsx` gets a small options step before invoking a DOCX or XLSX download: for DOCX, a 2-option radio/select (A4/Letter) in a small popover anchored to the download button; for XLSX, a checkbox list of sheet names (read the sheet names from the artifact's `content` string — same pattern already used by `detectNativeFormats`/`NATIVE_FORMATS` to sniff the artifact's capabilities from its source text, i.e. parse `SHEETS = [...]`'s `name:` fields out of `content` via a regex, since there is no other structured place to read them from before the artifact actually runs). If parsing the sheet names fails or finds none, skip the picker and download all sheets (fail open to current behavior, never block a download).
+
+- [ ] **Step 1: Write the failing tests**
+
+```tsx
+// DownloadArtifact.test.tsx additions
+it('shows a page-size picker before downloading a DOCX artifact', () => {
+  const { getByRole } = renderDownloadArtifact({ content: '<script src="/libs/doc-renderer.js"></script>' });
+  getByRole('button', { name: /docx/i }).click();
+  expect(getByRole('radio', { name: /a4/i })).toBeInTheDocument();
+  expect(getByRole('radio', { name: /letter/i })).toBeInTheDocument();
+});
+
+it('shows a sheet-selection checklist before downloading an XLSX artifact with multiple sheets', () => {
+  const content = `SHEETS = [{ name: 'Summary', ... }, { name: 'Detail', ... }];`;
+  const { getByRole } = renderDownloadArtifact({ content });
+  getByRole('button', { name: /xlsx/i }).click();
+  expect(getByRole('checkbox', { name: /summary/i })).toBeInTheDocument();
+  expect(getByRole('checkbox', { name: /detail/i })).toBeInTheDocument();
+});
+
+it('falls back to downloading all sheets when sheet names cannot be parsed from content', () => {
+  const { getByRole, queryByRole } = renderDownloadArtifact({ content: '<script src="/libs/exceljs.bare.min.js"></script>' });
+  getByRole('button', { name: /xlsx/i }).click();
+  expect(queryByRole('checkbox')).not.toBeInTheDocument(); // no picker shown, proceeds straight to download
+});
+```
+
+```js
+// doc-renderer.test.js additions
+it('downloadDocx defaults to A4 page size when no options are passed (existing behavior unchanged)', () => {
+  // assert the Document sectionProperties page size matches the existing 11906x16838 constants
+});
+
+it('downloadDocx uses Letter page size (12240x15840) when options.pageSize is "Letter"', () => {
+  // call downloadDocx({ pageSize: 'Letter' }), assert the Letter twip values are used
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest components/Artifacts/__tests__/DownloadArtifact.test.tsx public/libs/__tests__/doc-renderer.test.js`
+Expected: FAIL — no picker UI, `downloadDocx`/`downloadExcel` don't accept options yet.
+
+- [ ] **Step 3: Implement**
+
+In `agents/doc-creator.skill.md`'s `downloadDocx()`, change the signature to accept an options object and branch the page-size twip constants:
+
+```javascript
+async function downloadDocx(options) {
+  var pageSize = (options && options.pageSize === 'Letter')
+    ? { width: 12240, height: 15840 }
+    : { width: 11906, height: 16838 }; // A4, existing default — unchanged when options is omitted
+  // ... existing Document(...) construction, but read page.size from pageSize.width/height
+  // instead of the current hardcoded 11906/16838 literals ...
+}
+```
+
+In `agents/excel-creator.skill.md`'s `downloadExcel()`, accept an optional array and filter `SHEETS` before the existing `SHEETS.forEach(sh => { ws.addWorksheet(...) })` loop:
+
+```javascript
+async function downloadExcel(selectedSheetNames) {
+  var sheetsToExport = (Array.isArray(selectedSheetNames) && selectedSheetNames.length > 0)
+    ? SHEETS.filter(function (sh) { return selectedSheetNames.indexOf(sh.name) !== -1; })
+    : SHEETS; // default: all sheets, existing behavior unchanged when omitted
+  // ... existing export loop, but iterate sheetsToExport instead of SHEETS ...
+}
+```
+
+In `DownloadArtifact.tsx`, before dispatching the existing `downloadPptx`/`downloadDocx`/`downloadExcel` trigger (wherever the per-format button's `onClick` currently calls `triggerViaPreviewIframe`/`runInHiddenIframe` directly — read the current click-handler wiring first since this task inserts a step before it, not after), add: for DOCX, a small popover with an A4/Letter radio group that, on confirm, calls the existing download-trigger path but passes `{ pageSize }` as an argument through the existing postMessage protocol (extend the `artifact-download-request` message to include an optional `args` field: `{ type: 'artifact-download-request', fn: 'downloadDocx', args: [{ pageSize }] }`, and update `download-bridge.js`'s handler at `client/public/libs/download-bridge.js:72-87` to call `window[fn].apply(null, e.data.args || [])` instead of `window[fn]()`, preserving today's zero-arg behavior for every other trigger function that doesn't pass `args`). For XLSX, parse sheet names out of `content` via `content.match(/name:\s*['"]([^'"]+)['"]/g)` (or a more targeted regex against the `SHEETS = [...]` block specifically — verify against a real generated excel-creator artifact's actual source text before finalizing this regex, since it must match real LLM-generated output, not just an idealized example), render a checkbox list, and pass the selected array the same way through `args`.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest components/Artifacts/__tests__/DownloadArtifact.test.tsx public/libs/__tests__/doc-renderer.test.js public/libs/__tests__/download-bridge.test.js`
+Expected: PASS, including a regression check that every existing zero-arg download trigger (PPTX, and DOCX/XLSX with no options selected) still works exactly as before — `download-bridge.js`'s `.apply(null, e.data.args || [])` change must be verified not to break the current no-args call path.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/src/components/Artifacts/DownloadArtifact.tsx client/public/libs/download-bridge.js agents/doc-creator.skill.md agents/excel-creator.skill.md client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx client/public/libs/__tests__/doc-renderer.test.js client/public/libs/__tests__/download-bridge.test.js
+git commit -m "feat: add DOCX page-size and XLSX sheet-selection export options"
+```
+
+---
+
+## Task 15: Embed real fonts in exported PPTX (fixes font-substitution/reflow bug)
+
+**Background — why this task exists:** a previously-reported bug (from before this plan) was that opening an exported `.pptx` on another machine substitutes a fallback font for DM Sans/IBM Plex Sans (since PptxGenJS 4.0.1, confirmed via `node_modules/pptxgenjs/types/index.d.ts`, has no font-embedding API — `fontFace: 'DM Sans'` only labels the intended font, it never embeds it), which in turn causes text to reflow inside its fixed-size box and can look like content "shifted." Researched what Presenton (the reference project) actually does here: confirmed via its public GitHub source (`servers/fastapi/services/export_task_service.py`) that Presenton *also* uses PptxGenJS under the hood for PPTX generation — it does not have some superior proprietary export engine, so there is nothing to "port" from its code for this specific problem. The real, standards-compliant fix is OOXML's own font-embedding mechanism (`<p:embeddedFontLst>` + `ppt/fonts/*.fntdata` parts + `embedTrueTypeFonts="1"` on `<p:presentation>`), applied as a post-processing step on the blob PptxGenJS already produces. This is grounded in a **real, verified example**: `brand/Copy of Master Deck 2026.pptx` already has DM Sans and IBM Plex Sans embedded exactly this way (PowerPoint wrote it when the deck was originally saved) — the exact XML shapes and relationship-ID wiring below were extracted and confirmed directly from that real file, not written from memory or guesswork.
+
+**Files:**
+- Create: `client/public/brand/fonts/DMSans-regular.fntdata`, `DMSans-bold.fntdata`, `DMSans-italic.fntdata`, `DMSans-boldItalic.fntdata`, `IBMPlexSans-regular.fntdata`, `IBMPlexSans-bold.fntdata`, `IBMPlexSans-italic.fntdata`, `IBMPlexSans-boldItalic.fntdata` (8 files, extracted once from the master deck — see Step 1)
+- Modify: `scripts/copy-libs.mjs` (vendor `jszip.min.js` to `client/public/libs/`, same pattern already used for pptxgenjs/xlsx/docx)
+- Modify: `client/public/libs/deck-renderer.js` (`downloadPptx()`, currently `client/public/libs/deck-renderer.js:1372-1391`)
+- Test: extend `client/public/libs/__tests__/deck-renderer.test.js`
+
+**Interfaces:**
+- Produces: a new `embedFontsInPptx(blob)` async function in `deck-renderer.js` that takes the `Blob` `pptx.write({ outputType: 'blob' })` already produces, returns a new `Blob` with the 2 font families (DM Sans, IBM Plex Sans) embedded via real OOXML font parts. `downloadPptx()` calls it once, right after `pptx.write(...)`, before creating the object URL — no other behavior in `downloadPptx()` changes.
+
+- [ ] **Step 1: Extract the 8 real font files from the master deck (one-time, not part of the browser bundle)**
+
+```bash
+export PATH="/opt/homebrew/bin:$PATH"
+node -e "
+const fs = require('fs');
+const path = require('path');
+const JSZip = require('jszip');
+const NAMES = {
+  'DMSans-regular.fntdata': 'DMSans-regular.fntdata',
+  'DMSans-bold.fntdata': 'DMSans-bold.fntdata',
+  'DMSans-italic.fntdata': 'DMSans-italic.fntdata',
+  'DMSans-boldItalic.fntdata': 'DMSans-boldItalic.fntdata',
+  'IBMPlexSans-regular.fntdata': 'IBMPlexSans-regular.fntdata',
+  'IBMPlexSans-bold.fntdata': 'IBMPlexSans-bold.fntdata',
+  'IBMPlexSans-italic.fntdata': 'IBMPlexSans-italic.fntdata',
+  'IBMPlexSans-boldItalic.fntdata': 'IBMPlexSans-boldItalic.fntdata',
+};
+(async () => {
+  const buf = fs.readFileSync('brand/Copy of Master Deck 2026.pptx');
+  const zip = await JSZip.loadAsync(buf);
+  fs.mkdirSync('client/public/brand/fonts', { recursive: true });
+  for (const name of Object.keys(NAMES)) {
+    const entry = zip.file('ppt/fonts/' + name);
+    if (!entry) { console.error('MISSING', name); continue; }
+    const data = await entry.async('nodebuffer');
+    fs.writeFileSync(path.join('client/public/brand/fonts', name), data);
+    console.log('wrote', name, data.length, 'bytes');
+  }
+})();
+"
+```
+
+Confirm all 8 files were written with non-trivial sizes (tens of KB each, matching real font binaries — e.g. `DMSans-regular.fntdata` should be ~23KB, `IBMPlexSans-regular.fntdata` should be ~87KB, per the sizes already confirmed present in the source deck).
+
+- [ ] **Step 2: Vendor jszip.min.js for browser use**
+
+In `scripts/copy-libs.mjs`, add an entry to the existing `LIBS` array (matching its current pattern for pptxgenjs/xlsx/docx — read the array's existing entries first to match the exact object shape used) that copies `node_modules/jszip/dist/jszip.min.js` to `client/public/libs/jszip.min.js`. Run `export PATH="/opt/homebrew/bin:$PATH" && node scripts/copy-libs.mjs` and confirm `client/public/libs/jszip.min.js` now exists.
+
+- [ ] **Step 3: Write the failing test**
+
+```js
+// client/public/libs/__tests__/deck-renderer.test.js
+describe('embedFontsInPptx', () => {
+  it('adds a fntdata content-type declaration, font relationship entries, and an embeddedFontLst to the pptx zip', async () => {
+    // Build a minimal fake "pptx" zip via JSZip matching the real shape closely enough to assert against,
+    // OR (preferred, since this project already establishes real-file-based verification): load the actual
+    // pptx.write({outputType:'blob'}) output from a tiny real DeckRenderer.downloadPptx() run, pass it through
+    // embedFontsInPptx, then re-open the RESULT with JSZip and assert:
+    const JSZip = require('jszip');
+    // ... construct or obtain `resultBlob` from window.DeckRenderer.embedFontsInPptx(someBlob) ...
+    const resultZip = await JSZip.loadAsync(resultBlob);
+    expect(resultZip.file('ppt/fonts/DMSans-regular.fntdata')).not.toBeNull();
+    expect(resultZip.file('ppt/fonts/IBMPlexSans-regular.fntdata')).not.toBeNull();
+    const contentTypes = await resultZip.file('[Content_Types].xml').async('string');
+    expect(contentTypes).toContain('Extension="fntdata"');
+    const rels = await resultZip.file('ppt/_rels/presentation.xml.rels').async('string');
+    expect(rels).toContain('fonts/DMSans-regular.fntdata');
+    const presentationXml = await resultZip.file('ppt/presentation.xml').async('string');
+    expect(presentationXml).toContain('embedTrueTypeFonts="1"');
+    expect(presentationXml).toContain('<p:embeddedFontLst>');
+    expect(presentationXml).toContain('typeface="DM Sans"');
+    expect(presentationXml).toContain('typeface="IBM Plex Sans"');
+  });
+});
+```
+
+(jsdom/JSZip interaction was confirmed flaky for full end-to-end blob generation in Task 6's environment — if this test hits the same limitation, fall back to constructing a minimal synthetic zip via JSZip directly in the test, matching real PptxGenJS output's file structure closely enough — `[Content_Types].xml`, `ppt/presentation.xml`, `ppt/_rels/presentation.xml.rels` — rather than requiring a full real `pptx.write()` round-trip inside the test. Note this substitution in the implementer's report if taken.)
+
+- [ ] **Step 4: Run the test to verify it fails**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-renderer.test.js -t "embedFontsInPptx"`
+Expected: FAIL — function doesn't exist yet.
+
+- [ ] **Step 5: Implement**
+
+Add to `deck-renderer.js` (requires the `JSZip` global from the newly-vendored `client/public/libs/jszip.min.js` script tag — add that script tag to the required script-tag list documented in `agents/presentation-creator.skill.md`, alongside `deck-schema-renderer.js`/`icons.js` from Task 10, loaded before `deck-renderer.js` since `downloadPptx()` needs `window.JSZip` at call time):
+
+```javascript
+var EMBEDDED_FONTS = [
+  { typeface: 'DM Sans', regular: 'DMSans-regular.fntdata', bold: 'DMSans-bold.fntdata', italic: 'DMSans-italic.fntdata', boldItalic: 'DMSans-boldItalic.fntdata' },
+  { typeface: 'IBM Plex Sans', regular: 'IBMPlexSans-regular.fntdata', bold: 'IBMPlexSans-bold.fntdata', italic: 'IBMPlexSans-italic.fntdata', boldItalic: 'IBMPlexSans-boldItalic.fntdata' },
+];
+
+async function embedFontsInPptx(blob) {
+  var zip = await window.JSZip.loadAsync(blob);
+
+  // 1. Fetch and add each font binary under ppt/fonts/ -- origin-aware, same reasoning as
+  // brandImagePath: this runs in the artifact's own context, which may be the cross-origin
+  // Sandpack preview iframe when downloadPptx() is invoked from the live preview.
+  var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+  var relEntries = [];
+  var embeddedFontXml = '';
+  var nextRid = 200; // starts well above any rId PptxGenJS itself assigns, to avoid collisions
+  for (var i = 0; i < EMBEDDED_FONTS.length; i++) {
+    var font = EMBEDDED_FONTS[i];
+    var ids = {};
+    var variants = ['regular', 'bold', 'italic', 'boldItalic'];
+    for (var v = 0; v < variants.length; v++) {
+      var key = variants[v];
+      var filename = font[key];
+      var resp = await fetch(origin + '/brand/fonts/' + filename);
+      var buf = await resp.arrayBuffer();
+      zip.file('ppt/fonts/' + filename, buf);
+      var rid = 'rId' + nextRid++;
+      ids[key] = rid;
+      relEntries.push('<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/' + filename + '"/>');
+    }
+    embeddedFontXml += '<p:embeddedFont><p:font typeface="' + font.typeface + '"/>' +
+      '<p:regular r:id="' + ids.regular + '"/><p:bold r:id="' + ids.bold + '"/>' +
+      '<p:italic r:id="' + ids.italic + '"/><p:boldItalic r:id="' + ids.boldItalic + '"/></p:embeddedFont>';
+  }
+
+  // 2. [Content_Types].xml -- add the fntdata Default entry once, before </Types>.
+  var contentTypes = await zip.file('[Content_Types].xml').async('string');
+  if (contentTypes.indexOf('Extension="fntdata"') === -1) {
+    contentTypes = contentTypes.replace('</Types>', '<Default Extension="fntdata" ContentType="application/x-fontdata"/></Types>');
+  }
+  zip.file('[Content_Types].xml', contentTypes);
+
+  // 3. ppt/_rels/presentation.xml.rels -- append the new font relationships before </Relationships>.
+  var rels = await zip.file('ppt/_rels/presentation.xml.rels').async('string');
+  rels = rels.replace('</Relationships>', relEntries.join('') + '</Relationships>');
+  zip.file('ppt/_rels/presentation.xml.rels', rels);
+
+  // 4. ppt/presentation.xml -- set embedTrueTypeFonts/saveSubsetFonts on <p:presentation>,
+  // and insert <p:embeddedFontLst> right after </p:notesSz> (confirmed exact element order --
+  // sldSz, notesSz, embeddedFontLst, defaultTextStyle -- against a real PowerPoint-saved file).
+  var presentationXml = await zip.file('ppt/presentation.xml').async('string');
+  if (presentationXml.indexOf('embedTrueTypeFonts') === -1) {
+    presentationXml = presentationXml.replace('<p:presentation ', '<p:presentation embedTrueTypeFonts="1" saveSubsetFonts="1" ');
+  }
+  presentationXml = presentationXml.replace('</p:notesSz>', '</p:notesSz><p:embeddedFontLst>' + embeddedFontXml + '</p:embeddedFontLst>');
+  zip.file('ppt/presentation.xml', presentationXml);
+
+  return zip.generateAsync({ type: 'blob' });
+}
+```
+
+Update `downloadPptx()` (`client/public/libs/deck-renderer.js:1382`, the line `var blob = await pptx.write({ outputType: 'blob' });`) to:
+
+```javascript
+var blob = await pptx.write({ outputType: 'blob' });
+blob = await embedFontsInPptx(blob);
+```
+
+Export `embedFontsInPptx` on `window.DeckRenderer` for testability, alongside the other exports from Task 1.
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-renderer.test.js`
+Expected: PASS, full suite green — confirm no regression to any of the 19 existing layouts' `downloadPptx()` behavior (font embedding is additive to the zip, it must not change any slide content/shape/text that was already being written correctly).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add client/public/brand/fonts scripts/copy-libs.mjs client/public/libs/deck-renderer.js client/public/libs/__tests__/deck-renderer.test.js client/public/libs/jszip.min.js agents/presentation-creator.skill.md
+git commit -m "feat: embed real DM Sans and IBM Plex Sans fonts in exported PPTX files"
+```
+
+---
+
+## Task 16: Auto-fit text when a schema layout is reused with different content
+
+**Background:** when the LLM reuses a `componentId` from `master-deck-library.json` (Task 6) for a new topic — the whole point of that library being reusable across any future presentation, not just the master deck's own content — the substituted text is a different length than the original. Schema text elements (Task 2) have fixed `x/y/w/h`, so longer replacement text can overflow its box, and shorter text can look sparse. Researched how Presenton handles this (its `slide-editor` frontend, `servers/nextjs/components/slide-editor/layout/flowLayout.ts`): it does NOT shrink font size to fit a fixed box — it resizes the *container* to match the text's estimated natural size via a flex/flow layout engine. Adopting that fully would mean replacing this plan's fixed-absolute-position `ElementSpec` model (Task 2) with a full flow-layout engine, a much larger architecture change than warranted here. Instead, this task uses the narrower, well-established "shrink text on overflow" technique — which PptxGenJS 4.0.1 already supports natively for the export path (confirmed via `node_modules/pptxgenjs/types/index.d.ts:1816`: `fit?: 'none' | 'shrink' | 'resize'` on `addText` options, which PowerPoint itself computes the font-scale for), paired with a real DOM-overflow-based shrink loop for the preview path (accurate, not a heuristic character-width estimate like Presenton's own `text-line-height.ts` uses).
+
+**Files:**
+- Modify: `client/public/libs/deck-schema-renderer.js` (`renderSchemaElements`'s text branch, `exportSchemaElements`'s text branch)
+- Test: extend `client/public/libs/__tests__/deck-schema-renderer.test.js`
+
+**Interfaces:**
+- `ElementSpec`'s `text` type gains one new optional field: `minFontSize?: number` (pt, default `8`) — the floor below which auto-fit stops shrinking. No other field changes; every other existing field/default from Task 2 is unchanged.
+- Preview: after appending a `.schema-text` element to the DOM with its full `fontSize`, check for real overflow (`el.scrollHeight > el.clientHeight` — a real, browser-computed measurement, not a character-count estimate) and, if overflowing, reduce `fontSize` in a loop (e.g. 1pt steps) until it fits or `minFontSize` is reached, whichever comes first.
+- Export: `exportSchemaElements`'s text branch passes `fit: 'shrink'` in the `addText` options object, alongside the existing `fontSize`/`color`/`bold`/`fontFace`/`align` fields — PowerPoint computes the actual shrink factor when the file is opened/edited, this task does not need to replicate that calculation.
+
+- [ ] **Step 1: Write the failing tests**
+
+```js
+// client/public/libs/__tests__/deck-schema-renderer.test.js — extend existing describe blocks
+describe('DeckSchemaRenderer text auto-fit', () => {
+  it('shrinks fontSize when rendered text overflows its fixed box (real DOM overflow, not estimated)', () => {
+    const container = document.createElement('div');
+    // jsdom doesn't compute real scrollHeight from font metrics, so this test mocks the
+    // element's scrollHeight/clientHeight getters to simulate overflow, then asserts the
+    // shrink loop actually ran and reduced fontSize below the original.
+    const originalCreateElement = document.createElement.bind(document);
+    let capturedEl;
+    jest.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = originalCreateElement(tag);
+      if (tag === 'div' && !capturedEl) {
+        capturedEl = el;
+        Object.defineProperty(el, 'scrollHeight', { get: () => 200, configurable: true });
+        Object.defineProperty(el, 'clientHeight', { get: () => 50, configurable: true });
+      }
+      return el;
+    });
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Very long text that will not fit', fontSize: 20 }],
+      container,
+    );
+    document.createElement.mockRestore();
+    const el = container.querySelector('.schema-text');
+    expect(parseFloat(el.style.fontSize)).toBeLessThan(20);
+  });
+
+  it('never shrinks below minFontSize (default 8pt)', () => {
+    // same overflow-mocking technique as above, extreme overflow, confirm floor at 8
+  });
+
+  it('does not shrink text that already fits (no overflow)', () => {
+    const container = document.createElement('div');
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'text', x: 0, y: 0, w: 5, h: 5, text: 'Short', fontSize: 14 }],
+      container,
+    );
+    const el = container.querySelector('.schema-text');
+    expect(el.style.fontSize).toBe('14pt'); // unchanged when there's no overflow
+  });
+});
+
+describe('DeckSchemaRenderer export auto-fit', () => {
+  it('passes fit:"shrink" for every text element', () => {
+    const slide = { addText: jest.fn(), addImage: jest.fn(), addShape: jest.fn() };
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'text', x: 0, y: 0, w: 2, h: 1, text: 'Hello' },
+    ]);
+    expect(slide.addText).toHaveBeenCalledWith('Hello', expect.objectContaining({ fit: 'shrink' }));
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-schema-renderer.test.js -t "auto-fit"`
+Expected: FAIL — no shrink loop exists yet, `fit: 'shrink'` not passed.
+
+- [ ] **Step 3: Implement**
+
+In `renderSchemaElements`'s text branch (`client/public/libs/deck-schema-renderer.js`, added in Task 2), after `containerEl.appendChild(span)`:
+
+```javascript
+var minFontSize = el.minFontSize || 8;
+var currentSize = el.fontSize || 14;
+while (span.scrollHeight > span.clientHeight && currentSize > minFontSize) {
+  currentSize -= 1;
+  span.style.fontSize = currentSize + 'pt';
+}
+```
+
+(Place this immediately after the text element's `containerEl.appendChild(span)` call in the existing `if (el.type === 'text')` branch — the element must already be attached to the DOM for `scrollHeight`/`clientHeight` to be real, non-zero values.)
+
+In `exportSchemaElements`'s text branch, add `fit: 'shrink'` to the existing `pptxSlide.addText(el.text || '', { ... })` options object (alongside the existing `x/y/w/h/fontSize/color/bold/fontFace/align` fields from Task 2 — do not remove or change any of those).
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-schema-renderer.test.js`
+Expected: PASS, full file green (Task 2's original tests + these new ones).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/public/libs/deck-schema-renderer.js client/public/libs/__tests__/deck-schema-renderer.test.js
+git commit -m "feat: auto-fit schema text when a reused layout's content overflows its box"
+```
+
+---
+
+## Task 17: Editor UI chrome — slide control bar, image-swap, and variant/componentId-swap picker (added after the first final review, per user request)
+
+**Background:** Tasks 7-9 built real, tested editor capabilities — inline text edit (Task 7), `reorderSlide`/`duplicateSlide`/`deleteSlide`/`setSlideImage` (Task 8) — but Task 9 only ever wired up the Edit/Save toggle and inline text editing into actual clickable UI. `reorderSlide`/`duplicateSlide`/`deleteSlide`/`setSlideImage` have been callable-but-buttonless this entire time — reachable only via the JS console, never by clicking anything in the panel. Separately, the user asked for a genuine gap to be closed: no capability exists to swap which real master-deck variant (`componentId`) a slide uses — the editor can edit an existing slide's text/images, but can't change which of e.g. the 5 real title-slide designs or 4 real closing-slide designs is in use. This task closes both gaps in one pass: it adds real UI chrome for all five editor capabilities (reorder, duplicate, delete, image-swap, variant-swap), living inside the deck's own DOM (injected by `deck-editor.js` itself when editing is enabled), not as new host-side React UI — this keeps the same architecture Task 7 already established (editing chrome lives where editing happens, calling `window.DeckEditor`'s functions directly and synchronously, no new postMessage round-trip needed per click).
+
+**Files:**
+- Modify: `client/public/libs/deck-schema-renderer.js` (tag `.schema-image` elements with `data-el-index`, mirroring the existing `.schema-text` tagging — currently only text elements carry this attribute, per `deck-schema-renderer.js:32`)
+- Modify: `client/public/libs/deck-editor.js` (add `setSlideComponent`, add UI-chrome injection to `enableEditing`/`disableEditing`)
+- Test: extend `client/public/libs/__tests__/deck-schema-renderer.test.js`, `client/public/libs/__tests__/deck-editor.test.js`
+
+**Interfaces:**
+- `window.DeckEditor.setSlideComponent(slideIndex, componentId, mountEl): Promise<void>` — fetches `master-deck-library.json` (origin-aware, cached after first fetch — same pattern as `brandImagePath`/`deckAssetPath`: `origin + '/brand/master-deck-library.json'`), finds the entry whose `componentId` matches, deep-copies its `elements` into `window.DECK.slides[slideIndex].elements`, sets `slide.layout = 'schema'` and `slide.componentId = componentId`, then calls `renderDeck`. Throws (rejects) with a clear error if the componentId isn't found in the fetched library.
+- `enableEditing(mountEl)` (extends Task 7's existing function) additionally injects, per rendered `.slide` element: a small control bar (↑/↓ reorder buttons, Duplicate, Delete, and a "Change layout…" `<select>` populated from a curated variant list — see below) and, per `.schema-image` element, a "Swap image" button. `disableEditing()` additionally removes all injected chrome (tag every injected element with a shared class, e.g. `deck-editor-chrome`, so `disableEditing` can `querySelectorAll('.deck-editor-chrome').forEach(el => el.remove())` alongside its existing contenteditable-reversal logic).
+- Curated variant list (do NOT expose all 104 master-deck slides — many are known-broken per Task 6/10's documented limitations, or are divider/tip slides with no real content). Reuse the corrected ranges from `agents/presentation-creator.skill.md`'s componentId preference table (Title, Agenda, Section, Closing) — **verify these exact ranges against the file's current content yourself before hardcoding them** (the ranges were corrected once already during this plan's final review; do not silently re-introduce a stale range).
+
+- [ ] **Step 1: Write the failing tests**
+
+```js
+// client/public/libs/__tests__/deck-schema-renderer.test.js — extend the image element test
+it('tags image elements with data-el-index, mirroring text elements', () => {
+  const container = document.createElement('div');
+  window.DeckSchemaRenderer.renderSchemaElements(
+    [
+      { type: 'shape', x: 0, y: 0, w: 1, h: 1, shape: 'rect' },
+      { type: 'image', x: 0, y: 0, w: 1, h: 1, brandImage: 'logo-dark' },
+    ],
+    container,
+  );
+  const img = container.querySelector('.schema-image');
+  expect(img.dataset.elIndex).toBe('1'); // true array index, not loop-among-images index
+});
+```
+
+```js
+// client/public/libs/__tests__/deck-editor.test.js — new describe block
+describe('DeckEditor.setSlideComponent', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Old' }] }] };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ slides: [{ componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] }] }),
+    });
+  });
+  afterEach(() => { delete window.DECK; delete global.fetch; });
+
+  it('replaces the slide elements with the fetched componentId entry and re-renders', async () => {
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+    expect(window.DECK.slides[0].elements[0].text).toBe('Thank you!');
+    expect(window.DECK.slides[0].componentId).toBe('slide-97');
+    expect(window.DECK.slides[0].layout).toBe('schema');
+  });
+
+  it('rejects with a clear error for an unknown componentId', async () => {
+    await expect(window.DeckEditor.setSlideComponent(0, 'slide-9999', mount)).rejects.toThrow(/unknown componentId/);
+  });
+
+  it('caches the fetched library across calls (fetch only called once)', async () => {
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+    await window.DeckEditor.setSlideComponent(0, 'slide-97', mount);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DeckEditor UI chrome', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = {
+      title: 'T',
+      slides: [
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 1' }, { type: 'image', x: 0, y: 0, w: 1, h: 1, brandImage: 'logo-dark' }] },
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Slide 2' }] },
+      ],
+    };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+  });
+  afterEach(() => { delete window.DECK; });
+
+  it('injects a control bar with reorder/duplicate/delete buttons per slide when editing is enabled', () => {
+    window.DeckEditor.enableEditing(mount);
+    const bars = mount.querySelectorAll('.deck-editor-slide-bar');
+    expect(bars.length).toBe(2);
+  });
+
+  it('injects an image-swap button for every schema-image element', () => {
+    window.DeckEditor.enableEditing(mount);
+    expect(mount.querySelectorAll('.deck-editor-image-swap').length).toBe(1);
+  });
+
+  it('injects a variant-swap select populated with curated componentId options', () => {
+    window.DeckEditor.enableEditing(mount);
+    const select = mount.querySelector('.deck-editor-slide-bar select');
+    expect(select).not.toBeNull();
+    expect(select.querySelectorAll('option').length).toBeGreaterThan(1);
+  });
+
+  it('removes all injected chrome on disableEditing', () => {
+    window.DeckEditor.enableEditing(mount);
+    window.DeckEditor.disableEditing(mount);
+    expect(mount.querySelectorAll('.deck-editor-chrome').length).toBe(0);
+  });
+
+  it('the first slide\'s "move up" button is disabled and the last slide\'s "move down" button is disabled', () => {
+    window.DeckEditor.enableEditing(mount);
+    const bars = mount.querySelectorAll('.deck-editor-slide-bar');
+    const firstUp = bars[0].querySelector('[data-action="up"]');
+    const lastDown = bars[1].querySelector('[data-action="down"]');
+    expect(firstUp.disabled).toBe(true);
+    expect(lastDown.disabled).toBe(true);
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-schema-renderer.test.js public/libs/__tests__/deck-editor.test.js`
+Expected: FAIL — `data-el-index` missing on images, `setSlideComponent` undefined, no chrome elements exist.
+
+- [ ] **Step 3: Implement**
+
+In `deck-schema-renderer.js`'s image branch (the `else if (el.type === 'image')` block, added in Task 2), add one line mirroring the text branch's existing tagging:
+```javascript
+img.dataset.elIndex = String(elIndex); // mirrors the .schema-text tagging above — same forEach's elIndex is already in scope
+```
+
+In `deck-editor.js`, add (before the `window.DeckEditor = {...}` export):
+```javascript
+var libraryCache = null;
+function fetchLibrary() {
+  if (libraryCache) return Promise.resolve(libraryCache);
+  var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+  return fetch(origin + '/brand/master-deck-library.json')
+    .then(function (r) { return r.json(); })
+    .then(function (data) { libraryCache = data; return data; });
+}
+
+function setSlideComponent(slideIndex, componentId, mountEl) {
+  return fetchLibrary().then(function (library) {
+    var entry = (library.slides || []).filter(function (s) { return s.componentId === componentId; })[0];
+    if (!entry) throw new Error('DeckEditor.setSlideComponent: unknown componentId "' + componentId + '"');
+    var slide = window.DECK.slides[slideIndex];
+    slide.layout = 'schema';
+    slide.componentId = componentId;
+    slide.elements = JSON.parse(JSON.stringify(entry.elements));
+    window.DeckRenderer.renderDeck(window.DECK, mountEl);
+  });
+}
+
+// Curated, known-good componentId ranges for the variant-swap picker -- deliberately NOT
+// exposing all 104 master-deck slides (many are dividers/tip-slides/known-broken per
+// Task 6/10's documented limitations). VERIFY these ranges against the current content of
+// agents/presentation-creator.skill.md's componentId preference table before shipping --
+// they were corrected once already during this plan's final review; do not hardcode a
+// stale copy.
+var CURATED_VARIANTS = [
+  { category: 'Title', ids: ['slide-5', 'slide-6', 'slide-7', 'slide-8', 'slide-9'] },
+  { category: 'Agenda', ids: ['slide-18', 'slide-19'] },
+  { category: 'Section', ids: ['slide-21', 'slide-22', 'slide-23', 'slide-24', 'slide-25'] },
+  { category: 'Closing', ids: ['slide-97', 'slide-98', 'slide-99', 'slide-100'] },
+];
+
+function buildVariantSelect(slideIndex, mountEl) {
+  var select = document.createElement('select');
+  select.className = 'deck-editor-chrome';
+  var placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Change layout…';
+  select.appendChild(placeholder);
+  CURATED_VARIANTS.forEach(function (group) {
+    var optgroup = document.createElement('optgroup');
+    optgroup.label = group.category;
+    group.ids.forEach(function (id) {
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      optgroup.appendChild(opt);
+    });
+    select.appendChild(optgroup);
+  });
+  select.addEventListener('click', function (e) { e.stopPropagation(); });
+  select.addEventListener('change', function () {
+    if (!select.value) return;
+    setSlideComponent(slideIndex, select.value, mountEl);
+  });
+  return select;
+}
+
+function makeChromeButton(label, action, onClick, disabled) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'deck-editor-chrome';
+  b.setAttribute('data-action', action);
+  b.textContent = label;
+  b.disabled = !!disabled;
+  b.addEventListener('click', function (e) {
+    e.stopPropagation();
+    onClick();
+  });
+  return b;
+}
+
+function injectSlideBar(slideEl, slideIndex, totalSlides, mountEl) {
+  var bar = document.createElement('div');
+  bar.className = 'deck-editor-chrome deck-editor-slide-bar';
+  bar.style.cssText = 'position:absolute;top:8px;right:8px;z-index:1000;display:flex;gap:4px;';
+  bar.appendChild(makeChromeButton('↑', 'up', function () { reorderSlide(slideIndex, slideIndex - 1, mountEl); }, slideIndex === 0));
+  bar.appendChild(makeChromeButton('↓', 'down', function () { reorderSlide(slideIndex, slideIndex + 1, mountEl); }, slideIndex === totalSlides - 1));
+  bar.appendChild(makeChromeButton('Duplicate', 'duplicate', function () { duplicateSlide(slideIndex, mountEl); }));
+  bar.appendChild(makeChromeButton('Delete', 'delete', function () { deleteSlide(slideIndex, mountEl); }, totalSlides <= 1));
+  bar.appendChild(buildVariantSelect(slideIndex, mountEl));
+  slideEl.appendChild(bar);
+}
+
+function injectImageSwapButtons(slideEl, slideIndex, mountEl) {
+  var images = slideEl.querySelectorAll('.schema-image');
+  images.forEach(function (imgEl, loopIndex) {
+    var elementIndex = imgEl.dataset.elIndex !== undefined ? parseInt(imgEl.dataset.elIndex, 10) : loopIndex;
+    var btn = makeChromeButton('Swap image', 'swap-image', function () {
+      var name = window.prompt('Brand image key (e.g. logo-dark, logo-light):');
+      if (name) setSlideImage(slideIndex, elementIndex, { brandImage: name }, mountEl);
+    });
+    btn.className += ' deck-editor-image-swap';
+    btn.style.cssText = 'position:absolute;left:' + imgEl.style.left + ';top:' + imgEl.style.top + ';z-index:1000;';
+    slideEl.appendChild(btn);
+  });
+}
+```
+
+Update `enableEditing` to also call, inside its existing `slideEls.forEach(function (slideEl, slideIndex) {...})` loop (after the existing text-binding logic): `injectSlideBar(slideEl, slideIndex, slideEls.length, mountEl); injectImageSwapButtons(slideEl, slideIndex, mountEl);`
+
+Update `disableEditing` to also do, before its existing `boundHandlers = []` reset: `document.querySelectorAll('.deck-editor-chrome').forEach(function (el) { el.remove(); });` — note this queries the whole document, not a specific mount, matching the existing `boundHandlers` design (Task 7's `disableEditing` already accepts-but-ignores `mountEl` for the same reason: bindings/chrome aren't tracked per-mount, they're tracked globally since only one mount is ever "active" for editing at a time in this singleton-`DECK` architecture).
+
+Add the new functions to the `window.DeckEditor = {...}` export: `setSlideComponent: setSlideComponent,`.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-schema-renderer.test.js public/libs/__tests__/deck-editor.test.js`
+Expected: PASS, full files green.
+
+Also run the full `client/public/libs` suite to confirm no regressions (baseline before this task: 219/219 — the count after the final-review fix wave).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/public/libs/deck-schema-renderer.js client/public/libs/deck-editor.js client/public/libs/__tests__/deck-schema-renderer.test.js client/public/libs/__tests__/deck-editor.test.js
+git commit -m "feat: add editor UI chrome for reorder/duplicate/delete/image-swap/variant-swap"
+```
+
+---
+
+## Task 18: More chart types (line, area)
+
+**Background:** `chart` currently supports `type: 'bar'` (default) and `type: 'pie'` (Task 5). PptxGenJS 4.0.1 natively supports 9 chart types (`node_modules/pptxgenjs/types/index.d.ts:620`: `'area' | 'bar' | 'bar3D' | 'bubble' | 'doughnut' | 'line' | 'pie' | 'radar' | 'scatter'`). This task adds `'line'` and `'area'` — both use the exact same `bars: {label,value}[]` data shape already established, so they're a natural, low-risk extension of the exact pattern Task 5 already proved out. Deliberately deferred: `scatter`/`bubble` (need `{x,y}` point pairs, a genuinely different data shape than `{label,value}` — a separate future addition, not a small extension), `radar`/`doughnut`/`bar3D` (marginal value over what `bar`/`pie` already cover for this deck-generation use case).
+
+**Files:**
+- Modify: `client/public/libs/deck-renderer.js` (`chart` layout's `render`/`exportPptx`, same functions Task 5 touched)
+- Test: extend `client/public/libs/__tests__/deck-renderer.test.js`
+
+**Interfaces:** `chart` spec's `type` field gains two more valid values: `'line'`, `'area'` (alongside the existing `'bar'`/`'pie'`). Same `bars` field, same structural 6-item cap already enforced.
+
+- [ ] **Step 1: Write the failing tests**
+
+```js
+// client/public/libs/__tests__/deck-renderer.test.js — extend chart describe block
+it('renders a simple line/area indicator when type is "line" or "area" (preview treats them the same visually — a connected trend line over the bars, distinguished by fill)', () => {
+  const slideEl = document.createElement('section');
+  window.DeckRenderer.getLayout('chart').render({ title: 'T', type: 'line', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }] }, slideEl);
+  expect(slideEl.querySelector('.chart-line')).not.toBeNull();
+});
+
+it('exportPptx calls addChart with "line" for type:"line"', () => {
+  const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+  window.DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+    title: 'T', type: 'line', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }],
+  });
+  expect(pptxSlide.addChart).toHaveBeenCalledWith('line', expect.arrayContaining([expect.objectContaining({ labels: ['A', 'B'], values: [5, 8] })]), expect.any(Object));
+});
+
+it('exportPptx calls addChart with "area" for type:"area"', () => {
+  const pptxSlide = { addText: jest.fn(), addShape: jest.fn(), addChart: jest.fn() };
+  window.DeckRenderer.getLayout('chart').exportPptx(pptxSlide, {
+    title: 'T', type: 'area', bars: [{ label: 'A', value: 5 }, { label: 'B', value: 8 }],
+  });
+  expect(pptxSlide.addChart).toHaveBeenCalledWith('area', expect.anything(), expect.any(Object));
+});
+
+it('bar chart (default/unset type) behavior is unchanged', () => {
+  const slideEl = document.createElement('section');
+  window.DeckRenderer.getLayout('chart').render({ title: 'T', bars: [{ label: 'A', value: 5 }] }, slideEl);
+  expect(slideEl.querySelector('.chart-rows')).not.toBeNull();
+  expect(slideEl.querySelector('.chart-line')).toBeNull();
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-renderer.test.js -t "line"`
+Expected: FAIL.
+
+- [ ] **Step 3: Implement**
+
+In `chart`'s `render` (already branches on `spec.type === 'pie'` at the top, per Task 5 — add a sibling branch for `'line'`/`'area'` right after the pie branch's `return`, before the existing bar-rendering fallthrough code):
+
+```javascript
+if (spec.type === 'line' || spec.type === 'area') {
+  var lineWrap = document.createElement('div');
+  lineWrap.className = 'chart-line';
+  lineWrap.style.cssText = 'position:relative;height:14rem;display:flex;align-items:flex-end;gap:.5rem;padding:0 .5rem;';
+  var maxVal = Math.max.apply(null, bars.map(function (b) { return b.value; }).concat([1]));
+  bars.forEach(function (bar) {
+    var col = document.createElement('div');
+    col.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;';
+    var fill = document.createElement('div');
+    var pct = Math.round((bar.value / maxVal) * 100);
+    fill.style.cssText = 'width:100%;border-radius:4px 4px 0 0;height:' + pct + '%;' +
+      (spec.type === 'area' ? 'background:rgba(255,107,24,.35);border-top:2px solid #FF6B18;' : 'background:#FF6B18;width:4px;margin:0 auto;');
+    var label = document.createElement('span');
+    label.style.cssText = "font-size:.75rem;color:rgba(255,255,255,.7);margin-top:.4rem;font-family:'DM Sans',sans-serif;";
+    label.textContent = bar.label;
+    col.appendChild(fill);
+    col.appendChild(label);
+    lineWrap.appendChild(col);
+  });
+  slideEl.appendChild(lineWrap);
+  return;
+}
+```
+
+In `exportPptx` (same pie-branch pattern from Task 5 — add a sibling branch):
+
+```javascript
+if (spec.type === 'line' || spec.type === 'area') {
+  pptxSlide.addChart(
+    spec.type,
+    [{ name: spec.title || '', labels: bars.map(function (b) { return b.label; }), values: bars.map(function (b) { return b.value; }) }],
+    { x: g.bars.x, y: g.bars.y, w: g.bars.w, h: g.bars.h, showLegend: false },
+  );
+  return;
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-renderer.test.js`
+Expected: PASS, full suite green (existing bar/pie tests + these).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/public/libs/deck-renderer.js client/public/libs/__tests__/deck-renderer.test.js
+git commit -m "feat: add line and area chart variants"
+```
+
+---
+
+## Task 19: Visual thumbnail previews for the variant/layout picker
+
+**Background:** Task 17 builds the variant-swap picker as a plain `<select>` with text-only `componentId` options (e.g. "slide-97"). This task upgrades it to show an actual small live-rendered preview of each candidate layout's real content — the way other AI slide-generation tools show visual template thumbnails — reusing `DeckSchemaRenderer.renderSchemaElements` (already built, Task 2) to render each candidate at a small scale, so there's no separate rendering path to maintain and no risk of a thumbnail drifting out of sync with what actually renders.
+
+**Files:**
+- Modify: `client/public/libs/deck-editor.js` (replace `buildVariantSelect` with a thumbnail-grid picker)
+- Test: extend `client/public/libs/__tests__/deck-editor.test.js`
+
+**Interfaces:** the "Change layout…" control in each slide's chrome bar changes from a native `<select>` to a button that toggles a small popover panel containing a grid of thumbnail buttons (one per curated `componentId`, grouped by category header, same `CURATED_VARIANTS` list Task 17 established). Clicking a thumbnail calls the existing `setSlideComponent(slideIndex, componentId, mountEl)` and closes the popover. No new public API — this is purely a chrome-rendering change inside `deck-editor.js`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```js
+// client/public/libs/__tests__/deck-editor.test.js — extend the UI chrome describe block
+describe('DeckEditor visual variant picker', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'S1' }] }] };
+    window.DeckRenderer.renderDeck(window.DECK, mount);
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ slides: [{ componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] }] }),
+    });
+  });
+  afterEach(() => { delete window.DECK; delete global.fetch; });
+
+  it('shows a "Change layout" button instead of a native select', () => {
+    window.DeckEditor.enableEditing(mount);
+    expect(mount.querySelector('.deck-editor-slide-bar select')).toBeNull();
+    expect(mount.querySelector('[data-action="change-layout"]')).not.toBeNull();
+  });
+
+  it('opens a thumbnail grid with a rendered mini-preview per curated componentId when clicked', async () => {
+    window.DeckEditor.enableEditing(mount);
+    mount.querySelector('[data-action="change-layout"]').click();
+    await Promise.resolve(); // let the library fetch + thumbnail render settle
+    const thumbs = mount.querySelectorAll('.deck-editor-variant-thumb');
+    expect(thumbs.length).toBeGreaterThan(0);
+    // each thumbnail actually contains rendered schema content, not just a label
+    expect(thumbs[0].querySelector('.schema-text, .schema-shape, .schema-image')).not.toBeNull();
+  });
+
+  it('clicking a thumbnail calls setSlideComponent and closes the popover', async () => {
+    window.DeckEditor.enableEditing(mount);
+    mount.querySelector('[data-action="change-layout"]').click();
+    await Promise.resolve();
+    const thumb = Array.from(mount.querySelectorAll('.deck-editor-variant-thumb')).find((t) => t.dataset.componentId === 'slide-97');
+    thumb.click();
+    await Promise.resolve();
+    expect(window.DECK.slides[0].componentId).toBe('slide-97');
+    expect(mount.querySelector('.deck-editor-variant-popover')).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-editor.test.js -t "visual variant picker"`
+Expected: FAIL — no `[data-action="change-layout"]` button exists yet (Task 17 built a `<select>`, not a button+popover).
+
+- [ ] **Step 3: Implement**
+
+Replace `buildVariantSelect` (built in Task 17) with:
+
+```javascript
+function buildThumbnail(componentId, elements, slideIndex, mountEl, popover) {
+  var thumb = document.createElement('button');
+  thumb.type = 'button';
+  thumb.className = 'deck-editor-chrome deck-editor-variant-thumb';
+  thumb.dataset.componentId = componentId;
+  // Fixed small box at the deck's real 16:9 ratio; render the real elements at full
+  // scale inside an inner div, then CSS-scale the whole thing down -- reuses
+  // DeckSchemaRenderer verbatim, so the thumbnail can never drift from the real render.
+  thumb.style.cssText = 'width:96px;height:54px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.2);background:#25223B;padding:0;cursor:pointer;';
+  var inner = document.createElement('div');
+  inner.style.cssText = 'width:960px;height:540px;position:relative;transform:scale(0.1);transform-origin:top left;';
+  window.DeckSchemaRenderer.renderSchemaElements(elements, inner);
+  thumb.appendChild(inner);
+  thumb.addEventListener('click', function (e) {
+    e.stopPropagation();
+    setSlideComponent(slideIndex, componentId, mountEl);
+    popover.remove();
+  });
+  return thumb;
+}
+
+function openVariantPopover(anchorBtn, slideIndex, mountEl) {
+  var existing = document.querySelector('.deck-editor-variant-popover');
+  if (existing) existing.remove();
+  var popover = document.createElement('div');
+  popover.className = 'deck-editor-chrome deck-editor-variant-popover';
+  popover.style.cssText = 'position:absolute;top:32px;right:8px;z-index:1001;background:#1a1728;border:1px solid rgba(255,255,255,.2);padding:8px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;';
+  fetchLibrary().then(function (library) {
+    CURATED_VARIANTS.forEach(function (group) {
+      var groupLabel = document.createElement('div');
+      groupLabel.className = 'deck-editor-chrome';
+      groupLabel.style.cssText = "font-size:10px;color:rgba(255,255,255,.6);font-family:'DM Sans',sans-serif;";
+      groupLabel.textContent = group.category;
+      var row = document.createElement('div');
+      row.className = 'deck-editor-chrome';
+      row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+      group.ids.forEach(function (id) {
+        var entry = (library.slides || []).filter(function (s) { return s.componentId === id; })[0];
+        if (!entry) return; // skip silently if a curated id is somehow missing from the library
+        row.appendChild(buildThumbnail(id, entry.elements, slideIndex, mountEl, popover));
+      });
+      popover.appendChild(groupLabel);
+      popover.appendChild(row);
+    });
+  });
+  anchorBtn.parentElement.appendChild(popover);
+}
+```
+
+Update `injectSlideBar` to replace its `bar.appendChild(buildVariantSelect(...))` line with:
+```javascript
+bar.appendChild(makeChromeButton('Change layout…', 'change-layout', function () { openVariantPopover(bar, slideIndex, mountEl); }));
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `export PATH="/opt/homebrew/bin:$PATH" && cd client && npx jest public/libs/__tests__/deck-editor.test.js`
+Expected: PASS, full file green.
+
+Also run the full `client/public/libs` suite to confirm no regressions.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add client/public/libs/deck-editor.js client/public/libs/__tests__/deck-editor.test.js
+git commit -m "feat: replace text-only variant picker with visual thumbnail previews"
+```
+
+---
+
+## Second Final Whole-Branch Review (after Tasks 17-19)
+
+Dispatch the final code reviewer again (per subagent-driven-development), on the most capable available model, against the diff from Task 17's own BASE through Task 19's HEAD (the rest of the branch, Tasks 1-16 plus the first final-review fix wave, was already reviewed clean and should not need re-reading in full — but the reviewer should still check these tasks' interaction with what they touch: Task 7's `disableEditing`, Task 8's four mutation functions, Task 2's `data-el-index` tagging, Task 5's chart-type branching pattern, and the corrected componentId ranges from the first final review's M2 fix). Specifically check: (a) the curated `CURATED_VARIANTS` ranges in `deck-editor.js` actually match the current, corrected ranges in `agents/presentation-creator.skill.md` (not a stale copy from before the M2 fix), (b) `disableEditing`'s document-wide chrome removal doesn't remove anything it shouldn't (e.g. if any other, unrelated part of the app happens to use a `.deck-editor-chrome` class name — grep to confirm uniqueness), (c) the image-swap button's positioning (copying `imgEl.style.left`/`top`) actually lands visibly over or near the image it corresponds to, not off-screen, (d) `setSlideComponent`'s fetched-and-cached library isn't stale if `master-deck-library.json` could ever change during a session (acceptable to leave as session-lifetime cache, but confirm this is a deliberate, reasonable choice, not an oversight), (e) Task 19's thumbnail rendering doesn't leak duplicate popovers if "Change layout" is clicked multiple times without closing (confirm the `existing.remove()` guard actually works), (f) Task 18's `line`/`area` branches don't break the existing `bar`/`pie` fallthrough logic (the same `if (spec.type === 'pie') { ...; return; }` early-return pattern must still work unchanged).
+
+---
+
+## Final Whole-Branch Review (Tasks 1-16, superseded by the Second Final Whole-Branch Review above after Task 17 was added)
+
+After Task 16, dispatch the final code reviewer (per subagent-driven-development) against the full diff from Task 1's BASE through Task 16's HEAD, with this plan's Global Constraints as its attention lens — specifically checking: (a) no existing 19-layout behavior changed, (b) every new image reference is origin-aware, (c) the converter's regex extraction has no un-flagged silent gaps, (d) the editor's save path reconstructs `window.DECK` text losslessly (no truncation/escaping bugs in the `JSON.stringify` substitution), (e) the `.mutate()` call shape in Task 9 matches `EditMessage.tsx`'s proven usage exactly, (f) `download-bridge.js`'s new `.apply(null, e.data.args || [])` change (Task 14) does not break any existing zero-arg download trigger for any of the three generators, (g) Task 11's aspect-ratio CSS fix doesn't regress any existing layout's rendered appearance (16:9 content should look identical to before, only non-16:9 containers should now letterbox instead of stretch), (h) Task 15's font-embedding XML surgery (rId numbering, element insertion points) doesn't corrupt the pptx for any of the 19 existing layouts or the new schema layout — ideally verified by actually opening a generated file in PowerPoint/LibreOffice or an OOXML validator, not just asserting the strings are present, (i) Task 16's preview shrink-loop only engages on real overflow and never fires for the 19 existing hand-coded layouts (which don't use `.schema-text` at all).
