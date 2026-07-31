@@ -158,7 +158,7 @@ Every content rule from the previous version of this skill (action titles, one-i
 
 Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to render a raw `{ elements: [...] }` tree of primitive `text` / `image` / `shape` elements with explicit `x`/`y`/`w`/`h` (inches) — either fully hand-authored, or copied from a real slide in the Whatfix master deck.
 
-**The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. Use `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) to find the right `N` for a given category — e.g. `slide-97`..`slide-100` for thank-you variants, `slide-21`..`slide-25` for section dividers, `slide-11` for the Event Name variant, `slide-58`..`slide-67` for 6-card infographic grids. Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
+**The library**: `client/public/brand/master-deck-library.json` holds one entry per slide of the 104-slide master deck (`brand/Copy of Master Deck 2026.pptx`), each shaped `{ "componentId": "slide-N", "elements": [...] }`. It's a 531KB JSON blob — don't `file_search` it as your first move for the common categories below; the "Practical examples" subsection right after the Workflow paragraph embeds a real, already-picked `elements` excerpt for each one, ready to copy and adapt directly. Reach for `file_search` on this file (and on `brand/master-deck-layouts.md`'s category table) only when you need a *different* variant than the one embedded — e.g. another of the 5 title-slide options, a different Thank-you close, or one of the other infographic-grid slide counts (`slide-58`..`slide-67` span 3–5 cards across variants in the extracted library, plus a process-diagram outlier at `slide-60`). Image elements reference `deckAsset` filenames served from `client/public/deck-assets/`.
 
 **DEFAULT TO A REAL `componentId` FOR TITLE, SECTION, AGENDA, AND CLOSING SLIDES — this is a directive, not a suggestion.** The whole reason the master-deck library and `componentId` lookup exist is a direct user complaint that generated decks used generic, flat hand-coded cover/section/agenda/thank-you slides instead of the user's own real brand designs. The 4 hand-coded layouts below exist as a fallback for when nothing in the library fits — they are **not** the default choice for these categories:
 
@@ -169,7 +169,107 @@ Beyond the 19 hand-coded layouts above, a slide can use `"layout": "schema"` to 
 | Session/agenda overview | `agenda` | `slide-18`..`slide-19` (agenda — numbered session list with time slots; **`slide-17` is excluded**: it's the single-text category-divider header "Agenda", not a usable agenda layout) |
 | Deck close | `closing` | `slide-97`..`slide-100` (the 4 near-identical "Thank you!" variants; **`slide-96` is excluded** — single-text category-divider header "Thank you Slides" — and **`slide-101`..`slide-104` are excluded** — repeated shape-alignment tip slides, not thank-you content) |
 
-**Workflow**: for any title/section/agenda/closing slide, `file_search` the relevant `componentId` range above in `master-deck-library.json` first, pick a variant whose existing layout/copy shape fits the slide's actual content, and inline its `elements` array (editing only the `.text` fields you need to change, per the rules below). Only fall back to the plain `title`/`section`/`agenda`/`closing` layout when you've checked the range and genuinely nothing fits (e.g. every variant in range has fixed copy that can't be adapted to the content, or — per the known limitations below — the only remaining unused variant is one of the mis-scaled/oversized-shape slides that can't be cleanly copied). Don't skip the check just because the hand-coded layout is less typing; the fallback existing at all is not license to default to it.
+**Workflow**: for any title/section/agenda/closing slide, start with the matching embedded example in "Practical examples" below and inline its `elements` array (editing only the `.text` fields you need to change, per the rules below). If that specific example's copy shape doesn't fit and you need a different variant from the same range, `file_search` the rest of the `componentId` range in `master-deck-library.json` (and `brand/master-deck-layouts.md`'s category table) to find one that does. Only fall back to the plain `title`/`section`/`agenda`/`closing` layout when you've checked the range and genuinely nothing fits (e.g. every variant in range has fixed copy that can't be adapted to the content, or — per the known limitations below — the only remaining unused variant is one of the mis-scaled/oversized-shape slides that can't be cleanly copied). Don't skip the check just because the hand-coded layout is less typing; the fallback existing at all is not license to default to it.
+
+### Practical examples: real `componentId` excerpts to copy directly
+
+Each of these is pulled verbatim from `client/public/brand/master-deck-library.json` (not hand-written) — the hex fills, coordinates, and placeholder copy below are the actual extracted values for that slide. Copy the block, adjust `.text` fields (and drop any noted out-of-bounds decorative element), and paste into `elements`. Where an excerpt is truncated for length, a comment says so and gives the full original element count — `file_search` the same `componentId` in the library file if you need the untruncated array.
+
+**Title cover — `slide-5`** (5 elements, full — nothing truncated):
+```json
+[
+  { "type": "text", "text": "Design Presentation Whatfix", "x": 0.5, "y": 1.26, "w": 3.75, "h": 1.51 },
+  { "type": "shape", "shape": "rect", "fill": "F15C24", "x": 4.58, "y": 2.7, "w": 2.27, "h": 3.28 },
+  { "type": "shape", "shape": "rect", "fill": "F8A354", "x": 4.23, "y": 0.26, "w": 2.63, "h": 2.44 },
+  { "type": "shape", "shape": "rect", "fill": "F8A354", "x": 1.46, "y": 2.69, "w": 3.12, "h": 3.29 },
+  { "type": "shape", "shape": "rect", "fill": "C44028", "x": 4.23, "y": 2.69, "w": 1.54, "h": 2.66 }
+]
+```
+Swap the title text for the deck's real cover line; the 4 rects are the brand color-block motif — leave their fills/positions alone unless redesigning the cover.
+
+**Agenda — `slide-19`** (16 elements total; showing the "Agenda" label plus the first 2 of 6 numbered sessions — 4 more `Session N` / time / description triplets follow at the same x, incrementing y by ~0.66in each):
+```json
+[
+  { "type": "shape", "shape": "rect", "fill": "FFFFFF", "x": 0.4, "y": 0.36, "w": 1.51, "h": 0.57 },
+  { "type": "text", "text": "Agenda", "x": 0.4, "y": 0.36, "w": 1.51, "h": 0.57 },
+  { "type": "text", "text": "Session 18:00 AM ", "x": 0.5, "y": 1.12, "w": 0.69, "h": 0.57 },
+  { "type": "text", "text": "Session 29:00 AM ", "x": 0.5, "y": 1.78, "w": 0.69, "h": 0.57 },
+  { "type": "text", "text": "&quot;Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  ", "x": 1.48, "y": 1.12, "w": 2.86, "h": 0.57 },
+  { "type": "text", "text": "&quot;Lorem ipsum dolor sit amet, consectetur adipiscing elit, t  ", "x": 1.48, "y": 1.78, "w": 2.86, "h": 0.57 }
+  // ... 4 more Session N / time text elements + 4 more matching description text elements (Sessions 3–6), same pattern
+]
+```
+Note the source text literally contains `Session 18:00 AM` (session number and time concatenated with no separator) and HTML-escaped `&quot;` — clean both up when you replace the copy with real session data.
+
+**Section divider — `slide-25`** (4 elements, full — nothing truncated):
+```json
+[
+  { "type": "shape", "shape": "rect", "fill": "E1EEFA", "x": 0.41, "y": 2.27, "w": 2.86, "h": 0.48 },
+  { "type": "text", "text": "Lorem ipsum dolor sit dolor sit", "x": 0.39, "y": 1.6, "w": 4.6, "h": 1.12 },
+  { "type": "text", "text": "Subhead ", "x": 0.39, "y": 4.56, "w": 4.6, "h": 0.44 },
+  { "type": "shape", "shape": "rect", "fill": "E1EEFA", "x": 4.99, "y": 0.58, "w": 4.46, "h": 4.46 }
+]
+```
+The two large `E1EEFA` rects are the section-divider's light accent blocks; replace the two text elements with the chapter title and (optionally) a subhead line.
+
+**Closing — `slide-97`** (11 elements, full — nothing truncated):
+```json
+[
+  { "type": "shape", "shape": "rect", "fill": "FFE9DC", "x": 5.4, "y": 0, "w": 4.6, "h": 5.63 },
+  { "type": "text", "text": "Thank you!", "x": 0, "y": 2.26, "w": 5.64, "h": 0.74 },
+  { "type": "shape", "shape": "rect", "fill": "824E3B", "x": 5.4, "y": 4.45, "w": 2.29, "h": 0.83 },
+  { "type": "shape", "shape": "rect", "fill": "FAC1AA", "x": 7.68, "y": 2.89, "w": 2.32, "h": 0.83 },
+  { "type": "shape", "shape": "rect", "fill": "FFA450", "x": 6.99, "y": 3.89, "w": 1.32, "h": 1.32 },
+  { "type": "shape", "shape": "rect", "fill": "36314C", "x": 6.88, "y": 1.24, "w": 1.56, "h": 1.34 },
+  { "type": "shape", "shape": "rect", "fill": "F05B22", "x": 6.62, "y": 2.58, "w": 2, "h": 1.04 },
+  { "type": "shape", "shape": "rect", "fill": "FAC1AA", "x": 8.09, "y": 2.74, "w": 0.8, "h": 0.32 },
+  { "type": "shape", "shape": "rect", "fill": "824E3B", "x": 6.35, "y": 4.3, "w": 0.8, "h": 0.32 },
+  { "type": "shape", "shape": "rect", "fill": "BF7357", "x": 6.67, "y": 0.18, "w": 1.5, "h": 1.48 },
+  { "type": "shape", "shape": "rect", "fill": "BF7357", "x": 6.4, "y": 0, "w": 0.69, "h": 0.64 }
+]
+```
+Swap `"Thank you!"` for a real closing line (or a CTA); the right-hand block of warm-toned rects is a decorative collage — leave it as-is.
+
+**Key Takeaways list — `slide-28`** (26 elements total; showing the headline plus the first of 3 takeaway columns — 2 more identical-shape columns follow at `x≈3.64` and `x≈6.8`, and 5 small decorative `deckAsset` icon images are omitted):
+```json
+[
+  { "type": "text", "text": "Key Takeaways", "x": 0.5, "y": 0.53, "w": 6.06, "h": 0.44 },
+  { "type": "shape", "shape": "rect", "fill": "FFA450", "x": 0.5, "y": 1.51, "w": 2.7, "h": 3.57 },
+  { "type": "text", "text": "Lorem Ipsum", "x": 0.76, "y": 2.05, "w": 2.08, "h": 0.2 },
+  { "type": "text", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor ", "x": 0.59, "y": 2.63, "w": 2.39, "h": 0.95 },
+  { "type": "text", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit", "x": 0.59, "y": 3.65, "w": 2.49, "h": 0.56 },
+  { "type": "text", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit", "x": 0.59, "y": 4.33, "w": 2.49, "h": 0.56 }
+  // ... 2 more takeaway columns, each: 1 colored-rect card background + 1 short heading text + 2 supporting detail texts, plus 5 small deckAsset icon images atop each card
+]
+```
+Each takeaway is a colored card (heading + 2 supporting lines) — this is the richer, 3-column version of the hand-coded `content` layout's bullet list; use it when a takeaway needs its own short supporting detail rather than a single bullet line.
+
+**Problem/Solution two-panel — `slide-35`** (10 elements, full — nothing truncated, but note the last image is the known out-of-bounds corner decoration, safe to drop per the Known Limitations below):
+```json
+[
+  { "type": "text", "text": "AI agent performing operations on behalf of the users", "x": 0.4, "y": 1.26, "w": 2.8, "h": 1.3 },
+  { "type": "text", "text": "Problem", "x": 4.99, "y": 1.36, "w": 2, "h": 0.4 },
+  { "type": "text", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam", "x": 4.99, "y": 1.72, "w": 3.75, "h": 1.1 },
+  { "type": "text", "text": "Solution", "x": 4.99, "y": 3.02, "w": 1.08, "h": 0.4 },
+  { "type": "text", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam", "x": 4.99, "y": 3.36, "w": 3.56, "h": 1.1 },
+  { "type": "shape", "shape": "rect", "fill": "F15B22", "x": 1.2, "y": 2.04, "w": 1.51, "h": 1.8 },
+  { "type": "shape", "shape": "rect", "fill": "F15B22", "x": 1.1, "y": 2.91, "w": 0.44, "h": 0.76 },
+  { "type": "shape", "shape": "rect", "fill": "C53F27", "x": 1.1, "y": 2.91, "w": 0.44, "h": 0.76 },
+  { "type": "shape", "shape": "rect", "fill": "F9A352", "x": 0.5, "y": 0.53, "w": 0.27, "h": 0.31 }
+  // dropped: { "type": "image", "deckAsset": "slide35-image1.png", "x": 10.18, "y": 0, "w": 2.66, "h": 1.76 } — corner decoration past the 10in canvas edge, per Known Limitations
+]
+```
+Left column is a title + orange color-block illustration; right column stacks the `Problem` label/body over the `Solution` label/body. Use for a single problem framed against its solution, one panel each.
+
+**Infographic grid (5-card) — `slide-61`** (30 elements total; showing 1 of 5 card text elements plus 1 of ~24 decorative shape elements — the rest are small colored rects/circles forming a central Venn-style graphic and are cosmetic, not per-card content):
+```json
+[
+  { "type": "text", "text": "ADD TITLELorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor. Donec facilisis lacus eget mauris.", "x": 0.34, "y": 1.36, "w": 2.32, "h": 1.01 }
+  // ... 4 more identically-shaped card text elements at different x/y (two columns of cards flanking a central decorative graphic at x≈3.5-6.5)
+  // ... ~24 small decorative shape elements (colored rects/circles composing the central graphic) — cosmetic, copy as a block or omit and rebuild a simpler center visual
+]
+```
+Each card's `text` concatenates a bold "ADD TITLE" placeholder heading with its body copy in one run (the extractor's multi-run concatenation limitation, noted below) — split it back into a heading + a separate body line when you replace the placeholder copy. This is the 5-card variant; other slides in `slide-58`..`slide-67` have 3 or 4 cards for smaller grids.
 
 **`componentId` vs `elements` — these are alternatives, not both required:**
 - To reuse a master-deck slide **verbatim** (no text changes), look up its `componentId` entry in the library via `file_search` and copy its `elements` array directly into the slide spec as-is.
