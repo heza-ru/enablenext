@@ -15,6 +15,15 @@
 // floating chrome appended to document.body with position:fixed, positioned
 // off getBoundingClientRect() the same way canvas-context-menu.js/
 // canvas-toolbars.js already do for their own floating chrome.
+//
+// Task 12 adds a SEPARATE "+ Add slide" trigger + popover to this same file
+// (rather than a new file) because it reuses so much of the above machinery
+// (fetchLibrary/CURATED_VARIANTS/buildThumbnail, the single global popoverEl,
+// the mount/unmount-driven trigger lifecycle) — see insertSlideAfter(),
+// openInsert(), and the second trigger button in onMount() below. It is a
+// distinct action from Task 11's swap (INSERTS a new slide rather than
+// replacing the current one), so it gets its own button/popover, but shares
+// the underlying popover machinery so only one of the two can be open at once.
 (function () {
   // --- Variant/componentId swap (verbatim port) ---------------------------
   var libraryCache = null;
@@ -64,8 +73,32 @@
     });
   }
 
+  // Task 12 ("+ Add slide"): inserts a brand-new slide right after
+  // `afterIndex`, deep-cloning the same library entry setSlideComponent()
+  // swaps in-place, but splicing it into window.DECK.slides rather than
+  // overwriting an existing one -- same array-splice discipline as
+  // deck-editor.js's duplicateSlide (window.DECK.slides.splice(index+1, 0,
+  // copy)). Per design: no remount()/deselect() and no activeSlideIndex
+  // change -- the Konva canvas only ever mounts one slide at a time and has
+  // no mechanism of its own to decide "now show a different slide"; that's
+  // the surrounding artifact view's job whenever it next navigates there.
+  // notifyChange() still fires so autosave (Task 9) observes the new slide.
+  function insertSlideAfter(afterIndex, componentId) {
+    return fetchLibrary().then(function (library) {
+      var entry = (library.slides || []).filter(function (s) { return s.componentId === componentId; })[0];
+      if (!entry) throw new Error('CanvasTemplatePicker.insertSlideAfter: unknown componentId "' + componentId + '"');
+      if (window.CanvasHistory) window.CanvasHistory.push();
+      var newSlide = { layout: 'schema', componentId: componentId, elements: JSON.parse(JSON.stringify(entry.elements)) };
+      window.DECK.slides.splice(afterIndex + 1, 0, newSlide);
+      if (window.CanvasEditor) window.CanvasEditor.notifyChange();
+    });
+  }
+
   // --- Thumbnails (verbatim port of buildThumbnail's technique) -----------
-  function buildThumbnail(componentId, elements, slideIndex) {
+  // `onSelect(componentId)` is called on click, then the popover is closed --
+  // shared by both the swap popover (onSelect calls setSlideComponent) and
+  // the Task 12 insert popover (onSelect calls insertSlideAfter).
+  function buildThumbnail(componentId, elements, onSelect) {
     var thumb = document.createElement('button');
     thumb.type = 'button';
     thumb.setAttribute('data-canvas-template-thumb', 'true');
@@ -81,7 +114,7 @@
     thumb.appendChild(inner);
     thumb.addEventListener('click', function (e) {
       e.stopPropagation();
-      setSlideComponent(slideIndex, componentId);
+      onSelect(componentId);
       close();
     });
     return thumb;
@@ -93,6 +126,14 @@
 
   function isOpen() {
     return !!popoverEl;
+  }
+
+  // True only if the currently-open popover (if any) is the one identified by
+  // `attr` -- lets each trigger button's own click-to-toggle-close behavior
+  // ("click again while open closes it") stay scoped to ITS OWN popover
+  // rather than also closing (then immediately reopening) the other picker's.
+  function isOpenWithAttr(attr) {
+    return !!(popoverEl && popoverEl.getAttribute(attr) === 'true');
   }
 
   function close() {
@@ -121,10 +162,15 @@
     popover.style.top = top + 'px';
   }
 
-  function open(anchorEl, slideIndex) {
+  // Shared popover builder: `onSelect(componentId)` runs when a thumbnail is
+  // clicked, `popoverAttr` names the marker attribute so tests/CSS can tell
+  // the swap popover and the Task 12 insert popover apart even though they
+  // share this single global popoverEl (only one open at a time, globally,
+  // covering BOTH pickers -- see file header and open()/openInsert() below).
+  function openPopover(anchorEl, onSelect, popoverAttr) {
     close(); // only one popover open at a time, globally (see file header)
     var popover = document.createElement('div');
-    popover.setAttribute('data-canvas-template-popover', 'true');
+    popover.setAttribute(popoverAttr, 'true');
     popover.style.cssText = [
       'position:fixed',
       'z-index:100000',
@@ -156,7 +202,7 @@
         group.ids.forEach(function (id) {
           var entry = (library.slides || []).filter(function (s) { return s.componentId === id; })[0];
           if (!entry) return; // skip silently if a curated id is somehow missing from the library
-          row.appendChild(buildThumbnail(id, entry.elements, slideIndex));
+          row.appendChild(buildThumbnail(id, entry.elements, onSelect));
         });
         popover.appendChild(groupLabel);
         popover.appendChild(row);
@@ -170,53 +216,102 @@
     document.addEventListener('keydown', escHandler);
   }
 
+  // Public: swap-in-place popover (Task 11).
+  function open(anchorEl, slideIndex) {
+    openPopover(anchorEl, function (componentId) {
+      setSlideComponent(slideIndex, componentId);
+    }, 'data-canvas-template-popover');
+  }
+
+  // Public: insert-new-slide popover (Task 12). Shares openPopover()'s single
+  // global popoverEl with open() above, so opening either one closes the
+  // other -- "only one picker popover open at a time" covers both by
+  // construction rather than a second parallel mechanism.
+  function openInsert(anchorEl, afterIndex) {
+    openPopover(anchorEl, function (componentId) {
+      insertSlideAfter(afterIndex, componentId);
+    }, 'data-canvas-insert-popover');
+  }
+
   // --- Trigger button lifecycle (new chrome -- old deck-editor.js's
   // "Change layout…" button lived inline in a per-slide control bar; there's
   // no such DOM structure here, so this is always-visible chrome tied to
   // CanvasEditor's mount()/unmount() lifecycle instead of per-selected-
   // element like Task 6's context menu). ------------------------------------
   var triggerBtn = null;
+  var insertTriggerBtn = null;
   var triggerMountEl = null;
+  var TRIGGER_STYLE = [
+    'position:fixed',
+    'z-index:100000',
+    'padding:5px 10px',
+    'background:#212121',
+    'border:1px solid #171717',
+    'border-radius:6px',
+    'color:#ececec',
+    'font-size:12px',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'cursor:pointer',
+  ].join(';');
 
   function positionTrigger() {
-    if (!triggerBtn || !triggerMountEl) return;
+    if (!triggerMountEl) return;
     var rect = triggerMountEl.getBoundingClientRect();
     var vw = window.innerWidth || document.documentElement.clientWidth;
-    triggerBtn.style.top = (rect.top + 8) + 'px';
-    triggerBtn.style.right = (vw - rect.right + 8) + 'px';
+    if (triggerBtn) {
+      triggerBtn.style.top = (rect.top + 8) + 'px';
+      triggerBtn.style.right = (vw - rect.right + 8) + 'px';
+    }
+    // Task 12's "+ Add slide" trigger lives in the opposite corner (top-left
+    // of the mount el) from Task 11's "Change layout…" trigger (top-right),
+    // so the two are always visually and functionally distinct chrome, never
+    // stacked on top of one another.
+    if (insertTriggerBtn) {
+      insertTriggerBtn.style.top = (rect.top + 8) + 'px';
+      insertTriggerBtn.style.left = (rect.left + 8) + 'px';
+    }
   }
 
   function onMount(mountEl, slideIndex) {
     onUnmount();
     triggerMountEl = mountEl;
+
     triggerBtn = document.createElement('button');
     triggerBtn.type = 'button';
     triggerBtn.setAttribute('data-canvas-template-trigger', 'true');
     triggerBtn.textContent = 'Change layout…';
-    triggerBtn.style.cssText = [
-      'position:fixed',
-      'z-index:100000',
-      'padding:5px 10px',
-      'background:#212121',
-      'border:1px solid #171717',
-      'border-radius:6px',
-      'color:#ececec',
-      'font-size:12px',
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      'cursor:pointer',
-    ].join(';');
+    triggerBtn.style.cssText = TRIGGER_STYLE;
     triggerBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (isOpen()) { close(); return; }
+      if (isOpenWithAttr('data-canvas-template-popover')) { close(); return; }
       open(triggerBtn, slideIndex);
     });
     document.body.appendChild(triggerBtn);
+
+    // Task 12: separate "+ Add slide" trigger -- inserts a new slide after
+    // whichever slide is currently mounted, rather than swapping it. Same
+    // lifecycle (mount/unmount), same popover technique, distinct button and
+    // popover so "change this slide" and "add a new slide" can never be
+    // confused for one another.
+    insertTriggerBtn = document.createElement('button');
+    insertTriggerBtn.type = 'button';
+    insertTriggerBtn.setAttribute('data-canvas-insert-trigger', 'true');
+    insertTriggerBtn.textContent = '+ Add slide';
+    insertTriggerBtn.style.cssText = TRIGGER_STYLE;
+    insertTriggerBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (isOpenWithAttr('data-canvas-insert-popover')) { close(); return; }
+      openInsert(insertTriggerBtn, window.CanvasEditor.getActiveSlideIndex());
+    });
+    document.body.appendChild(insertTriggerBtn);
+
     positionTrigger();
   }
 
   function onUnmount() {
     close();
     if (triggerBtn) { triggerBtn.remove(); triggerBtn = null; }
+    if (insertTriggerBtn) { insertTriggerBtn.remove(); insertTriggerBtn = null; }
     triggerMountEl = null;
   }
 
@@ -225,6 +320,11 @@
     close: close,
     isOpen: isOpen,
     setSlideComponent: setSlideComponent,
+    // Task 12: insert-new-slide-from-template picker. Shares this module's
+    // fetchLibrary()/CURATED_VARIANTS/buildThumbnail machinery (see comments
+    // above) rather than duplicating a second fetch+cache elsewhere.
+    openInsert: openInsert,
+    insertSlideAfter: insertSlideAfter,
     // Called by canvas-editor.js's mount()/unmount() -- same guarded
     // "if (window.CanvasTemplatePicker)" wiring style as CanvasToolbars/
     // CanvasHistory's cross-module hooks elsewhere in this codebase.

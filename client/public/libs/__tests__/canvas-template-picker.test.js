@@ -248,4 +248,215 @@ describe('CanvasTemplatePicker popover thumbnails (real master-deck-library.json
     await Promise.resolve();
     expect(window.DECK.slides[0].componentId).toBe('slide-97');
   });
+
+  it('renders the "+ Add slide" insert popover thumbnails too (curated ids), from the same real library', async () => {
+    document.querySelector('[data-canvas-insert-trigger]').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const popover = document.querySelector('[data-canvas-insert-popover]');
+    expect(popover).not.toBeNull();
+    const thumbs = popover.querySelectorAll('[data-canvas-template-thumb]');
+    expect(thumbs.length).toBe(curatedIds.length);
+  });
+
+  it('clicking an insert-popover thumbnail inserts a new slide (does not swap the current one) and closes the popover', async () => {
+    document.querySelector('[data-canvas-insert-trigger]').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const popover = document.querySelector('[data-canvas-insert-popover]');
+    const thumb = Array.from(popover.querySelectorAll('[data-canvas-template-thumb]'))
+      .find((t) => t.dataset.componentId === 'slide-97');
+    expect(thumb).toBeTruthy();
+    thumb.click();
+
+    expect(document.querySelector('[data-canvas-insert-popover]')).toBeNull();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(window.DECK.slides.length).toBe(2);
+    expect(window.DECK.slides[1].componentId).toBe('slide-97');
+    expect(window.DECK.slides[0].elements[0].text).toBe('S1'); // current slide untouched
+  });
+});
+
+describe('CanvasTemplatePicker.insertSlideAfter (Task 12)', () => {
+  let mount;
+  beforeEach(() => {
+    window.CanvasTemplatePicker._resetLibraryCache();
+    if (window.CanvasHistory && window.CanvasHistory._resetForTests) window.CanvasHistory._resetForTests();
+    mount = makeMountEl();
+    window.DECK = {
+      title: 'T',
+      slides: [
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Current' }] },
+        { layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Other slide' }] },
+      ],
+    };
+    mockOneEntryLibrary();
+  });
+
+  afterEach(() => {
+    window.CanvasTemplatePicker.close();
+    if (window.CanvasEditor.isMounted()) window.CanvasEditor.unmount();
+    mount.remove();
+    delete window.DECK;
+    delete global.fetch;
+  });
+
+  it('adds exactly one new slide at currentIndex + 1 with the componentId\'s elements', async () => {
+    window.CanvasEditor.mount(mount, 0);
+    const before = window.DECK.slides.length;
+    await window.CanvasTemplatePicker.insertSlideAfter(0, 'slide-97');
+    expect(window.DECK.slides.length).toBe(before + 1);
+    expect(window.DECK.slides[1].componentId).toBe('slide-97');
+    expect(window.DECK.slides[1].layout).toBe('schema');
+    expect(window.DECK.slides[1].elements[0].text).toBe('Thank you!');
+  });
+
+  it('does not mutate the current slide (reference or content, byte-identical before/after)', async () => {
+    window.CanvasEditor.mount(mount, 0);
+    const currentBefore = window.DECK.slides[0];
+    const elementsBefore = currentBefore.elements;
+    const snapshotBefore = JSON.stringify(currentBefore);
+
+    await window.CanvasTemplatePicker.insertSlideAfter(0, 'slide-97');
+
+    expect(window.DECK.slides[0]).toBe(currentBefore);
+    expect(window.DECK.slides[0].elements).toBe(elementsBefore);
+    expect(JSON.stringify(window.DECK.slides[0])).toBe(snapshotBefore);
+  });
+
+  it('inserts after an arbitrary index, not just 0', async () => {
+    window.CanvasEditor.mount(mount, 1);
+    await window.CanvasTemplatePicker.insertSlideAfter(1, 'slide-97');
+    expect(window.DECK.slides.length).toBe(3);
+    expect(window.DECK.slides[2].componentId).toBe('slide-97');
+    expect(window.DECK.slides[0].elements[0].text).toBe('Current');
+    expect(window.DECK.slides[1].elements[0].text).toBe('Other slide');
+  });
+
+  it('rejects with a clear error for an unknown componentId, without mutating slides', async () => {
+    const before = window.DECK.slides.length;
+    await expect(window.CanvasTemplatePicker.insertSlideAfter(0, 'slide-9999')).rejects.toThrow(/unknown componentId/);
+    expect(window.DECK.slides.length).toBe(before);
+  });
+
+  it('pushes to CanvasHistory before mutating, then notifies after, and never remounts/deselects (no auto-navigation)', async () => {
+    window.CanvasEditor.mount(mount, 0);
+    const pushSpy = jest.spyOn(window.CanvasHistory, 'push');
+    const remountSpy = jest.spyOn(window.CanvasEditor, 'remount');
+    const deselectSpy = jest.spyOn(window.CanvasEditor, 'deselect');
+    const notifySpy = jest.spyOn(window.CanvasEditor, 'notifyChange');
+
+    await window.CanvasTemplatePicker.insertSlideAfter(0, 'slide-97');
+
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy.mock.invocationCallOrder[0]).toBeLessThan(notifySpy.mock.invocationCallOrder[0]);
+    // No auto-navigation: the currently-mounted slide's rendering must not be
+    // disturbed by inserting a slide elsewhere in the array.
+    expect(remountSpy).not.toHaveBeenCalled();
+    expect(deselectSpy).not.toHaveBeenCalled();
+    // activeSlideIndex itself is untouched -- still pointed at slide 0.
+    expect(window.CanvasEditor.getActiveSlideIndex()).toBe(0);
+
+    pushSpy.mockRestore();
+    remountSpy.mockRestore();
+    deselectSpy.mockRestore();
+    notifySpy.mockRestore();
+  });
+
+  it('caches the fetched library across calls (fetch only called once), sharing Task 11\'s cache', async () => {
+    await window.CanvasTemplatePicker.insertSlideAfter(0, 'slide-97');
+    await window.CanvasTemplatePicker.insertSlideAfter(0, 'slide-97');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CanvasTemplatePicker "+ Add slide" trigger/popover lifecycle (Task 12)', () => {
+  let mount;
+  beforeEach(() => {
+    window.CanvasTemplatePicker._resetLibraryCache();
+    mount = makeMountEl();
+    window.DECK = { title: 'T', slides: [{ layout: 'schema', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'S1' }] }] };
+    mockOneEntryLibrary();
+  });
+
+  afterEach(() => {
+    window.CanvasTemplatePicker.close();
+    if (window.CanvasEditor.isMounted()) window.CanvasEditor.unmount();
+    mount.remove();
+    delete window.DECK;
+    delete global.fetch;
+  });
+
+  function swapTrigger() {
+    return document.querySelector('[data-canvas-template-trigger]');
+  }
+  function insertTrigger() {
+    return document.querySelector('[data-canvas-insert-trigger]');
+  }
+  function swapPopover() {
+    return document.querySelector('[data-canvas-template-popover]');
+  }
+  function insertPopover() {
+    return document.querySelector('[data-canvas-insert-popover]');
+  }
+
+  it('mounting creates BOTH the swap trigger and the insert trigger as separate buttons; unmounting removes both', () => {
+    expect(swapTrigger()).toBeNull();
+    expect(insertTrigger()).toBeNull();
+    window.CanvasEditor.mount(mount, 0);
+    expect(swapTrigger()).not.toBeNull();
+    expect(insertTrigger()).not.toBeNull();
+    expect(swapTrigger()).not.toBe(insertTrigger());
+    expect(insertTrigger().textContent).toBe('+ Add slide');
+    window.CanvasEditor.unmount();
+    expect(swapTrigger()).toBeNull();
+    expect(insertTrigger()).toBeNull();
+  });
+
+  it('clicking the insert trigger opens its own popover; clicking it again closes it', () => {
+    window.CanvasEditor.mount(mount, 0);
+    expect(insertPopover()).toBeNull();
+    insertTrigger().click();
+    expect(insertPopover()).not.toBeNull();
+    insertTrigger().click();
+    expect(insertPopover()).toBeNull();
+  });
+
+  it('opening the insert popover while the swap popover is open closes the swap popover (mutual exclusion)', () => {
+    window.CanvasEditor.mount(mount, 0);
+    swapTrigger().click();
+    expect(swapPopover()).not.toBeNull();
+    insertTrigger().click();
+    expect(swapPopover()).toBeNull();
+    expect(insertPopover()).not.toBeNull();
+  });
+
+  it('opening the swap popover while the insert popover is open closes the insert popover (mutual exclusion)', () => {
+    window.CanvasEditor.mount(mount, 0);
+    insertTrigger().click();
+    expect(insertPopover()).not.toBeNull();
+    swapTrigger().click();
+    expect(insertPopover()).toBeNull();
+    expect(swapPopover()).not.toBeNull();
+  });
+
+  it('unmounting closes an open insert popover too', () => {
+    window.CanvasEditor.mount(mount, 0);
+    insertTrigger().click();
+    expect(insertPopover()).not.toBeNull();
+    window.CanvasEditor.unmount();
+    expect(insertPopover()).toBeNull();
+  });
+
+  it('Escape closes an open insert popover', () => {
+    window.CanvasEditor.mount(mount, 0);
+    insertTrigger().click();
+    expect(insertPopover()).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(insertPopover()).toBeNull();
+  });
 });
