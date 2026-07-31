@@ -164,6 +164,22 @@ describe('CanvasHistory', () => {
     hideSpy.mockRestore();
   });
 
+  it('undo() and redo() each trigger a subscriber registered via CanvasEditor.onChange() (autosave path)', () => {
+    const onChangeSpy = jest.fn();
+    window.CanvasEditor.onChange(onChangeSpy);
+
+    window.CanvasHistory.push();
+    window.DECK.slides[0].elements[0].x = 1;
+    onChangeSpy.mockClear();
+
+    window.CanvasHistory.undo();
+    expect(onChangeSpy).toHaveBeenCalled();
+
+    onChangeSpy.mockClear();
+    window.CanvasHistory.redo();
+    expect(onChangeSpy).toHaveBeenCalled();
+  });
+
   it('remount() rebuilds the Konva stage from the current window.DECK state (stale node refs are gone)', () => {
     const staleStage = window.CanvasEditor.getStage();
     window.DECK.slides[0].elements.push({ type: 'text', x: 3, y: 3, w: 1, h: 1, text: 'D' });

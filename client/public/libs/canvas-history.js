@@ -36,6 +36,14 @@
       window.CanvasEditor.deselect();
     }
     if (window.CanvasToolbars) window.CanvasToolbars.hide();
+    // Every other mutating call site (canvas-editor.js, canvas-toolbars.js,
+    // canvas-image-editor.js, canvas-template-picker.js, canvas-slide-actions.js)
+    // calls notifyChange() immediately after mutating window.DECK, which is
+    // what canvas-autosave.js listens for via CanvasEditor.onChange(...) to
+    // persist edits to the server. Undo/redo must route through the same
+    // path, or a reversion that isn't followed by another edit never gets
+    // saved server-side.
+    if (window.CanvasEditor) window.CanvasEditor.notifyChange();
   }
 
   function undo() {
