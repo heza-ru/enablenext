@@ -1515,4 +1515,57 @@ describe('slide navigation (goTo/next/prev)', () => {
     expect(slides[0].classList.contains('active')).toBe(false);
     expect(slides[1].classList.contains('active')).toBe(true);
   });
+
+  it('exposes getCurrentIndex() reflecting the module-internal currentIndex', () => {
+    const DeckRenderer = loadDeckRenderer();
+    renderThreeSlideDeck(DeckRenderer);
+    expect(DeckRenderer.getCurrentIndex()).toBe(0);
+
+    DeckRenderer.goTo(2);
+    expect(DeckRenderer.getCurrentIndex()).toBe(2);
+
+    DeckRenderer.prev();
+    expect(DeckRenderer.getCurrentIndex()).toBe(1);
+  });
+
+  // Gap 2 from Task 13's brief: while the canvas editor is mounted, arrow
+  // keys belong entirely to element nudging (canvas-editor.js's own
+  // keydown handler) -- the document-level slide-navigation listener must
+  // suppress itself rather than firing next()/prev() at the same time.
+  describe('arrow-key guard against window.CanvasEditor', () => {
+    afterEach(() => {
+      delete window.CanvasEditor;
+    });
+
+    it('does not navigate on ArrowRight/ArrowLeft when window.CanvasEditor.isMounted() is true', () => {
+      const DeckRenderer = loadDeckRenderer();
+      const slides = renderThreeSlideDeck(DeckRenderer);
+      window.CanvasEditor = { isMounted: () => true };
+
+      document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(slides[0].classList.contains('active')).toBe(true);
+      expect(slides[1].classList.contains('active')).toBe(false);
+
+      document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      expect(slides[0].classList.contains('active')).toBe(true);
+    });
+
+    it('still navigates as before when window.CanvasEditor.isMounted() is false', () => {
+      const DeckRenderer = loadDeckRenderer();
+      const slides = renderThreeSlideDeck(DeckRenderer);
+      window.CanvasEditor = { isMounted: () => false };
+
+      document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(slides[1].classList.contains('active')).toBe(true);
+    });
+
+    it('still navigates as before when window.CanvasEditor is undefined (regression)', () => {
+      const DeckRenderer = loadDeckRenderer();
+      const slides = renderThreeSlideDeck(DeckRenderer);
+      delete window.CanvasEditor;
+
+      document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(slides[1].classList.contains('active')).toBe(true);
+    });
+  });
 });

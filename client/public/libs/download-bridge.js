@@ -92,9 +92,17 @@
     });
   });
 
+  // Set when toggling editing ON, so toggling OFF can restore the deck's
+  // view to the slide the user was actually looking at. renderDeck() (called
+  // below on toggle-off to rebuild the DOM-rendered deck from the possibly-
+  // edited window.DECK) always resets to slide 0, so without this the user
+  // would be bounced back to the first slide every time they finish editing.
+  var activeIndexAtToggleOn = 0;
+
   window.addEventListener('message', function (e) {
     if (!e.data || e.data.type !== 'artifact-editor-toggle') return;
-    if (typeof window.DeckEditor === 'undefined') return; // non-deck artifacts don't load deck-editor.js
+    // Non-deck artifacts don't load canvas-editor.js/deck-renderer.js.
+    if (typeof window.CanvasEditor === 'undefined' || typeof window.DeckRenderer === 'undefined') return;
     // Resolve the same mount point the production bootstrap script uses
     // (DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root')),
     // per agents/presentation-creator.skill.md's deck template) rather than
@@ -108,9 +116,17 @@
     // #deck-root genuinely doesn't exist (e.g. a future template change).
     var mountEl = document.getElementById('deck-root') || document.body;
     if (e.data.enabled) {
-      window.DeckEditor.enableEditing(mountEl);
+      activeIndexAtToggleOn = window.DeckRenderer.getCurrentIndex();
+      var slideEls = mountEl.querySelectorAll('.slide');
+      var activeSlideEl = slideEls[activeIndexAtToggleOn];
+      if (activeSlideEl) {
+        activeSlideEl.innerHTML = ''; // clear the DOM-rendered content; Konva takes over this element
+        window.CanvasEditor.mount(activeSlideEl, activeIndexAtToggleOn);
+      }
     } else {
-      window.DeckEditor.disableEditing(mountEl);
+      window.CanvasEditor.unmount();
+      window.DeckRenderer.renderDeck(window.DECK, mountEl); // full rebuild from current (possibly edited) window.DECK
+      window.DeckRenderer.goTo(activeIndexAtToggleOn); // restore the slide the user was viewing -- renderDeck always resets to slide 0
     }
   });
 

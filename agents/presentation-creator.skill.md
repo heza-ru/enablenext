@@ -78,7 +78,14 @@ The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this sha
 <script src="/libs/deck-renderer.js"></script>
 <script src="/libs/deck-schema-renderer.js"></script>
 <script src="/libs/icons.js"></script>
-<script src="/libs/deck-editor.js"></script>
+<script src="/libs/konva.min.js"></script>
+<script src="/libs/canvas-editor.js"></script>
+<script src="/libs/canvas-toolbars.js"></script>
+<script src="/libs/canvas-context-menu.js"></script>
+<script src="/libs/canvas-history.js"></script>
+<script src="/libs/canvas-autosave.js"></script>
+<script src="/libs/canvas-image-editor.js"></script>
+<script src="/libs/canvas-template-picker.js"></script>
 </head>
 <body>
 <div id="deck-root"></div>
@@ -99,7 +106,7 @@ DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'));
 
 **Never write CSS, positioning, or duplicated content in the artifact.** Every slide is one object in `slides[]` with a `layout` field (from the table below) and that layout's content fields — nothing else. `deck-renderer.js` (loaded from `/libs/`, never regenerated) owns every visual decision.
 
-**The structured editor is automatic — no extra authoring needed.** Once `deck-editor.js` is included in the script-tag list above, the artifact panel's "Edit" button host-triggers inline editing (contenteditable text on `schema` layout elements, layout/variant swap, slide reorder/duplicate/delete, and the image picker) with zero additional code in the artifact itself — it is wired up entirely by `deck-editor.js` reading and mutating `window.DECK` in place. Never hand-write editing affordances (edit buttons, drag handles, contenteditable attributes) into the artifact; just include the script tag and the rest follows.
+**The canvas editor is automatic — no extra authoring needed.** Once `konva.min.js` and the `canvas-*.js` scripts are included in the script-tag list above, the artifact panel's "Edit" button host-triggers a full Konva-based canvas editor over the current slide: free drag/resize/rotate of every element via on-canvas handles, multi-select, floating per-element toolbars, a contextual right-click menu, undo/redo, autosave (changes persist continuously — there is no explicit Save action), image upload/crop, and both template pickers (swap the current slide's layout in place, or insert a new slide from a template) — with zero additional code in the artifact itself. It is wired up entirely by `canvas-editor.js` and its companion scripts reading and mutating `window.DECK` in place. Never hand-write editing affordances (edit buttons, drag handles, contenteditable attributes) into the artifact; just include the script tags and the rest follows.
 
 ## Layout Reference
 

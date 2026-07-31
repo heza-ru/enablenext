@@ -175,41 +175,90 @@ describe('download-bridge.js', () => {
     expect(realClickCalled).toBe(true);
   });
 
-  // Regression test (polish round 1, Finding M3): the real production
-  // bootstrap script mounts the deck at #deck-root, not document.body
-  // (agents/presentation-creator.skill.md's deck template calls
+  // Regression test (Task 13): the real production bootstrap script mounts
+  // the deck at #deck-root, not document.body (agents/presentation-creator
+  // .skill.md's deck template calls
   // DeckRenderer.renderDeck(window.DECK, document.getElementById('deck-root'))).
-  // Every structural mutator's renderDeck call does `mountEl.innerHTML = ''`
-  // before rebuilding, so passing document.body itself as the mount would
-  // wipe out document.body's own children -- including the #deck-root div --
-  // on the very first chrome-driven mutation. The bridge must resolve
-  // #deck-root and hand THAT to enableEditing/disableEditing, not document.body.
-  it('relays artifact-editor-toggle to window.DeckEditor.enableEditing/disableEditing using #deck-root as the mount', () => {
+  // The toggle-on path must resolve #deck-root, find the currently-active
+  // .slide element inside it, clear it, and hand it to CanvasEditor.mount.
+  it('mounts CanvasEditor on the active .slide element under #deck-root on toggle-on', () => {
     loadBridge();
     const deckRoot = document.createElement('div');
     deckRoot.id = 'deck-root';
+    const slide0 = document.createElement('section');
+    slide0.className = 'slide';
+    const slide1 = document.createElement('section');
+    slide1.className = 'slide active';
+    slide1.innerHTML = '<p>slide 2 content</p>';
+    const slide2 = document.createElement('section');
+    slide2.className = 'slide';
+    deckRoot.appendChild(slide0);
+    deckRoot.appendChild(slide1);
+    deckRoot.appendChild(slide2);
     document.body.appendChild(deckRoot);
-    const enableEditing = jest.fn();
-    const disableEditing = jest.fn();
-    window.DeckEditor = { enableEditing, disableEditing };
+
+    const mount = jest.fn();
+    const unmount = jest.fn();
+    window.CanvasEditor = { mount, unmount };
+    window.DeckRenderer = { getCurrentIndex: () => 1, renderDeck: jest.fn(), goTo: jest.fn() };
+    window.DECK = { slides: [] };
     try {
       window.dispatchEvent(
         new MessageEvent('message', {
           data: { type: 'artifact-editor-toggle', enabled: true },
         }),
       );
-      expect(enableEditing).toHaveBeenCalledWith(deckRoot);
-      expect(enableEditing).not.toHaveBeenCalledWith(document.body);
+      expect(slide1.innerHTML).toBe('');
+      expect(mount).toHaveBeenCalledWith(slide1, 1);
+    } finally {
+      delete window.CanvasEditor;
+      delete window.DeckRenderer;
+      delete window.DECK;
+      deckRoot.remove();
+    }
+  });
 
+  // Toggle-off must unmount CanvasEditor, fully rebuild the DOM-rendered
+  // deck via DeckRenderer.renderDeck (renderDeck always resets to slide 0),
+  // then goTo() back to the slide the user was on when they toggled editing
+  // on -- in that order, and using the index captured at toggle-on time.
+  it('unmounts, rebuilds via renderDeck, then restores the slide index on toggle-off', () => {
+    loadBridge();
+    const deckRoot = document.createElement('div');
+    deckRoot.id = 'deck-root';
+    const slide2 = document.createElement('section');
+    slide2.className = 'slide active';
+    deckRoot.appendChild(document.createElement('section'));
+    deckRoot.appendChild(document.createElement('section'));
+    deckRoot.appendChild(slide2);
+    document.body.appendChild(deckRoot);
+
+    const calls = [];
+    const mount = jest.fn();
+    const unmount = jest.fn(() => calls.push('unmount'));
+    const renderDeck = jest.fn(() => calls.push('renderDeck'));
+    const goTo = jest.fn((i) => calls.push('goTo:' + i));
+    window.CanvasEditor = { mount, unmount };
+    window.DeckRenderer = { getCurrentIndex: () => 2, renderDeck, goTo };
+    window.DECK = { slides: [] };
+    try {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'artifact-editor-toggle', enabled: true },
+        }),
+      );
       window.dispatchEvent(
         new MessageEvent('message', {
           data: { type: 'artifact-editor-toggle', enabled: false },
         }),
       );
-      expect(disableEditing).toHaveBeenCalledWith(deckRoot);
-      expect(disableEditing).not.toHaveBeenCalledWith(document.body);
+      expect(calls).toEqual(['unmount', 'renderDeck', 'goTo:2']);
+      expect(renderDeck).toHaveBeenCalledWith(window.DECK, deckRoot);
+      expect(goTo).toHaveBeenCalledWith(2);
     } finally {
-      delete window.DeckEditor;
+      delete window.CanvasEditor;
+      delete window.DeckRenderer;
+      delete window.DECK;
       deckRoot.remove();
     }
   });
@@ -219,31 +268,40 @@ describe('download-bridge.js', () => {
   // rather than passing null/undefined to the editor.
   it('falls back to document.body for artifact-editor-toggle when #deck-root does not exist', () => {
     loadBridge();
-    const enableEditing = jest.fn();
-    const disableEditing = jest.fn();
-    window.DeckEditor = { enableEditing, disableEditing };
+    const slide0 = document.createElement('section');
+    slide0.className = 'slide active';
+    document.body.appendChild(slide0);
+    const mount = jest.fn();
+    const unmount = jest.fn();
+    window.CanvasEditor = { mount, unmount };
+    window.DeckRenderer = { getCurrentIndex: () => 0, renderDeck: jest.fn(), goTo: jest.fn() };
+    window.DECK = { slides: [] };
     try {
       window.dispatchEvent(
         new MessageEvent('message', {
           data: { type: 'artifact-editor-toggle', enabled: true },
         }),
       );
-      expect(enableEditing).toHaveBeenCalledWith(document.body);
+      expect(mount).toHaveBeenCalledWith(slide0, 0);
 
       window.dispatchEvent(
         new MessageEvent('message', {
           data: { type: 'artifact-editor-toggle', enabled: false },
         }),
       );
-      expect(disableEditing).toHaveBeenCalledWith(document.body);
+      expect(window.DeckRenderer.renderDeck).toHaveBeenCalledWith(window.DECK, document.body);
     } finally {
-      delete window.DeckEditor;
+      delete window.CanvasEditor;
+      delete window.DeckRenderer;
+      delete window.DECK;
+      slide0.remove();
     }
   });
 
-  it('ignores artifact-editor-toggle when window.DeckEditor is undefined (non-deck artifacts)', () => {
+  it('ignores artifact-editor-toggle when window.CanvasEditor is undefined (non-deck artifacts)', () => {
     loadBridge();
-    delete window.DeckEditor;
+    delete window.CanvasEditor;
+    delete window.DeckRenderer;
     expect(() =>
       window.dispatchEvent(
         new MessageEvent('message', {
@@ -251,5 +309,23 @@ describe('download-bridge.js', () => {
         }),
       ),
     ).not.toThrow();
+  });
+
+  it('ignores artifact-editor-toggle when window.DeckRenderer is undefined', () => {
+    loadBridge();
+    window.CanvasEditor = { mount: jest.fn(), unmount: jest.fn() };
+    delete window.DeckRenderer;
+    try {
+      expect(() =>
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { type: 'artifact-editor-toggle', enabled: true },
+          }),
+        ),
+      ).not.toThrow();
+      expect(window.CanvasEditor.mount).not.toHaveBeenCalled();
+    } finally {
+      delete window.CanvasEditor;
+    }
   });
 });

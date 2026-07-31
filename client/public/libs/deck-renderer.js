@@ -201,6 +201,12 @@
     if (!keyListenerAttached) {
       keyListenerAttached = true;
       document.addEventListener('keydown', function (e) {
+        // While the canvas editor is mounted (editing active), slide
+        // navigation is fully suppressed -- arrow keys belong entirely to
+        // element nudging (canvas-editor.js's own arrow-key handler). The
+        // user exits edit mode to navigate to a different slide; there is no
+        // live navigation-while-editing in this design.
+        if (window.CanvasEditor && window.CanvasEditor.isMounted()) return;
         if (e.key === 'ArrowRight') next();
         else if (e.key === 'ArrowLeft') prev();
       });
@@ -1668,6 +1674,7 @@
     goTo: goTo,
     next: next,
     prev: prev,
+    getCurrentIndex: function () { return currentIndex; },
   };
   window.downloadPptx = downloadPptx;
 })();
