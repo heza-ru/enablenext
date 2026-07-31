@@ -105,7 +105,7 @@
       '.deck{width:min(100vw,177.78vh);height:min(100vh,56.25vw);aspect-ratio:16/9;' +
       'container-type:size;container-name:deck;' +
       'position:relative;overflow:hidden;flex-shrink:0}' +
-      '.slide{position:absolute;inset:0;opacity:0;background:#25223B;' +
+      '.slide{position:absolute;inset:0;opacity:0;background:#36314C;' +
       'content-visibility:auto;contain:layout style paint}' +
       '.slide.active{opacity:1;content-visibility:visible}' +
       // Visible, obvious failure state for a single slide's render() throwing
@@ -223,7 +223,7 @@
       slideEl.style.cssText =
         'display:flex;flex-direction:column;justify-content:flex-end;' +
         'padding:2.5rem 3rem 3rem;' +
-        'background:linear-gradient(150deg,#25223B 0%,#3f3a56 60%,#48425f 100%);';
+        'background:linear-gradient(150deg,#36314C 0%,#3f3a56 60%,#48425f 100%);';
       var eyebrow = document.createElement('p');
       eyebrow.className = 'eyebrow';
       eyebrow.style.cssText = "font-size:.65rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#FF6B18;margin-bottom:.85rem;font-family:'DM Sans',sans-serif;";
@@ -1631,7 +1631,7 @@
     pptx.layout = 'LAYOUT_WIDE'; // matches SW=10/SH=5.625
     (deck.slides || []).forEach(function (spec, i) {
       var pptxSlide = pptx.addSlide();
-      pptxSlide.background = { color: '25223B' };
+      pptxSlide.background = { color: '36314C' };
       // Mirrors renderDeck's per-slide isolation: one slide's exportPptx
       // throwing (same root causes as the render-side failure -- an
       // unregistered layout name, a malformed schema element) must not abort

@@ -1271,10 +1271,10 @@ describe('downloadPptx', () => {
 
     expect(addedSlides.length).toBe(2);
     addedSlides.forEach((slide) => {
-      expect(slide.background).toEqual({ color: '25223B' });
+      expect(slide.background).toEqual({ color: '36314C' });
     });
     // Background must be set BEFORE exportPptx runs, so the layout sees it too.
-    expect(backgroundAtExportTime).toEqual([{ color: '25223B' }, { color: '25223B' }]);
+    expect(backgroundAtExportTime).toEqual([{ color: '36314C' }, { color: '36314C' }]);
   });
 
   // Regression test (same production bug as renderDeck's isolation tests
