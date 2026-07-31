@@ -662,6 +662,93 @@ describe('DownloadArtifact — autosave queue concurrency (Task 9)', () => {
     expect(mutate.mock.calls[2][0].original).toBe(retryUpdated);
     expect(mutate.mock.calls[2][0].updated).toContain('"title":"Third"');
   });
+
+  /**
+   * Fix Round 1 regression test.
+   *
+   * useEditArtifact's own hook-level `onSuccess` (data-provider/Messages/
+   * mutations.ts) writes the server-confirmed `content` into the React Query
+   * cache on EVERY successful save — not just when switching artifacts. In
+   * the real app that cache write flows back into this component as a new
+   * `artifact.content` prop (hence a new `initialContent` passed into
+   * useDeckAutosaveQueue) via a re-render, entirely independent of the
+   * call-level `onSuccess` the queue itself uses to chain saves.
+   *
+   * The bug: an earlier version of the queue's reset effect was keyed on
+   * that `initialContent` value, so it fired after every save — not only on
+   * a genuine artifact switch — and clobbered `lastKnownContent.current`
+   * back down to a value the queue had already moved past. This test
+   * reproduces that exact interleaving: save1 resolves, a coalesced save2
+   * dispatches using the correct chained `original`, THEN a rerender
+   * delivers the hook-level cache echo (artifact.content = save1's
+   * `updated`) while save2 is still in flight, and finally a third edit
+   * coalesces in behind save2. The third save's `original` must be save2's
+   * `updated` — never the echoed, now-stale `initialContent`.
+   */
+  it("a rerender carrying the hook-level cache-write echo (artifact.content updating after every save) does not clobber lastKnownContent for a save already in flight", () => {
+    const mutate = jest.fn();
+    (useEditArtifact as jest.Mock).mockReturnValue({ mutate, isLoading: false });
+    mockCurrentCode = FENCE_BODY;
+
+    const { getByRole, rerender } = render(
+      <DownloadArtifact
+        artifact={{ content: FENCE_BODY, messageId: 'msg-1', index: 3 } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+    fireEvent.click(getByRole('button', { name: /^com_ui_edit$/i }));
+
+    // Save1: v0 (FENCE_BODY) -> v1.
+    postDeckUpdate({ title: 'First' });
+    expect(mutate).toHaveBeenCalledTimes(1);
+    const save1 = mutate.mock.calls[0][0];
+    expect(save1.original).toBe(FENCE_BODY);
+
+    // A second edit coalesces while save1 is still in flight.
+    postDeckUpdate({ title: 'Second' });
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    // Save1 resolves. The call-level onSuccess fires synchronously: it
+    // drains the coalesced Second edit, which reads lastKnownContent
+    // (still correctly = save1.updated = v1 at this instant) and dispatches
+    // save2 (v1 -> v2).
+    act(() => {
+      mutate.mock.calls[0][1].onSuccess();
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
+    const save2 = mutate.mock.calls[1][0];
+    expect(save2.original).toBe(save1.updated); // v1, correctly chained.
+
+    // Now simulate the hook-level onSuccess's cache write reaching this
+    // component as a fresh `artifact.content` prop via a re-render — this
+    // is the SAME save1 success being echoed back through the query cache,
+    // arriving after (and independently of) the call-level onSuccess above,
+    // while save2 (v1 -> v2) is legitimately still in flight.
+    rerender(
+      <DownloadArtifact
+        artifact={{ content: save1.updated, messageId: 'msg-1', index: 3 } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+
+    // A third edit arrives and coalesces in behind the still-in-flight
+    // save2.
+    postDeckUpdate({ title: 'Third' });
+    expect(mutate).toHaveBeenCalledTimes(2);
+
+    // Save2 resolves, draining the coalesced Third edit.
+    act(() => {
+      mutate.mock.calls[1][1].onSuccess();
+    });
+    expect(mutate).toHaveBeenCalledTimes(3);
+    const save3 = mutate.mock.calls[2][0];
+
+    // The bug under test: save3.original must be save2.updated (v2) — the
+    // rerender's stale-relative-to-save2 artifact.content echo (v1) must
+    // NOT have clobbered lastKnownContent back down to v1 in between.
+    expect(save3.original).toBe(save2.updated);
+    expect(save3.original).not.toBe(save1.updated);
+  });
 });
 
 // Renders DownloadArtifact with content guaranteed to trigger both DOCX and

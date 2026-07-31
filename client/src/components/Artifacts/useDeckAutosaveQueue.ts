@@ -52,17 +52,44 @@ export function useDeckAutosaveQueue({
   // the flaw ArtifactCodeEditor.tsx's debounced-mutation pattern has (it uses
   // artifact.content, which only updates after the query cache round-trips).
   const lastKnownContent = useRef(initialContent);
+
+  // Latest `initialContent` mirrored into a ref DURING RENDER (not inside an
+  // effect) so the identity-reset effect below can read an up-to-date value
+  // without taking `initialContent` in its own dependency array. Reading a
+  // ref during render to store "the latest prop value" (never to derive
+  // rendered output) is a standard React pattern and is safe here because
+  // this assignment always runs before the effect below fires for the same
+  // commit.
+  const initialContentRef = useRef(initialContent);
+  initialContentRef.current = initialContent;
+
   // Reset the whole queue's baseline whenever a genuinely new artifact
-  // session starts (e.g. switching artifact versions), mirroring the
-  // bridgeReadyRef reset pattern already used elsewhere in this file family.
-  const isFirstContentRender = useRef(true);
+  // SESSION starts (e.g. switching artifact versions) — keyed on the stable
+  // identity pair (messageId, artifactIndex), mirroring the bridgeReadyRef
+  // reset pattern already used elsewhere in this file family, which resets
+  // on `artifact.id` changing, NOT on `artifact.content` changing.
+  //
+  // Deliberately NOT keyed on `initialContent`/`artifact.content`: the
+  // call-level `onSuccess` in dispatchSave is not the only place that writes
+  // this artifact's content after a successful save — useEditArtifact's own
+  // hook-level `onSuccess` (data-provider/Messages/mutations.ts) writes the
+  // server-confirmed content into the React Query cache on EVERY successful
+  // save, which flows back here as a new `initialContent` value on the next
+  // render. If this effect were keyed on that value, it would fire after
+  // every save (not just on a genuine artifact switch) and clobber
+  // `lastKnownContent.current` back down to a value the queue has already
+  // moved past — reintroducing the exact stale-`original` race this queue
+  // exists to prevent for any save that coalesced while the previous one was
+  // in flight.
+  const isFirstIdentityRender = useRef(true);
   useEffect(() => {
-    if (isFirstContentRender.current) {
-      isFirstContentRender.current = false;
+    if (isFirstIdentityRender.current) {
+      isFirstIdentityRender.current = false;
       return;
     }
-    lastKnownContent.current = initialContent;
-  }, [initialContent]);
+    lastKnownContent.current = initialContentRef.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageId, artifactIndex]);
 
   const inFlightRef = useRef(false);
   const pendingDeckRef = useRef<object | null>(null);
