@@ -19,6 +19,7 @@
   var NUDGE_STEP = 0.05; // inches
   var NUDGE_STEP_SHIFT = 0.2; // inches
   var DUPLICATE_OFFSET = 0.2; // inches
+  var nonSchemaNoticeEl = null; // DOM overlay shown for non-schema (hand-coded) layouts
 
   function isMounted() {
     return stage !== null;
@@ -502,13 +503,60 @@
     stage = new window.Konva.Stage({ container: mountEl, width: SW * scale, height: SH * scale });
     layer = new window.Konva.Layer();
     stage.add(layer);
+    var slide = window.DECK.slides[activeSlideIndex];
+
+    // Only the 'schema' layout stores its content as elements[] (the shape
+    // this whole file knows how to render). The 19 other hand-coded
+    // deck-renderer.js layouts (stat/two_col/timeline/etc.) keep their
+    // content in layout-specific fields (stats/items/...), so there is
+    // nothing here to draw on the Konva stage — rendering the normal path
+    // for them silently produces a blank canvas (just the empty
+    // Transformer, zero content nodes). Show an explicit, non-alarming
+    // notice instead, and skip the selection/drag/keyboard machinery since
+    // there is nothing to select or drag. The stage/layer above are still
+    // created so isMounted() stays true and unmount()/remount() and the
+    // slide-action chrome (Change layout…/reorder/duplicate/delete) keep
+    // working normally — "Change layout…" is in fact how the user escapes
+    // this state.
+    if (slide && slide.layout && slide.layout !== 'schema') {
+      layer.draw();
+      nonSchemaNoticeEl = document.createElement('div');
+      nonSchemaNoticeEl.setAttribute('data-canvas-non-schema-notice', 'true');
+      nonSchemaNoticeEl.style.cssText = [
+        'position:absolute',
+        'inset:0',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'text-align:center',
+        'padding:32px',
+        'box-sizing:border-box',
+        'background:#212121',
+        'border:1px solid #171717',
+        'color:#ececec',
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+        'font-size:14px',
+        'line-height:1.5',
+        'pointer-events:none',
+        'z-index:1',
+      ].join(';');
+      nonSchemaNoticeEl.textContent = 'This slide uses the \'' + slide.layout + '\' layout, which isn\'t canvas-editable yet. Use “Change layout…” to convert it to a componentId-based layout you can edit directly.';
+      mountEl.appendChild(nonSchemaNoticeEl);
+
+      // Always-visible "Change layout…" / slide-action chrome must still
+      // work on a non-schema slide (it's the escape hatch), but the
+      // selection/drag/keyboard machinery below is intentionally skipped.
+      if (window.CanvasTemplatePicker) window.CanvasTemplatePicker._onMount(mountEl, activeSlideIndex);
+      if (window.CanvasSlideActions) window.CanvasSlideActions._onMount(mountEl, activeSlideIndex);
+      return;
+    }
+
     transformer = new window.Konva.Transformer({
       rotateEnabled: true,
       // Konva's own default handles (corners + edges + rotation) — not
       // hand-rolled.
     });
     layer.add(transformer);
-    var slide = window.DECK.slides[activeSlideIndex];
     var elements = (slide && slide.elements) || [];
     sortByZIndex(elements).forEach(function (item) {
       createAndAddNode(item.el, item.origIndex);
@@ -537,6 +585,10 @@
 
   function unmount() {
     if (stage) { stage.destroy(); stage = null; layer = null; transformer = null; }
+    if (nonSchemaNoticeEl) {
+      if (nonSchemaNoticeEl.parentNode) nonSchemaNoticeEl.parentNode.removeChild(nonSchemaNoticeEl);
+      nonSchemaNoticeEl = null;
+    }
     selectedIndices = [];
     if (window.CanvasToolbars) window.CanvasToolbars.hide();
     if (window.CanvasTemplatePicker) window.CanvasTemplatePicker._onUnmount();

@@ -87,6 +87,58 @@ describe('CanvasEditor.mount', () => {
   });
 });
 
+describe('CanvasEditor.mount on a non-schema (hand-coded) layout slide', () => {
+  let mount;
+  beforeEach(() => {
+    mount = document.createElement('div');
+    Object.defineProperty(mount, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      configurable: true,
+    });
+    document.body.appendChild(mount);
+    window.DECK = {
+      title: 'T',
+      slides: [
+        { layout: 'stat', stats: [{ value: '42%', label: 'Growth' }] },
+        { layout: 'schema', elements: [{ type: 'text', x: 1, y: 1, w: 3, h: 1, text: 'Hello' }] },
+      ],
+    };
+  });
+  afterEach(() => {
+    window.CanvasEditor.unmount();
+    mount.remove();
+    delete window.DECK;
+  });
+
+  it('does not throw, stays mounted, and shows a fallback message instead of a blank canvas', () => {
+    expect(() => window.CanvasEditor.mount(mount, 0)).not.toThrow();
+    expect(window.CanvasEditor.isMounted()).toBe(true);
+    const notice = mount.querySelector('[data-canvas-non-schema-notice]');
+    expect(notice).not.toBeNull();
+    expect(notice.textContent).toMatch(/stat/);
+    expect(notice.textContent).toMatch(/Change layout/);
+    // No content nodes were rendered (only the stage/layer scaffolding).
+    const stage = window.CanvasEditor.getStage();
+    const layer = stage.getLayers()[0];
+    expect(layer.getChildren().length).toBe(0);
+  });
+
+  it('renders normally after switching (remounting) to a schema-layout slide', () => {
+    window.CanvasEditor.mount(mount, 0);
+    expect(mount.querySelector('[data-canvas-non-schema-notice]')).not.toBeNull();
+
+    // Simulate "Change layout…" swapping the slide and CanvasSlideActions
+    // (or the template picker) re-mounting the same mountEl on slide 1.
+    window.CanvasEditor.mount(mount, 1);
+    expect(window.CanvasEditor.isMounted()).toBe(true);
+    expect(mount.querySelector('[data-canvas-non-schema-notice]')).toBeNull();
+    const stage = window.CanvasEditor.getStage();
+    const layer = stage.getLayers()[0];
+    const elementNodes = layer.getChildren().filter((n) => n.getClassName() !== 'Transformer');
+    expect(elementNodes.length).toBe(1);
+  });
+});
+
 describe('CanvasEditor coordinate conversion (pxToInches / inchesToPx)', () => {
   // scale = 80 corresponds to an 800px-wide mount over the 10in canvas
   // width (matches this suite's mocked getBoundingClientRect elsewhere).
