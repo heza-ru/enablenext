@@ -451,6 +451,55 @@ const DownloadArtifact = ({
     return () => window.removeEventListener('message', handle);
   }, [enqueueDeckSave]);
 
+  // canvas-image-editor.js (Task 10) posts artifact-image-upload-request from
+  // inside the deck iframe when its Upload tab gets a file — the iframe is
+  // genuinely cross-origin (Sandpack) in production and has no access to
+  // this app's auth token, so it cannot call
+  // api/server/routes/files/deckAsset.js itself. This relay does that on its
+  // behalf, using the same iframeWindow-resolution pattern as toggleEditing
+  // above, and posts the resulting URL (or an error) back to the same iframe.
+  useEffect(() => {
+    const handle = async (e: MessageEvent) => {
+      if (e.data?.type !== 'artifact-image-upload-request') return;
+      const { requestId, dataUrl, filename } = e.data as {
+        requestId: string;
+        dataUrl: string;
+        filename?: string;
+      };
+      const client = previewRef?.current?.getClient();
+      const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)
+        ?.iframe?.contentWindow;
+      try {
+        const blob = await (await fetch(dataUrl)).blob();
+        const formData = new FormData();
+        formData.append('file', blob, filename || 'upload.png');
+        const res = await fetch(`${apiBaseUrl()}/api/files/images/deck-asset`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { message?: string }).message || 'Upload failed');
+        }
+        const { url } = (await res.json()) as { url: string };
+        iframeWindow?.postMessage({ type: 'artifact-image-upload-result', requestId, url }, '*');
+      } catch (err) {
+        console.error(`${LOG} artifact-image-upload-request failed`, err);
+        iframeWindow?.postMessage(
+          {
+            type: 'artifact-image-upload-result',
+            requestId,
+            error: err instanceof Error ? err.message : 'Upload failed',
+          },
+          '*',
+        );
+      }
+    };
+    window.addEventListener('message', handle);
+    return () => window.removeEventListener('message', handle);
+  }, [previewRef, token]);
+
   // Reset bridgeReadyRef when a genuinely different artifact is shown.
   //
   // DownloadArtifact does NOT always remount when the artifact changes —

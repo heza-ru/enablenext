@@ -69,6 +69,61 @@ describe('DeckSchemaRenderer.renderSchemaElements', () => {
     expect(img.getAttribute('src')).toBe('/deck-assets/slide-42-image-1.png');
   });
 
+  // Task 10: uploadedImageUrl (set by canvas-image-editor.js's Upload tab) is
+  // a complete URL used as-is with no brandImagePath/deckAssetPath
+  // resolution, and takes precedence over brandImage/deckAsset if both
+  // somehow end up set on the same element.
+  it('renders an image element via uploadedImageUrl as-is, with no path resolution', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, uploadedImageUrl: 'https://files.example.com/abc-123.png' }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img.getAttribute('src')).toBe('https://files.example.com/abc-123.png');
+  });
+
+  it('prefers uploadedImageUrl over brandImage/deckAsset when multiple are set', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, uploadedImageUrl: 'https://files.example.com/abc-123.png', brandImage: 'logo-dark' }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img.getAttribute('src')).toBe('https://files.example.com/abc-123.png');
+  });
+
+  // focusX/focusY (Task 10's crop/focus-point control): default object-fit
+  // stays 'contain' (unchanged) when no focus point is set; setting either
+  // switches to 'cover' (required for object-position to have any visible
+  // effect) and writes the CSS object-position.
+  it('does not set object-position when focusX/focusY are absent (no regression)', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img.style.objectFit).toBe('contain');
+    expect(img.style.objectPosition).toBe('');
+  });
+
+  it('applies focusX/focusY as CSS object-position with object-fit: cover', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark', focusX: 0.2, focusY: 0.8 }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img.style.objectFit).toBe('cover');
+    expect(img.style.objectPosition).toBe('20% 80%');
+  });
+
+  it('defaults the unset half of focusX/focusY to 50% (centered) when only one is provided', () => {
+    window.DeckSchemaRenderer.renderSchemaElements(
+      [{ type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark', focusX: 0.1 }],
+      container,
+    );
+    const img = container.querySelector('.schema-image');
+    expect(img.style.objectPosition).toBe('10% 50%');
+  });
+
   // Regression test (production bug found in a real generated deck: the LLM
   // authored image elements as { type:'image', src:'/brand/KEY.png', ... },
   // a more "natural" HTML-like convention it guessed instead of our actual
@@ -280,6 +335,23 @@ describe('DeckSchemaRenderer.exportSchemaElements', () => {
       { type: 'image', x: 0, y: 0, w: 2, h: 2, brandImage: 'logo-dark' },
     ]);
     expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/brand/logo-dark.svg', x: 0, y: 0, w: 2, h: 2 }));
+  });
+
+  // Task 10: uploadedImageUrl exports using the URL directly, and export
+  // does NOT apply focusX/focusY (pptxgenjs's sizing:{type:'crop'} needs the
+  // source image's own natural pixel/inch dimensions to compute a crop
+  // offset from a 0-1 fraction, which isn't known synchronously at export
+  // time — see the code comment in exportSchemaElements). This is a
+  // documented capability gap, not an oversight: the exported image is
+  // simply the full, uncropped source at the element's box.
+  it('exports uploadedImageUrl as the addImage path as-is, ignoring focusX/focusY', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'image', x: 0, y: 0, w: 2, h: 2, uploadedImageUrl: 'https://files.example.com/abc-123.png', focusX: 0.2, focusY: 0.8 },
+    ]);
+    expect(slide.addImage).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'https://files.example.com/abc-123.png', x: 0, y: 0, w: 2, h: 2 }),
+    );
   });
 
   // Export-side counterpart of the render-path `src` recovery regression

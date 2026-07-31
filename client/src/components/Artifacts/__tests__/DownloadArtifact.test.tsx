@@ -488,6 +488,134 @@ describe('DownloadArtifact — Presentation editor toggle', () => {
 });
 
 /**
+ * Task 10: canvas-image-editor.js (inside the cross-origin deck iframe)
+ * cannot call api/server/routes/files/deckAsset.js itself — it has no access
+ * to this app's auth token — so it posts 'artifact-image-upload-request' to
+ * window.parent, and this component relays the upload using its own token,
+ * then posts the result back to the same iframe.
+ */
+describe('DownloadArtifact — image upload relay (Task 10)', () => {
+  afterEach(() => {
+    delete (global as any).fetch;
+  });
+
+  function renderWithPostMessage() {
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: {
+        getClient: () => ({ iframe: { contentWindow: { postMessage } } }),
+      },
+    } as never;
+    render(<DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />);
+    return postMessage;
+  }
+
+  it('relays an artifact-image-upload-request to the deck-asset endpoint with FormData and the auth token, then posts the URL back', async () => {
+    const postMessage = renderWithPostMessage();
+    const fetchMock = jest
+      .fn()
+      // First call: fetch(dataUrl).blob() to reconstruct the file
+      .mockResolvedValueOnce({ blob: async () => new Blob(['abc'], { type: 'image/png' }) })
+      // Second call: the actual upload POST
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ url: 'https://files.example.com/uploaded-123.png' }),
+      });
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-image-upload-request',
+            requestId: 'req-1',
+            dataUrl: 'data:image/png;base64,AAAA',
+            filename: 'photo.png',
+            mimeType: 'image/png',
+          },
+        }),
+      );
+      // Flush the fetch/blob/json microtask chain.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const uploadCall = fetchMock.mock.calls[1];
+    expect(uploadCall[0]).toMatch(/\/api\/files\/images\/deck-asset$/);
+    expect(uploadCall[1]).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Authorization: 'Bearer test-token' },
+        body: expect.any(FormData),
+      }),
+    );
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: 'artifact-image-upload-result',
+        requestId: 'req-1',
+        url: 'https://files.example.com/uploaded-123.png',
+      },
+      '*',
+    );
+  });
+
+  it('posts an error result back to the iframe if the upload fails, without throwing', async () => {
+    const postMessage = renderWithPostMessage();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({ blob: async () => new Blob(['abc'], { type: 'image/png' }) })
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ message: 'Unsupported file type' }) });
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-image-upload-request',
+            requestId: 'req-2',
+            dataUrl: 'data:image/png;base64,AAAA',
+            filename: 'photo.png',
+            mimeType: 'image/png',
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: 'artifact-image-upload-result',
+        requestId: 'req-2',
+        error: 'Unsupported file type',
+      },
+      '*',
+    );
+  });
+
+  it('ignores messages of any other type', async () => {
+    const postMessage = renderWithPostMessage();
+    const fetchMock = jest.fn();
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'some-other-message' } }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'artifact-image-upload-result' }),
+      '*',
+    );
+  });
+});
+
+/**
  * Task 9's core correctness requirement: replaceArtifactContent splices
  * `updated` into the message's stored text by locating `original` as an exact
  * substring. Two saves in flight concurrently with out-of-order resolution

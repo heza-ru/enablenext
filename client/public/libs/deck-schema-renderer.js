@@ -31,6 +31,15 @@
   // brandImagePath from its own PNG-only list), since the LLM's guessed
   // extension in `src` isn't necessarily correct.
   function resolveImageRef(el) {
+    // uploadedImageUrl (Task 10's Upload tab) is a COMPLETE URL returned by
+    // the deck-asset upload endpoint's storage strategy (local/S3/Azure/etc,
+    // the same mechanism avatar.js uses) — it does NOT live under
+    // client/public/deck-assets/ and needs no brandImagePath/deckAssetPath
+    // resolution, unlike brandImage/deckAsset. Checked first since it's the
+    // most specific/complete reference an element can carry.
+    if (el.uploadedImageUrl) {
+      return { uploadedImageUrl: el.uploadedImageUrl };
+    }
     if (el.brandImage || el.deckAsset) {
       return { brandImage: el.brandImage, deckAsset: el.deckAsset };
     }
@@ -106,7 +115,7 @@
         containerEl.appendChild(span);
       } else if (el.type === 'image') {
         var imageRef = resolveImageRef(el);
-        if (!imageRef.brandImage && !imageRef.deckAsset) {
+        if (!imageRef.uploadedImageUrl && !imageRef.brandImage && !imageRef.deckAsset) {
           // Degrade gracefully instead of throwing: a missing image reference
           // is a common, recoverable authoring slip (especially for
           // componentId-copied library elements) and shouldn't cost the rest
@@ -147,8 +156,23 @@
         img.style.top = (el.y / SH) * 100 + '%';
         img.style.width = (el.w / SW) * 100 + '%';
         img.style.height = (el.h / SH) * 100 + '%';
-        img.style.objectFit = 'contain';
-        img.src = imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset);
+        // focusX/focusY (Task 10's crop/focus-point control, 0-1 floats,
+        // default centered) only have a visible effect once the fit mode can
+        // actually crop the image — 'contain' (the prior unconditional
+        // default) never crops, so object-position would be a no-op under
+        // it. Switch to 'cover' whenever a focus point is set; otherwise
+        // keep the existing 'contain' behavior so untouched elements render
+        // exactly as before.
+        var hasFocus = el.focusX != null || el.focusY != null;
+        img.style.objectFit = hasFocus ? 'cover' : 'contain';
+        if (hasFocus) {
+          var focusX = el.focusX != null ? el.focusX : 0.5;
+          var focusY = el.focusY != null ? el.focusY : 0.5;
+          img.style.objectPosition = (focusX * 100) + '% ' + (focusY * 100) + '%';
+        }
+        img.src = imageRef.uploadedImageUrl
+          ? imageRef.uploadedImageUrl
+          : (imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset));
         containerEl.appendChild(img);
       } else if (el.type === 'shape') {
         var box = document.createElement('div');
@@ -233,7 +257,7 @@
         pptxSlide.addText(el.text || '', textOpts);
       } else if (el.type === 'image') {
         var imageRef = resolveImageRef(el);
-        if (!imageRef.brandImage && !imageRef.deckAsset) {
+        if (!imageRef.uploadedImageUrl && !imageRef.brandImage && !imageRef.deckAsset) {
           // Export-side counterpart of the render-path placeholder above:
           // degrade gracefully (a placeholder shape + label) instead of
           // throwing and aborting the rest of this slide's export (and, before
@@ -260,7 +284,18 @@
         // silently dropped every schema-layout image from the exported PPTX.
         // This matches the 3 hand-coded addImage call sites in deck-renderer.js
         // and embedFontsInPptx's origin-aware fetch.
-        var fullPath = imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset);
+        var fullPath = imageRef.uploadedImageUrl
+          ? imageRef.uploadedImageUrl
+          : (imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset));
+        // focusX/focusY (crop/focus-point) are NOT applied here. PptxGenJS's
+        // addImage sizing:{type:'crop'} takes its x/y/w/h crop offsets in the
+        // SOURCE IMAGE's own coordinate space (i.e. it needs the image's
+        // natural pixel/inch dimensions to compute a correct offset from a
+        // 0-1 focus fraction), and those dimensions aren't known synchronously
+        // at export time without pre-loading every image first — a real
+        // capability gap, not a shortcut being taken for convenience. Export
+        // therefore always renders the full, uncropped source image;
+        // focus-point cropping is a render-only (HTML preview) affordance.
         pptxSlide.addImage({ path: fullPath, x: el.x, y: el.y, w: el.w, h: el.h });
       } else if (el.type === 'shape') {
         var shapeFill = { color: el.fill || '4a4560' };

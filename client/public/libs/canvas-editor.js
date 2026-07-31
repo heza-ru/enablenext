@@ -101,7 +101,13 @@
       });
       var imgEl = new Image();
       var brandImage = el.brandImage, deckAsset = el.deckAsset;
-      imgEl.src = brandImage ? window.DeckRenderer.brandImagePath(brandImage) : window.DeckRenderer.deckAssetPath(deckAsset);
+      // uploadedImageUrl (Task 10's Upload tab) is a complete URL from the
+      // deck-asset upload endpoint and needs no brandImagePath/deckAssetPath
+      // resolution — same precedence as deck-schema-renderer.js's
+      // resolveImageRef.
+      imgEl.src = el.uploadedImageUrl
+        ? el.uploadedImageUrl
+        : (brandImage ? window.DeckRenderer.brandImagePath(brandImage) : window.DeckRenderer.deckAssetPath(deckAsset));
       imgEl.onload = function () { node.image(imgEl); if (layer) layer.batchDraw(); };
       return node;
     }
