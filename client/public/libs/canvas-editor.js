@@ -529,6 +529,10 @@
     // current slide, unlike the per-selected-element toolbar/context menu, so
     // it lives on the mount/unmount lifecycle rather than the selection one.
     if (window.CanvasTemplatePicker) window.CanvasTemplatePicker._onMount(mountEl, activeSlideIndex);
+    // Always-visible slide-level reorder/duplicate/delete chrome (parity
+    // gap-fill for deck-editor.js's old reorderSlide/duplicateSlide/
+    // deleteSlide) — same mount/unmount-lifecycle wiring as CanvasTemplatePicker.
+    if (window.CanvasSlideActions) window.CanvasSlideActions._onMount(mountEl, activeSlideIndex);
   }
 
   function unmount() {
@@ -536,6 +540,7 @@
     selectedIndices = [];
     if (window.CanvasToolbars) window.CanvasToolbars.hide();
     if (window.CanvasTemplatePicker) window.CanvasTemplatePicker._onUnmount();
+    if (window.CanvasSlideActions) window.CanvasSlideActions._onUnmount();
     if (keydownHandler) {
       document.removeEventListener('keydown', keydownHandler);
       keydownHandler = null;
@@ -569,6 +574,10 @@
     onChange: onChange,
     notifyChange: notifyChange,
     getActiveSlideIndex: function () { return activeSlideIndex; },
+    // The module's internal lastMountEl (same one remount() already uses) —
+    // needed so CanvasSlideActions can re-mount a DIFFERENT slide index onto
+    // the SAME DOM element after a reorder/delete.
+    getMountEl: function () { return lastMountEl; },
     // Real actions (not test-only internals) — same functions Task 5's
     // keyboard shortcuts call, exposed so the context menu (Task 6) and
     // toolbar (Task 7) can invoke them directly instead of synthesizing

@@ -86,6 +86,7 @@ The artifact body is now data, not hand-authored HTML/CSS. Emit exactly this sha
 <script src="/libs/canvas-autosave.js"></script>
 <script src="/libs/canvas-image-editor.js"></script>
 <script src="/libs/canvas-template-picker.js"></script>
+<script src="/libs/canvas-slide-actions.js"></script>
 </head>
 <body>
 <div id="deck-root"></div>
