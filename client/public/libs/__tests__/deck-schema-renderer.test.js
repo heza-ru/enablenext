@@ -337,21 +337,50 @@ describe('DeckSchemaRenderer.exportSchemaElements', () => {
     expect(slide.addImage).toHaveBeenCalledWith(expect.objectContaining({ path: '/brand/logo-dark.svg', x: 0, y: 0, w: 2, h: 2 }));
   });
 
-  // Task 10: uploadedImageUrl exports using the URL directly, and export
-  // does NOT apply focusX/focusY (pptxgenjs's sizing:{type:'crop'} needs the
-  // source image's own natural pixel/inch dimensions to compute a crop
-  // offset from a 0-1 fraction, which isn't known synchronously at export
-  // time — see the code comment in exportSchemaElements). This is a
-  // documented capability gap, not an oversight: the exported image is
-  // simply the full, uncropped source at the element's box.
-  it('exports uploadedImageUrl as the addImage path as-is, ignoring focusX/focusY', () => {
+  // Task 10 fix round 1: uploadedImageUrl exports using the URL directly,
+  // and focusX/focusY now drive an approximate box-relative crop (see the
+  // exportSchemaElements code comment for why this is possible without the
+  // source image's natural pixel dimensions). el.x/el.y stay the true
+  // element position; el.w/el.h become the final rendered size via
+  // sizing.w/h, while addImage's own w/h are inflated by the fixed
+  // FOCUS_CROP_OVERSCAN (1.35) to give pptxgenjs's crop math a virtual frame
+  // to pan within.
+  it('exports uploadedImageUrl as the addImage path as-is, applying focusX/focusY as an approximate box-relative crop', () => {
     const slide = fakeSlide();
     window.DeckSchemaRenderer.exportSchemaElements(slide, [
       { type: 'image', x: 0, y: 0, w: 2, h: 2, uploadedImageUrl: 'https://files.example.com/abc-123.png', focusX: 0.2, focusY: 0.8 },
     ]);
-    expect(slide.addImage).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'https://files.example.com/abc-123.png', x: 0, y: 0, w: 2, h: 2 }),
-    );
+    // virtualW = virtualH = 2 * 1.35 = 2.7
+    // cropOffsetX = 0.2 * (2.7 - 2) = 0.2 * 0.7 = 0.14
+    // cropOffsetY = 0.8 * (2.7 - 2) = 0.8 * 0.7 = 0.56
+    expect(slide.addImage).toHaveBeenCalledWith({
+      path: 'https://files.example.com/abc-123.png',
+      x: 0, y: 0, w: 2.7, h: 2.7,
+      sizing: { type: 'crop', w: 2, h: 2, x: 0.14, y: 0.56 },
+    });
+  });
+
+  it('does not apply crop sizing when focusX/focusY are absent (no regression)', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'image', x: 1, y: 1, w: 3, h: 2, uploadedImageUrl: 'https://files.example.com/plain.png' },
+    ]);
+    expect(slide.addImage).toHaveBeenCalledWith({
+      path: 'https://files.example.com/plain.png', x: 1, y: 1, w: 3, h: 2,
+    });
+  });
+
+  it('defaults the unset half of focusX/focusY to 0.5 (centered) on export, same as the render path', () => {
+    const slide = fakeSlide();
+    window.DeckSchemaRenderer.exportSchemaElements(slide, [
+      { type: 'image', x: 0, y: 0, w: 2, h: 2, uploadedImageUrl: 'https://files.example.com/abc-123.png', focusX: 0.2 },
+    ]);
+    // focusY defaults to 0.5: cropOffsetY = 0.5 * 0.7 = 0.35
+    expect(slide.addImage).toHaveBeenCalledWith({
+      path: 'https://files.example.com/abc-123.png',
+      x: 0, y: 0, w: 2.7, h: 2.7,
+      sizing: { type: 'crop', w: 2, h: 2, x: 0.14, y: 0.35 },
+    });
   });
 
   // Export-side counterpart of the render-path `src` recovery regression

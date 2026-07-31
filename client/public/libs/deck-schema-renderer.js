@@ -11,6 +11,13 @@
   var SW = DR.SW;
   var SH = DR.SH;
 
+  // How much larger than the element's own box the "virtual" crop frame is,
+  // for approximate focusX/focusY export cropping (see exportSchemaElements
+  // below). 1.35 gives +/-17.5% of pan room in each axis around center —
+  // enough to meaningfully favor one edge/corner of the source image without
+  // needing its real aspect ratio.
+  var FOCUS_CROP_OVERSCAN = 1.35;
+
   function hexToCss(hex) {
     var h = (hex || 'FFFFFF').replace('#', '');
     var r = parseInt(h.substring(0, 2), 16);
@@ -287,16 +294,60 @@
         var fullPath = imageRef.uploadedImageUrl
           ? imageRef.uploadedImageUrl
           : (imageRef.brandImage ? DR.brandImagePath(imageRef.brandImage) : DR.deckAssetPath(imageRef.deckAsset));
-        // focusX/focusY (crop/focus-point) are NOT applied here. PptxGenJS's
-        // addImage sizing:{type:'crop'} takes its x/y/w/h crop offsets in the
-        // SOURCE IMAGE's own coordinate space (i.e. it needs the image's
-        // natural pixel/inch dimensions to compute a correct offset from a
-        // 0-1 focus fraction), and those dimensions aren't known synchronously
-        // at export time without pre-loading every image first — a real
-        // capability gap, not a shortcut being taken for convenience. Export
-        // therefore always renders the full, uncropped source image;
-        // focus-point cropping is a render-only (HTML preview) affordance.
-        pptxSlide.addImage({ path: fullPath, x: el.x, y: el.y, w: el.w, h: el.h });
+        // focusX/focusY (crop/focus-point): approximate box-relative crop for
+        // PPTX export, using ONLY the element's own placement box (el.w/el.h)
+        // — no dependency on the source image's natural pixel dimensions.
+        //
+        // This corrects an earlier claim in this comment (that pptxgenjs's
+        // sizing:{type:'crop'} needs the source's natural pixel/inch size,
+        // unavailable synchronously at export time). Reading the actual
+        // implementation (node_modules/pptxgenjs/dist/pptxgen.cjs.js,
+        // ImageSizingXml.crop, ~line 5077, and its call site ~line 5565)
+        // shows the "imgSize" fed into the crop-percentage math is simply
+        // `{w: cx, h: cy}` — the `addImage` call's own `options.w`/`options.h`
+        // (set at ~line 5148), NOT the image's natural dimensions. There is a
+        // `getSizeFromImage`/`sizeOf` helper (~line 5019) that reads real
+        // image dimensions, but it is commented out/unused and not wired
+        // into this crop path. So the crop math is entirely box-relative —
+        // we control both sides of the ratio (options.w/h and sizing.w/h/x/y
+        // are all in the same inches-based coordinate space as el.w/el.h) and
+        // never need the real source pixel size.
+        //
+        // Technique: addImage's own options.w/h (the "virtual frame" that
+        // seeds the crop-percentage denominator) is set LARGER than the
+        // element's real box by a fixed overscan factor, simulating a zoom.
+        // sizing:{type:'crop'} then asks pptxgenjs to crop that virtual frame
+        // down to a window of el.w x el.h — which also becomes the actual
+        // final rendered size (pptxgenjs overwrites the image's a:ext with
+        // sizing.w/h; a:off keeps the addImage x/y untouched), positioned
+        // within the virtual frame per focusX/focusY. This mirrors CSS
+        // `object-fit: cover` + `object-position` in the render path, using a
+        // fixed overscan instead of the real image aspect ratio (which
+        // genuinely isn't available synchronously) — so it is an
+        // approximation: a source image whose native aspect differs a lot
+        // from the box may pan less "into" the image than the HTML preview
+        // shows, but it does not distort or mis-position the crop, and it is
+        // no worse than the plain box-fill stretch this code fell back to
+        // before this fix.
+        var hasExportFocus = el.focusX != null || el.focusY != null;
+        if (hasExportFocus) {
+          var exportFocusX = el.focusX != null ? el.focusX : 0.5;
+          var exportFocusY = el.focusY != null ? el.focusY : 0.5;
+          var virtualW = el.w * FOCUS_CROP_OVERSCAN;
+          var virtualH = el.h * FOCUS_CROP_OVERSCAN;
+          // Rounded to avoid float noise (e.g. 0.7999999999999998) in the
+          // exported offset — inch-level precision here is already far
+          // finer than this approximation's real accuracy.
+          var cropOffsetX = Math.round(exportFocusX * (virtualW - el.w) * 1e6) / 1e6;
+          var cropOffsetY = Math.round(exportFocusY * (virtualH - el.h) * 1e6) / 1e6;
+          pptxSlide.addImage({
+            path: fullPath,
+            x: el.x, y: el.y, w: virtualW, h: virtualH,
+            sizing: { type: 'crop', w: el.w, h: el.h, x: cropOffsetX, y: cropOffsetY },
+          });
+        } else {
+          pptxSlide.addImage({ path: fullPath, x: el.x, y: el.y, w: el.w, h: el.h });
+        }
       } else if (el.type === 'shape') {
         var shapeFill = { color: el.fill || '4a4560' };
         if (el.opacity != null) shapeFill.transparency = Math.round((1 - el.opacity) * 100);
