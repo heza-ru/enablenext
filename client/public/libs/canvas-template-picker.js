@@ -25,13 +25,49 @@
 // replacing the current one), so it gets its own button/popover, but shares
 // the underlying popover machinery so only one of the two can be open at once.
 (function () {
+  // Emergency hotfix (see deck-renderer.js's identical helper for the full
+  // story): this file's canvas artifact iframe is genuinely cross-origin
+  // (Sandpack) in production, so a direct fetch() against the real app's
+  // static assets gets CORS-blocked there even though it works fine in
+  // jsdom tests and any same-origin fallback context. Try the direct fetch
+  // first (cheap, and correct wherever CORS isn't a problem); only fall back
+  // to relaying the request through the parent app (DownloadArtifact.tsx's
+  // artifact-asset-fetch-request/-result listener, which does a same-origin
+  // fetch from the parent page and posts the result back) when the direct
+  // attempt fails. Duplicated in deck-renderer.js rather than shared/imported
+  // since both are separate vanilla-JS IIFE files per this codebase's
+  // convention -- keep the two in sync if this logic changes.
+  function fetchViaParentIfNeeded(path, encoding) {
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    return fetch(origin + path).then(function (r) {
+      if (r.ok === false) throw new Error('fetch failed: ' + r.status);
+      return encoding === 'base64' ? r.arrayBuffer() : r.text();
+    }).catch(function () {
+      return new Promise(function (resolve, reject) {
+        var requestId = 'assetfetch_' + Math.random().toString(36).slice(2);
+        var timeout = setTimeout(function () {
+          window.removeEventListener('message', handler);
+          reject(new Error('asset fetch relay timed out for ' + path));
+        }, 10000);
+        function handler(e) {
+          if (!e.data || e.data.type !== 'artifact-asset-fetch-result' || e.data.requestId !== requestId) return;
+          clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          if (e.data.error) { reject(new Error(e.data.error)); return; }
+          resolve(e.data.data);
+        }
+        window.addEventListener('message', handler);
+        window.parent.postMessage({ type: 'artifact-asset-fetch-request', requestId: requestId, path: path, encoding: encoding }, '*');
+      });
+    });
+  }
+
   // --- Variant/componentId swap (verbatim port) ---------------------------
   var libraryCache = null;
   function fetchLibrary() {
     if (libraryCache) return Promise.resolve(libraryCache);
-    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
-    return fetch(origin + '/brand/master-deck-library.json')
-      .then(function (r) { return r.json(); })
+    return fetchViaParentIfNeeded('/brand/master-deck-library.json', 'text')
+      .then(function (text) { return JSON.parse(text); })
       .then(function (data) { libraryCache = data; return data; });
   }
 

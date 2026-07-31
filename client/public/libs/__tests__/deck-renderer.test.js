@@ -1433,6 +1433,104 @@ describe('embedFontsInPptx', () => {
     const resultSlideXml = await resultZip.file('ppt/slides/slide1.xml').async('string');
     expect(resultSlideXml).toBe(slideXml);
   });
+
+  // Emergency hotfix regression coverage: this artifact runs inside a
+  // genuinely cross-origin (Sandpack) iframe in production, where a direct
+  // fetch() against /brand/fonts/*.fntdata is CORS-blocked. Before this fix,
+  // that CORS failure propagated uncaught out of embedFontsInPptx() and killed
+  // the ENTIRE downloadPptx() call -- no .pptx file at all, not even one
+  // without embedded fonts. The fix wraps the whole font-fetching loop in a
+  // try/catch that logs a warning and returns the ORIGINAL blob unmodified.
+  it('falls back through the parent relay when the direct font fetch fails, and still succeeds', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    window.JSZip = JSZip;
+
+    // Direct fetch always rejects (simulating the CORS-blocked Sandpack case);
+    // the relay is exercised via a fake window.parent that immediately responds.
+    global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+    const fontBytes = new Uint8Array([9, 8, 7, 6]);
+    const fakeBase64 = Buffer.from(fontBytes).toString('base64');
+    window.parent = {
+      postMessage: jest.fn((msg) => {
+        // Respond asynchronously, like the real parent relay, with the
+        // requested font's base64 payload.
+        setTimeout(() => {
+          window.dispatchEvent(
+            new MessageEvent('message', {
+              data: { type: 'artifact-asset-fetch-result', requestId: msg.requestId, data: fakeBase64 },
+            }),
+          );
+        }, 0);
+      }),
+    };
+
+    const sourceBlob = await buildFakePptxBlob();
+    const resultBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+
+    const resultZip = await JSZip.loadAsync(resultBlob);
+    expect(resultZip.file('ppt/fonts/DMSans-regular.fntdata')).not.toBeNull();
+    const embeddedBytes = await resultZip.file('ppt/fonts/DMSans-regular.fntdata').async('uint8array');
+    expect(Array.from(embeddedBytes)).toEqual(Array.from(fontBytes));
+
+    delete window.parent;
+  });
+
+  it('degrades gracefully to the original blob (no thrown/rejected promise) when both the direct fetch and the relay fail', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    window.JSZip = JSZip;
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+    // No window.parent relay available either (e.g. a standalone context) --
+    // posting to it rejects synchronously, so the whole font-fetching loop's
+    // try/catch must still degrade to the original blob rather than throw.
+    window.parent = {
+      postMessage: jest.fn(() => {
+        throw new Error('no parent listener');
+      }),
+    };
+
+    const sourceBlob = await buildFakePptxBlob();
+    const resultBlob = await DeckRenderer.embedFontsInPptx(sourceBlob);
+
+    expect(resultBlob).toBe(sourceBlob);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[embedFontsInPptx] Could not fetch/embed fonts, PPTX will use default fonts:',
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+    delete window.parent;
+  });
+
+  // Exercises the relay's own timeout path in isolation (no window.parent
+  // response ever arrives), proving it rejects rather than hanging forever --
+  // and that embedFontsInPptx still degrades to the original blob when that
+  // happens, all within a single test via jest's fake timers.
+  it('does not hang forever when the parent relay never responds (timeout), and still degrades to the original blob', async () => {
+    const DeckRenderer = loadDeckRenderer();
+    window.JSZip = JSZip;
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask'] });
+
+    global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+    window.parent = { postMessage: jest.fn() }; // accepted, but never responds
+
+    const sourceBlob = await buildFakePptxBlob();
+    const resultPromise = DeckRenderer.embedFontsInPptx(sourceBlob);
+    await jest.advanceTimersByTimeAsync(10000);
+    const resultBlob = await resultPromise;
+
+    expect(resultBlob).toBe(sourceBlob);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[embedFontsInPptx] Could not fetch/embed fonts, PPTX will use default fonts:',
+      expect.any(Error),
+    );
+
+    jest.useRealTimers();
+    warnSpy.mockRestore();
+    delete window.parent;
+  }, 15000);
 });
 
 describe('slide navigation (goTo/next/prev)', () => {

@@ -1545,6 +1545,56 @@
     { typeface: 'IBM Plex Sans', regular: 'IBMPlexSans-regular.fntdata', bold: 'IBMPlexSans-bold.fntdata', italic: 'IBMPlexSans-italic.fntdata', boldItalic: 'IBMPlexSans-boldItalic.fntdata' },
   ];
 
+  // Emergency hotfix: this artifact runs inside a genuinely cross-origin
+  // (Sandpack) iframe in production, so a direct fetch() against the real
+  // app's static assets (font binaries here) gets CORS-blocked there even
+  // though it works fine in jsdom tests and any same-origin fallback
+  // context. Try the direct fetch first (cheap, and correct wherever CORS
+  // isn't a problem); only fall back to relaying the request through the
+  // parent app (DownloadArtifact.tsx's artifact-asset-fetch-request/-result
+  // listener, which does a same-origin fetch from the parent page and posts
+  // the result back) when the direct attempt fails. Duplicated in
+  // canvas-template-picker.js rather than shared/imported since both are
+  // separate vanilla-JS IIFE files per this codebase's convention -- keep
+  // the two in sync if this logic changes.
+  function fetchViaParentIfNeeded(path, encoding) {
+    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    return fetch(origin + path).then(function (r) {
+      if (r.ok === false) throw new Error('fetch failed: ' + r.status);
+      return encoding === 'base64' ? r.arrayBuffer() : r.text();
+    }).catch(function () {
+      return new Promise(function (resolve, reject) {
+        var requestId = 'assetfetch_' + Math.random().toString(36).slice(2);
+        var timeout = setTimeout(function () {
+          window.removeEventListener('message', handler);
+          reject(new Error('asset fetch relay timed out for ' + path));
+        }, 10000);
+        function handler(e) {
+          if (!e.data || e.data.type !== 'artifact-asset-fetch-result' || e.data.requestId !== requestId) return;
+          clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          if (e.data.error) { reject(new Error(e.data.error)); return; }
+          resolve(encoding === 'base64' ? base64ToArrayBuffer(e.data.data) : e.data.data);
+        }
+        window.addEventListener('message', handler);
+        window.parent.postMessage({ type: 'artifact-asset-fetch-request', requestId: requestId, path: path, encoding: encoding }, '*');
+      });
+    });
+  }
+
+  // Decodes the base64 string the parent relay sends back (font binaries
+  // can't be posted through postMessage as raw ArrayBuffers/base64 is the
+  // simplest JSON-safe transport) into a real ArrayBuffer, which is what
+  // zip.file(...) needs for binary font data.
+  function base64ToArrayBuffer(base64) {
+    var binaryStr = atob(base64);
+    var bytes = new Uint8Array(binaryStr.length);
+    for (var i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
   async function embedFontsInPptx(blob) {
     var zip = await window.JSZip.loadAsync(blob);
 
@@ -1557,30 +1607,36 @@
       return blob;
     }
 
-    // 1. Fetch and add each font binary under ppt/fonts/ -- origin-aware, same reasoning as
-    // brandImagePath: this runs in the artifact's own context, which may be the cross-origin
-    // Sandpack preview iframe when downloadPptx() is invoked from the live preview.
-    var origin = (typeof window !== 'undefined' && typeof window._BRAND_ORIGIN === 'string') ? window._BRAND_ORIGIN : '';
+    // 1. Fetch and add each font binary under ppt/fonts/ -- origin-aware (via
+    // fetchViaParentIfNeeded), same reasoning as brandImagePath: this runs in the
+    // artifact's own context, which may be the cross-origin Sandpack preview iframe
+    // when downloadPptx() is invoked from the live preview. Wrapped in its own
+    // try/catch below (around the whole loop): a font-fetch failure must degrade to
+    // "PPTX without embedded fonts", never to "no PPTX at all".
     var relEntries = [];
     var embeddedFontXml = '';
     var nextRid = 200; // starts well above any rId PptxGenJS itself assigns, to avoid collisions
-    for (var i = 0; i < EMBEDDED_FONTS.length; i++) {
-      var font = EMBEDDED_FONTS[i];
-      var ids = {};
-      var variants = ['regular', 'bold', 'italic', 'boldItalic'];
-      for (var v = 0; v < variants.length; v++) {
-        var key = variants[v];
-        var filename = font[key];
-        var resp = await fetch(origin + '/brand/fonts/' + filename);
-        var buf = await resp.arrayBuffer();
-        zip.file('ppt/fonts/' + filename, buf);
-        var rid = 'rId' + nextRid++;
-        ids[key] = rid;
-        relEntries.push('<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/' + filename + '"/>');
+    try {
+      for (var i = 0; i < EMBEDDED_FONTS.length; i++) {
+        var font = EMBEDDED_FONTS[i];
+        var ids = {};
+        var variants = ['regular', 'bold', 'italic', 'boldItalic'];
+        for (var v = 0; v < variants.length; v++) {
+          var key = variants[v];
+          var filename = font[key];
+          var buf = await fetchViaParentIfNeeded('/brand/fonts/' + filename, 'base64');
+          zip.file('ppt/fonts/' + filename, buf);
+          var rid = 'rId' + nextRid++;
+          ids[key] = rid;
+          relEntries.push('<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/' + filename + '"/>');
+        }
+        embeddedFontXml += '<p:embeddedFont><p:font typeface="' + font.typeface + '"/>' +
+          '<p:regular r:id="' + ids.regular + '"/><p:bold r:id="' + ids.bold + '"/>' +
+          '<p:italic r:id="' + ids.italic + '"/><p:boldItalic r:id="' + ids.boldItalic + '"/></p:embeddedFont>';
       }
-      embeddedFontXml += '<p:embeddedFont><p:font typeface="' + font.typeface + '"/>' +
-        '<p:regular r:id="' + ids.regular + '"/><p:bold r:id="' + ids.bold + '"/>' +
-        '<p:italic r:id="' + ids.italic + '"/><p:boldItalic r:id="' + ids.boldItalic + '"/></p:embeddedFont>';
+    } catch (err) {
+      console.warn('[embedFontsInPptx] Could not fetch/embed fonts, PPTX will use default fonts:', err);
+      return blob;
     }
 
     // 2. [Content_Types].xml -- add the fntdata Default entry once, before </Types>.

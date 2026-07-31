@@ -9,12 +9,14 @@ require('../canvas-history.js');
 require('../canvas-template-picker.js');
 
 function mockOneEntryLibrary() {
+  var library = {
+    slides: [
+      { componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] },
+    ],
+  };
   global.fetch = jest.fn().mockResolvedValue({
-    json: () => Promise.resolve({
-      slides: [
-        { componentId: 'slide-97', elements: [{ type: 'text', x: 0, y: 0, w: 5, h: 1, text: 'Thank you!' }] },
-      ],
-    }),
+    ok: true,
+    text: () => Promise.resolve(JSON.stringify(library)),
   });
 }
 
@@ -205,7 +207,7 @@ describe('CanvasTemplatePicker popover thumbnails (real master-deck-library.json
     const realLibrary = JSON.parse(
       fs.readFileSync(path.join(__dirname, '..', '..', 'brand', 'master-deck-library.json'), 'utf8'),
     );
-    global.fetch = jest.fn().mockResolvedValue({ json: () => Promise.resolve(realLibrary) });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(JSON.stringify(realLibrary)) });
     window.CanvasEditor.mount(mount, 0);
   });
 
@@ -458,5 +460,74 @@ describe('CanvasTemplatePicker "+ Add slide" trigger/popover lifecycle (Task 12)
     expect(insertPopover()).not.toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(insertPopover()).toBeNull();
+  });
+});
+
+// Emergency hotfix regression coverage: in production this artifact runs
+// inside a genuinely cross-origin (Sandpack) iframe, where a direct
+// fetch(origin + '/brand/master-deck-library.json') is CORS-blocked --
+// confirmed via a real production console log ("canvas-template-picker.js:33
+// Uncaught (in promise) TypeError: Failed to fetch"), which broke both the
+// "Change layout..." and "+ Add slide" pickers entirely. fetchLibrary() now
+// falls back to relaying the request through window.parent (handled by
+// DownloadArtifact.tsx's artifact-asset-fetch-request/-result listener) when
+// the direct fetch fails.
+describe('CanvasTemplatePicker fetchLibrary cross-origin fallback (CORS hotfix)', () => {
+  beforeEach(() => {
+    window.CanvasTemplatePicker._resetLibraryCache();
+  });
+
+  afterEach(() => {
+    window.CanvasTemplatePicker._resetLibraryCache();
+    delete global.fetch;
+    delete window.parent;
+  });
+
+  it('uses the direct fetch result as-is when it succeeds (no relay involved)', async () => {
+    const library = { slides: [{ componentId: 'slide-97', elements: [] }] };
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(JSON.stringify(library)) });
+    window.parent = { postMessage: jest.fn() };
+
+    const result = await window.CanvasTemplatePicker._fetchLibrary();
+
+    expect(result).toEqual(library);
+    expect(window.parent.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the parent relay when the direct fetch fails, and resolves with the relayed library', async () => {
+    const library = { slides: [{ componentId: 'slide-97', elements: [] }] };
+    global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+    window.parent = {
+      postMessage: jest.fn((msg) => {
+        expect(msg.type).toBe('artifact-asset-fetch-request');
+        expect(msg.path).toBe('/brand/master-deck-library.json');
+        expect(msg.encoding).toBe('text');
+        setTimeout(() => {
+          window.dispatchEvent(
+            new MessageEvent('message', {
+              data: { type: 'artifact-asset-fetch-result', requestId: msg.requestId, data: JSON.stringify(library) },
+            }),
+          );
+        }, 0);
+      }),
+    };
+
+    const result = await window.CanvasTemplatePicker._fetchLibrary();
+
+    expect(result).toEqual(library);
+    expect(window.parent.postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects (does not hang forever) when the parent relay never responds', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask'] });
+    global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+    window.parent = { postMessage: jest.fn() }; // never responds
+
+    const resultPromise = window.CanvasTemplatePicker._fetchLibrary();
+    const assertion = expect(resultPromise).rejects.toThrow(/timed out/);
+    await jest.advanceTimersByTimeAsync(10000);
+    await assertion;
+
+    jest.useRealTimers();
   });
 });

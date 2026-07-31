@@ -616,6 +616,151 @@ describe('DownloadArtifact — image upload relay (Task 10)', () => {
 });
 
 /**
+ * Emergency hotfix: deck-renderer.js's embedFontsInPptx() and
+ * canvas-template-picker.js's fetchLibrary() both do a direct
+ * fetch(window._BRAND_ORIGIN + path) against the real app's static assets
+ * from inside the deck iframe. In production that iframe is the genuinely
+ * cross-origin Sandpack sandbox, and the real app's static assets don't send
+ * an Access-Control-Allow-Origin permitting that sandbox origin to read the
+ * response, so the direct fetch is CORS-blocked there — confirmed via real
+ * production console logs ("Failed to fetch" right after CORS errors, for
+ * both PPTX font embedding and the master-deck-library.json template
+ * picker). This relay does a normal same-origin fetch(window.location.origin
+ * + path) from the parent page instead (no CORS issue, since it's the app's
+ * own origin) and posts the result back to the same iframe, mirroring Task
+ * 10's image-upload relay above.
+ */
+describe('DownloadArtifact — asset fetch relay (cross-origin CORS hotfix)', () => {
+  afterEach(() => {
+    delete (global as any).fetch;
+  });
+
+  function renderWithPostMessage() {
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: {
+        getClient: () => ({ iframe: { contentWindow: { postMessage } } }),
+      },
+    } as never;
+    render(<DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />);
+    return postMessage;
+  }
+
+  it('base64-encodes a binary (font) response and round-trips back to the original bytes', async () => {
+    const postMessage = renderWithPostMessage();
+    // A small, known byte sequence stands in for a real .fntdata font binary.
+    const originalBytes = new Uint8Array([0, 1, 2, 253, 254, 255, 42, 7]);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => originalBytes.buffer,
+    });
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-asset-fetch-request',
+            requestId: 'asset-1',
+            path: '/brand/fonts/DMSans-regular.fntdata',
+            encoding: 'base64',
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(`${window.location.origin}/brand/fonts/DMSans-regular.fntdata`);
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    const [message] = postMessage.mock.calls[0];
+    expect(message.type).toBe('artifact-asset-fetch-result');
+    expect(message.requestId).toBe('asset-1');
+    // Round-trip: decode the base64 string back to bytes and confirm it
+    // matches the original binary exactly.
+    const decoded = Uint8Array.from(atob(message.data), (c) => c.charCodeAt(0));
+    expect(Array.from(decoded)).toEqual(Array.from(originalBytes));
+  });
+
+  it('passes through a text/JSON response unmodified', async () => {
+    const postMessage = renderWithPostMessage();
+    const libraryJson = JSON.stringify({ slides: [{ componentId: 'slide-97' }] });
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => libraryJson,
+    });
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-asset-fetch-request',
+            requestId: 'asset-2',
+            path: '/brand/master-deck-library.json',
+            encoding: 'text',
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(`${window.location.origin}/brand/master-deck-library.json`);
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'artifact-asset-fetch-result', requestId: 'asset-2', data: libraryJson },
+      '*',
+    );
+  });
+
+  it('posts an error result back to the iframe when the fetch fails, without throwing', async () => {
+    const postMessage = renderWithPostMessage();
+    const fetchMock = jest.fn().mockResolvedValue({ ok: false, status: 404 });
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'artifact-asset-fetch-request',
+            requestId: 'asset-3',
+            path: '/brand/master-deck-library.json',
+            encoding: 'text',
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'artifact-asset-fetch-result', requestId: 'asset-3', error: expect.any(String) }),
+      '*',
+    );
+  });
+
+  it('ignores messages of any other type', async () => {
+    const postMessage = renderWithPostMessage();
+    const fetchMock = jest.fn();
+    (global as any).fetch = fetchMock;
+
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'some-other-message' } }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'artifact-asset-fetch-result' }),
+      '*',
+    );
+  });
+});
+
+/**
  * Task 9's core correctness requirement: replaceArtifactContent splices
  * `updated` into the message's stored text by locating `original` as an exact
  * substring. Two saves in flight concurrently with out-of-order resolution

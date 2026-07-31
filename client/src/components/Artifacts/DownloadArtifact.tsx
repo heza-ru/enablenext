@@ -14,6 +14,25 @@ import { useDeckAutosaveQueue } from './useDeckAutosaveQueue';
 
 const LOG = '[DownloadArtifact]';
 
+/**
+ * Encodes binary data (font files relayed for the artifact-asset-fetch-request
+ * handler below) as base64 for transport over postMessage, which is JSON-only
+ * and can't carry an ArrayBuffer directly. The browser has no built-in
+ * Buffer, hence the btoa(String.fromCharCode(...)) pattern -- fine for the
+ * small (a few hundred KB at most) font files this is used for; a chunked
+ * variant would be needed for anything large enough to blow the call-stack
+ * limit on `apply`/spread.
+ */
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 type NativeFormat = {
   label: string;
   ext: string;
@@ -499,6 +518,52 @@ const DownloadArtifact = ({
     window.addEventListener('message', handle);
     return () => window.removeEventListener('message', handle);
   }, [previewRef, token]);
+
+  // deck-renderer.js's embedFontsInPptx() and canvas-template-picker.js's
+  // fetchLibrary() post artifact-asset-fetch-request from inside the deck
+  // iframe when their own direct fetch(window._BRAND_ORIGIN + path) fails --
+  // in production that iframe is the genuinely cross-origin Sandpack sandbox,
+  // and the real app's static assets (brand fonts, master-deck-library.json)
+  // don't send an Access-Control-Allow-Origin permitting that sandbox origin
+  // to read the response, so the direct fetch is CORS-blocked there. This
+  // relay does a normal same-origin fetch from THIS (parent) page instead --
+  // which has no CORS issue since it's the app's own origin -- and posts the
+  // result back to the same iframe, using the same iframeWindow-resolution
+  // pattern as the image-upload relay above.
+  useEffect(() => {
+    const handle = async (e: MessageEvent) => {
+      if (e.data?.type !== 'artifact-asset-fetch-request') return;
+      const { requestId, path, encoding } = e.data as {
+        requestId: string;
+        path: string;
+        encoding: 'base64' | 'text';
+      };
+      const client = previewRef?.current?.getClient();
+      const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)
+        ?.iframe?.contentWindow;
+      try {
+        const res = await fetch(`${window.location.origin}${path}`);
+        if (!res.ok) {
+          throw new Error(`Asset fetch failed: ${res.status}`);
+        }
+        const data =
+          encoding === 'base64' ? arrayBufferToBase64(await res.arrayBuffer()) : await res.text();
+        iframeWindow?.postMessage({ type: 'artifact-asset-fetch-result', requestId, data }, '*');
+      } catch (err) {
+        console.error(`${LOG} artifact-asset-fetch-request failed`, err);
+        iframeWindow?.postMessage(
+          {
+            type: 'artifact-asset-fetch-result',
+            requestId,
+            error: err instanceof Error ? err.message : 'Asset fetch failed',
+          },
+          '*',
+        );
+      }
+    };
+    window.addEventListener('message', handle);
+    return () => window.removeEventListener('message', handle);
+  }, [previewRef]);
 
   // Reset bridgeReadyRef when a genuinely different artifact is shown.
   //
