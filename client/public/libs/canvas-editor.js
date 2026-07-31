@@ -524,12 +524,18 @@
 
     keydownHandler = handleKeydown;
     document.addEventListener('keydown', keydownHandler);
+
+    // Always-visible "Change layout…" chrome (Task 11) — acts on the whole
+    // current slide, unlike the per-selected-element toolbar/context menu, so
+    // it lives on the mount/unmount lifecycle rather than the selection one.
+    if (window.CanvasTemplatePicker) window.CanvasTemplatePicker._onMount(mountEl, activeSlideIndex);
   }
 
   function unmount() {
     if (stage) { stage.destroy(); stage = null; layer = null; transformer = null; }
     selectedIndices = [];
     if (window.CanvasToolbars) window.CanvasToolbars.hide();
+    if (window.CanvasTemplatePicker) window.CanvasTemplatePicker._onUnmount();
     if (keydownHandler) {
       document.removeEventListener('keydown', keydownHandler);
       keydownHandler = null;
