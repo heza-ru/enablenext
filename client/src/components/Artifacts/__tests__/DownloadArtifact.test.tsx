@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { render, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useEditArtifact } from '~/data-provider';
 import DownloadArtifact, {
   runInHiddenIframe,
@@ -43,6 +44,26 @@ jest.mock('~/Providers', () => ({
   useChatContext: () => ({ conversation: mockConversation }),
 }));
 
+// Presentation artifacts now consolidate every download-format option (PPTX/
+// PDF/PDF Compat/PDF HD/PPTX HD/HTML) behind a single "Download" trigger +
+// dropdown menu (Radix), instead of a flat row of buttons. Radix's
+// DropdownMenuContent is only mounted in the DOM while open, so any test
+// that needs to see/click a format option must open the menu first. This
+// helper does that via the trigger's aria-label (localize() is mocked to the
+// identity function above, so the label is the literal key `com_ui_download`).
+// Radix's DropdownMenuTrigger only opens on a full pointerdown/pointerup
+// sequence (plus Enter/Space/ArrowDown keydown for keyboard users) — it
+// deliberately has no plain `onClick` handler, so a synthetic
+// fireEvent.click/pointerDown never opens it. @testing-library/user-event
+// simulates the full real-browser event sequence and does reliably open it.
+// `delay: null` disables user-event's internal real-timer waits between
+// events so this works the same whether or not the surrounding test has
+// jest.useFakeTimers() active.
+const menuUser = userEvent.setup({ delay: null });
+async function openDownloadMenu(getByLabelText: (text: string) => HTMLElement) {
+  await menuUser.click(getByLabelText('com_ui_download'));
+}
+
 // downloadNative only arms the FALLBACK_MS timer (the race under test) when a
 // previewRef is supplied and triggerViaPreviewIframe() succeeds in dispatching
 // the postMessage — without one, the component goes straight to the
@@ -67,10 +88,13 @@ beforeEach(() => {
 });
 
 describe('DownloadArtifact — PDF (HD) button tooltip copy', () => {
-  it('PDF (HD) button tooltip describes the client-side capture approach', () => {
-    const { queryByTitle, getByTitle } = render(
+  it('PDF (HD) button tooltip describes the client-side capture approach', async () => {
+    const { queryByTitle, getByTitle, getByLabelText } = render(
       <DownloadArtifact artifact={{ content: '...downloadPptx()...' } as never} />,
     );
+    // PDF (HD) is now a menu item inside the consolidated Download dropdown
+    // rather than a standalone flat button — open the menu first.
+    await openDownloadMenu(getByLabelText);
     expect(queryByTitle(/Server-side Playwright render/i)).toBeNull();
     expect(getByTitle(/screenshots each slide.*in-browser/i)).toBeDefined();
   });
@@ -85,7 +109,7 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
     document.querySelectorAll('iframe').forEach((el) => el.remove());
   });
 
-  it('does not create a hidden-iframe fallback if bridge-ready already arrived at mount, even across multiple download clicks', () => {
+  it('does not create a hidden-iframe fallback if bridge-ready already arrived at mount, even across multiple download clicks', async () => {
     const { getByLabelText } = render(
       <DownloadArtifact artifact={{ content: '' } as never} previewRef={fakePreviewRef} />,
     );
@@ -99,6 +123,10 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
     // ref was reset to false on every click).
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'bridge-ready' } }));
 
+    // PPTX is now a menu item inside the consolidated Download dropdown —
+    // open the menu before each click since selecting an item closes it
+    // again (Radix's default item-select behaviour).
+    await openDownloadMenu(getByLabelText);
     fireEvent.click(getByLabelText('Download as PPTX'));
 
     // Advance well past FALLBACK_MS (10s) — since bridge-ready already
@@ -107,17 +135,19 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
 
     // Click again to confirm the sticky ref still prevents a fallback on
     // subsequent downloads of the same (still-alive) artifact instance.
+    await openDownloadMenu(getByLabelText);
     fireEvent.click(getByLabelText('Download as PPTX'));
     jest.advanceTimersByTime(15_000);
 
     expect(document.querySelectorAll('iframe').length).toBe(0);
   });
 
-  it('does create a hidden-iframe fallback if bridge-ready never arrives', () => {
+  it('does create a hidden-iframe fallback if bridge-ready never arrives', async () => {
     const { getByLabelText } = render(
       <DownloadArtifact artifact={{ content: '' } as never} previewRef={fakePreviewRef} />,
     );
 
+    await openDownloadMenu(getByLabelText);
     fireEvent.click(getByLabelText('Download as PPTX'));
 
     // No bridge-ready message — simulating an older artifact with no bridge script.
@@ -126,7 +156,7 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
     expect(document.querySelectorAll('iframe').length).toBeGreaterThan(0);
   });
 
-  it('resets bridgeReadyRef when a different artifact.id is shown, so a stale ready-flag from a previous artifact does not suppress the fallback a new, dead artifact actually needs', () => {
+  it('resets bridgeReadyRef when a different artifact.id is shown, so a stale ready-flag from a previous artifact does not suppress the fallback a new, dead artifact actually needs', async () => {
     // DownloadArtifact does not always remount on artifact change (Artifacts.tsx
     // renders it with no key tied to artifact identity, and version switching
     // just changes which artifact id is current) — so bridgeReadyRef (a
@@ -140,6 +170,7 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
 
     // artifact-v1 confirms it's alive.
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'bridge-ready' } }));
+    await openDownloadMenu(getByLabelText);
     fireEvent.click(getByLabelText('Download as PPTX'));
     jest.advanceTimersByTime(15_000);
     expect(document.querySelectorAll('iframe').length).toBe(0);
@@ -154,6 +185,7 @@ describe('DownloadArtifact — readiness vs. liveness', () => {
       />,
     );
 
+    await openDownloadMenu(getByLabelText);
     fireEvent.click(getByLabelText('Download as PPTX'));
     jest.advanceTimersByTime(15_000);
 
@@ -506,7 +538,9 @@ describe('DownloadArtifact — image upload relay (Task 10)', () => {
         getClient: () => ({ iframe: { contentWindow: { postMessage } } }),
       },
     } as never;
-    render(<DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />);
+    render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
     return postMessage;
   }
 
@@ -567,7 +601,10 @@ describe('DownloadArtifact — image upload relay (Task 10)', () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce({ blob: async () => new Blob(['abc'], { type: 'image/png' }) })
-      .mockResolvedValueOnce({ ok: false, json: async () => ({ message: 'Unsupported file type' }) });
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ message: 'Unsupported file type' }),
+      });
     (global as any).fetch = fetchMock;
 
     await act(async () => {
@@ -642,7 +679,9 @@ describe('DownloadArtifact — asset fetch relay (cross-origin CORS hotfix)', ()
         getClient: () => ({ iframe: { contentWindow: { postMessage } } }),
       },
     } as never;
-    render(<DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />);
+    render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
     return postMessage;
   }
 
@@ -672,7 +711,9 @@ describe('DownloadArtifact — asset fetch relay (cross-origin CORS hotfix)', ()
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(`${window.location.origin}/brand/fonts/DMSans-regular.fntdata`);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${window.location.origin}/brand/fonts/DMSans-regular.fntdata`,
+    );
     expect(postMessage).toHaveBeenCalledTimes(1);
     const [message] = postMessage.mock.calls[0];
     expect(message.type).toBe('artifact-asset-fetch-result');
@@ -708,7 +749,9 @@ describe('DownloadArtifact — asset fetch relay (cross-origin CORS hotfix)', ()
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(`${window.location.origin}/brand/master-deck-library.json`);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${window.location.origin}/brand/master-deck-library.json`,
+    );
     expect(postMessage).toHaveBeenCalledWith(
       { type: 'artifact-asset-fetch-result', requestId: 'asset-2', data: libraryJson },
       '*',
@@ -737,7 +780,11 @@ describe('DownloadArtifact — asset fetch relay (cross-origin CORS hotfix)', ()
     });
 
     expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'artifact-asset-fetch-result', requestId: 'asset-3', error: expect.any(String) }),
+      expect.objectContaining({
+        type: 'artifact-asset-fetch-result',
+        requestId: 'asset-3',
+        error: expect.any(String),
+      }),
       '*',
     );
   });
@@ -958,7 +1005,7 @@ describe('DownloadArtifact — autosave queue concurrency (Task 9)', () => {
    * coalesces in behind save2. The third save's `original` must be save2's
    * `updated` — never the echoed, now-stale `initialContent`.
    */
-  it("a rerender carrying the hook-level cache-write echo (artifact.content updating after every save) does not clobber lastKnownContent for a save already in flight", () => {
+  it('a rerender carrying the hook-level cache-write echo (artifact.content updating after every save) does not clobber lastKnownContent for a save already in flight', () => {
     const mutate = jest.fn();
     (useEditArtifact as jest.Mock).mockReturnValue({ mutate, isLoading: false });
     mockCurrentCode = FENCE_BODY;
@@ -1124,7 +1171,7 @@ describe('DownloadArtifact — export options picker (Task 14)', () => {
     );
   });
 
-  it('a zero-option PPTX download still posts a message with no args field at all (regression)', () => {
+  it('a zero-option PPTX download still posts a message with no args field at all (regression)', async () => {
     const postMessage = jest.fn();
     const previewRef = {
       current: { getClient: () => ({ iframe: { contentWindow: { postMessage } } }) },
@@ -1133,11 +1180,132 @@ describe('DownloadArtifact — export options picker (Task 14)', () => {
     const { getByLabelText } = render(
       <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
     );
+    await openDownloadMenu(getByLabelText);
     fireEvent.click(getByLabelText('Download as PPTX'));
     expect(postMessage).toHaveBeenCalledWith(
       { type: 'artifact-download-request', fn: 'downloadPptx' },
       '*',
     );
+  });
+});
+
+/**
+ * UI polish fix: for presentation artifacts, the 7-8 flat, equal-weight
+ * download-format buttons (native format, PDF, PDF (Compat), PDF (HD),
+ * PPTX (HD), HTML) that used to crowd a single toolbar row now consolidate
+ * into one "Download" trigger + dropdown menu. Edit/Done Editing stays its
+ * own always-visible button OUTSIDE the menu (a distinct primary action, not
+ * a download variant), and any live status feedback (Drive spinner/error/
+ * success, download error) also stays visible outside the menu rather than
+ * being hidden behind a closed dropdown.
+ */
+describe('DownloadArtifact — consolidated download dropdown (presentation artifacts)', () => {
+  afterEach(() => {
+    document.querySelectorAll('iframe').forEach((el) => el.remove());
+  });
+
+  it('collapses the format buttons into a single closed "Download" trigger by default, with Edit visible alongside it (no separate PDF/PDF (Compat)/PDF (HD)/PPTX (HD)/HTML buttons in the header)', () => {
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const { getByLabelText, queryByText, getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+
+    // Single Download trigger, closed by default.
+    const trigger = getByLabelText('com_ui_download');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    // None of the individual format menu items are in the DOM while closed.
+    expect(queryByText('PDF (Compat)')).not.toBeInTheDocument();
+    expect(queryByText('PDF (HD)')).not.toBeInTheDocument();
+    expect(queryByText('PPTX (HD)')).not.toBeInTheDocument();
+
+    // Edit stays visible and independently clickable without opening the menu.
+    expect(getByRole('button', { name: /^com_ui_edit$/i })).toBeInTheDocument();
+  });
+
+  it('opens the dropdown to reveal every format option with the expected labels', async () => {
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const { getByLabelText, getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+
+    await openDownloadMenu(getByLabelText);
+
+    // Native format items use the `Download as <FORMAT>` aria-label
+    // (unchanged from the old flat buttons); PDF/PDF (Compat)/PDF (HD)/
+    // PPTX (HD) items use their own descriptive aria-labels (also unchanged);
+    // HTML reuses the existing com_ui_download_artifact localize key.
+    expect(getByRole('menuitem', { name: /download as pptx/i })).toBeInTheDocument();
+    expect(
+      getByRole('menuitem', { name: /export as pdf \(opens print dialog\)/i }),
+    ).toBeInTheDocument();
+    expect(
+      getByRole('menuitem', { name: /export as pdf \(compatibility mode/i }),
+    ).toBeInTheDocument();
+    expect(getByRole('menuitem', { name: /export as pdf \(client-rendered/i })).toBeInTheDocument();
+    expect(getByRole('menuitem', { name: /export as pptx \(image-based/i })).toBeInTheDocument();
+    expect(getByRole('menuitem', { name: /^com_ui_download_artifact$/i })).toBeInTheDocument();
+  });
+
+  it('clicking the PPTX menu item still dispatches the exact same postMessage the old flat button did', async () => {
+    const postMessage = jest.fn();
+    const previewRef = {
+      current: { getClient: () => ({ iframe: { contentWindow: { postMessage } } }) },
+    } as never;
+    mockCurrentCode = '<html>...downloadPptx()...</html>';
+    const { getByLabelText } = render(
+      <DownloadArtifact artifact={{ content: mockCurrentCode } as never} previewRef={previewRef} />,
+    );
+
+    await openDownloadMenu(getByLabelText);
+    fireEvent.click(getByLabelText('Download as PPTX'));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'artifact-download-request', fn: 'downloadPptx' },
+      '*',
+    );
+  });
+
+  it('clicking HTML in the dropdown still triggers the same client-side HTML download as before', async () => {
+    mockCurrentCode = '<html>...downloadPptx()...</html>';
+    const { getByLabelText, getByRole } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+
+    const createObjectURL = jest.fn().mockReturnValue('blob:mock');
+    const revokeObjectURL = jest.fn();
+    (window.URL as any).createObjectURL = createObjectURL;
+    (window.URL as any).revokeObjectURL = revokeObjectURL;
+
+    await openDownloadMenu(getByLabelText);
+    fireEvent.click(getByRole('menuitem', { name: /^com_ui_download_artifact$/i }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Drive button, Drive error/success feedback, and download-error feedback visible outside the (closed) dropdown', () => {
+    mockStartupConfigData = { googleDrivePickerEnabled: true };
+    mockCurrentCode = '<script src="/libs/deck-renderer.js"></script>';
+    const { getByLabelText } = render(
+      <DownloadArtifact
+        artifact={{ content: mockCurrentCode } as never}
+        previewRef={fakePreviewRef}
+      />,
+    );
+
+    // The Drive save button for PPTX is visible without opening the Download
+    // dropdown at all — Drive is a distinct, always-visible action, not a
+    // download-format menu item.
+    expect(getByLabelText('Save PPTX to Google Drive')).toBeInTheDocument();
   });
 });
 

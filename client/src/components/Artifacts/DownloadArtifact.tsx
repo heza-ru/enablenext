@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
-import { CircleCheckBig, Loader2 } from 'lucide-react';
+import { CircleCheckBig, Loader2, Download, ChevronDown } from 'lucide-react';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react/unstyled';
 import type { Artifact } from '~/common';
-import { Button } from '@librechat/client';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@librechat/client';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { useCodeState } from '~/Providers/EditorContext';
 import { apiBaseUrl } from 'librechat-data-provider';
@@ -486,8 +492,8 @@ const DownloadArtifact = ({
         filename?: string;
       };
       const client = previewRef?.current?.getClient();
-      const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)
-        ?.iframe?.contentWindow;
+      const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)?.iframe
+        ?.contentWindow;
       try {
         const blob = await (await fetch(dataUrl)).blob();
         const formData = new FormData();
@@ -539,8 +545,8 @@ const DownloadArtifact = ({
         encoding: 'base64' | 'text';
       };
       const client = previewRef?.current?.getClient();
-      const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)
-        ?.iframe?.contentWindow;
+      const iframeWindow = (client as unknown as { iframe?: HTMLIFrameElement } | undefined)?.iframe
+        ?.contentWindow;
       try {
         const res = await fetch(`${window.location.origin}${path}`);
         if (!res.ok) {
@@ -1185,110 +1191,106 @@ const DownloadArtifact = ({
   // decks are the only artifact type deck-editor.js supports.
   const isDeckArtifact = nativeFormats.some((f) => f.ext === 'pptx');
 
-  return (
-    <div className="relative flex flex-wrap items-center justify-end gap-1">
-      {nativeFormats.map((fmt) => (
-        <React.Fragment key={fmt.ext}>
-          {/* Wrapped in its own `relative` container (not the whole, now-wrappable
-              toolbar) so each popover anchors under ITS OWN button — with
-              flex-wrap on the outer row, a later button can land on a second
-              line, and `absolute top-8` relative to the whole toolbar would then
-              detach the popover from the button that opened it. */}
-          <div className="relative inline-flex">
+  // Shared page-size / sheet-selection popovers for the DOCX/XLSX export
+  // options pickers. Rendered once (not per-format) since docxPicker/
+  // xlsxPicker are singular, component-wide state — only one can be open at
+  // a time regardless of which button/menu-item container triggered it.
+  const exportOptionPickers = (
+    <>
+      {docxPicker && (
+        <div
+          role="dialog"
+          aria-label="DOCX page size"
+          className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+        >
+          <div className="mb-2 font-medium">{localize('com_ui_page_size')}</div>
+          {/* A4/Letter are format-name proper nouns, not UI verbs — left as
+            literal strings, matching how PPTX/XLSX/DOCX (fmt.label) are
+            already handled as literal, unlocalized labels in this file. */}
+          <label className="mb-1 flex items-center gap-2">
+            <input
+              type="radio"
+              name="docx-page-size"
+              aria-label="A4"
+              checked={docxPageSize === 'A4'}
+              onChange={() => setDocxPageSize('A4')}
+            />
+            A4
+          </label>
+          <label className="mb-2 flex items-center gap-2">
+            <input
+              type="radio"
+              name="docx-page-size"
+              aria-label="Letter"
+              checked={docxPageSize === 'Letter'}
+              onChange={() => setDocxPageSize('Letter')}
+            />
+            Letter
+          </label>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-6 px-2 text-xs" onClick={confirmDocxDownload}>
+              {localize('com_ui_download')}
+            </Button>
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-xs font-medium"
-              onClick={() => handleDownloadClick(fmt)}
-              aria-label={`Download as ${fmt.label}`}
+              className="h-6 px-2 text-xs"
+              onClick={() => setDocxPicker(null)}
             >
-              {done === fmt.ext && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-              {fmt.label}
+              {localize('com_ui_cancel')}
             </Button>
-            {docxPicker?.ext === fmt.ext && (
-              <div
-                role="dialog"
-                aria-label="DOCX page size"
-                className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
-              >
-                <div className="mb-2 font-medium">{localize('com_ui_page_size')}</div>
-                {/* A4/Letter are format-name proper nouns, not UI verbs — left as
-                  literal strings, matching how PPTX/XLSX/DOCX (fmt.label) are
-                  already handled as literal, unlocalized labels in this file. */}
-                <label className="mb-1 flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="docx-page-size"
-                    aria-label="A4"
-                    checked={docxPageSize === 'A4'}
-                    onChange={() => setDocxPageSize('A4')}
-                  />
-                  A4
-                </label>
-                <label className="mb-2 flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="docx-page-size"
-                    aria-label="Letter"
-                    checked={docxPageSize === 'Letter'}
-                    onChange={() => setDocxPageSize('Letter')}
-                  />
-                  Letter
-                </label>
-                <div className="flex gap-2">
-                  <Button size="sm" className="h-6 px-2 text-xs" onClick={confirmDocxDownload}>
-                    {localize('com_ui_download')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => setDocxPicker(null)}
-                  >
-                    {localize('com_ui_cancel')}
-                  </Button>
-                </div>
-              </div>
-            )}
-            {xlsxPicker?.fmt.ext === fmt.ext && (
-              <div
-                role="dialog"
-                aria-label="XLSX sheet selection"
-                className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
-              >
-                <div className="mb-2 font-medium">{localize('com_ui_sheets_to_export')}</div>
-                {xlsxPicker.sheetNames.map((name) => (
-                  <label key={name} className="mb-1 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      aria-label={name}
-                      checked={selectedSheets.has(name)}
-                      onChange={() => toggleSelectedSheet(name)}
-                    />
-                    {name}
-                  </label>
-                ))}
-                <div className="mt-1 flex gap-2">
-                  <Button
-                    size="sm"
-                    className="h-6 px-2 text-xs"
-                    onClick={confirmXlsxDownload}
-                    disabled={selectedSheets.size === 0}
-                  >
-                    {localize('com_ui_download')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => setXlsxPicker(null)}
-                  >
-                    {localize('com_ui_cancel')}
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
+        </div>
+      )}
+      {xlsxPicker && (
+        <div
+          role="dialog"
+          aria-label="XLSX sheet selection"
+          className="absolute top-8 z-10 rounded-md border border-border-light bg-surface-primary p-3 text-xs shadow-lg"
+        >
+          <div className="mb-2 font-medium">{localize('com_ui_sheets_to_export')}</div>
+          {xlsxPicker.sheetNames.map((name) => (
+            <label key={name} className="mb-1 flex items-center gap-2">
+              <input
+                type="checkbox"
+                aria-label={name}
+                checked={selectedSheets.has(name)}
+                onChange={() => toggleSelectedSheet(name)}
+              />
+              {name}
+            </label>
+          ))}
+          <div className="mt-1 flex gap-2">
+            <Button
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={confirmXlsxDownload}
+              disabled={selectedSheets.size === 0}
+            >
+              {localize('com_ui_download')}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs"
+              onClick={() => setXlsxPicker(null)}
+            >
+              {localize('com_ui_cancel')}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // Live status feedback (Drive spinner/error/success, download error) must
+  // stay visible OUTSIDE the dropdown at all times — folding it into a
+  // closed menu would hide exactly the information a user needs when a
+  // download or Drive save is in flight or has just failed/succeeded.
+  const driveAndErrorFeedback = (
+    <>
+      {nativeFormats.map((fmt) => (
+        <React.Fragment key={`drive-${fmt.ext}`}>
           {startupConfig?.googleDrivePickerEnabled && (
             <Button
               size="sm"
@@ -1302,114 +1304,231 @@ const DownloadArtifact = ({
               {driveSaving === fmt.ext ? 'Saving...' : 'Drive'}
             </Button>
           )}
-          {driveError && driveSaving === null && (
-            <span className="flex h-7 items-center px-2 text-xs text-red-500" title={driveError}>
-              Drive failed
-            </span>
-          )}
-          {driveLink && driveSaving === null && (
-            <a
-              href={driveLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-7 items-center px-2 text-xs font-medium text-primary hover:underline"
-            >
-              Open ↗
-            </a>
-          )}
-          {downloadError && (
-            <span className="flex h-7 items-center px-2 text-xs text-red-500" title={downloadError}>
-              Download failed
-            </span>
-          )}
         </React.Fragment>
       ))}
-      {isPresentationArtifact && (
-        <>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs font-medium"
-            onClick={printPdf}
-            aria-label="Export as PDF (opens print dialog)"
-            title="Opens in a new tab — use browser Save as PDF for pixel-perfect output"
-          >
-            {done === 'pdf' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-            PDF
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs font-medium"
-            onClick={printPdfCompat}
-            aria-label="Export as PDF (compatibility mode — flattens glass effects)"
-            title="Strips backdrop-filter, blend modes, and SVG filters before printing — more compatible with PDF viewers"
-          >
-            {done === 'pdf-compat' && (
-              <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
-            )}
-            PDF (Compat)
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs font-medium"
-            onClick={downloadPdfHD}
-            aria-label="Export as PDF (client-rendered, pixel-perfect)"
-            title="Screenshots each slide at 2× resolution in-browser and assembles a printable PDF — preserves visual fidelity but does not support backdrop-filter or blend modes"
-          >
-            {done === 'pdf-hd' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-            PDF (HD)
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs font-medium"
-            onClick={downloadPptxHD}
-            aria-label="Export as PPTX (image-based, pixel-perfect)"
-            title="Screenshots each slide at 2× resolution and assembles as a full-bleed image PPTX"
-          >
-            {done === 'pptx-hd' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-            PPTX (HD)
-          </Button>
-        </>
+      {driveError && driveSaving === null && (
+        <span className="flex h-7 items-center px-2 text-xs text-red-500" title={driveError}>
+          Drive failed
+        </span>
       )}
+      {driveLink && driveSaving === null && (
+        <a
+          href={driveLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-7 items-center px-2 text-xs font-medium text-primary hover:underline"
+        >
+          Open ↗
+        </a>
+      )}
+      {downloadError && (
+        <span className="flex h-7 items-center px-2 text-xs text-red-500" title={downloadError}>
+          Download failed
+        </span>
+      )}
+    </>
+  );
+
+  // Edit/Done Editing is a distinct primary action (not a download variant)
+  // and is kept as its own always-visible button OUTSIDE the dropdown so
+  // it's not buried behind an extra click.
+  const editButton = isDeckArtifact && (
+    <>
       <Button
         size="sm"
         variant="ghost"
         className="h-7 px-2 text-xs font-medium"
-        onClick={downloadHtml}
-        aria-label={localize('com_ui_download_artifact')}
+        onClick={toggleEditing}
+        aria-label={isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
       >
-        {done === 'html' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
-        HTML
+        {isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
       </Button>
-      {isDeckArtifact && (
-        <>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs font-medium"
-            onClick={toggleEditing}
-            aria-label={isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
-          >
-            {isEditing ? localize('com_ui_done_editing') : localize('com_ui_edit')}
-          </Button>
-          {/* Non-blocking autosave-failed indicator (Task 9): edits are
-              autosaved via a debounced, serialized queue rather than an
-              explicit Save button. Local edits are never lost when this
-              shows — only server persistence lags — so nothing here disables
-              further editing. */}
-          {autosaveFailed && (
-            <span
-              className="flex h-7 items-center px-2 text-xs text-red-500"
-              title={localize('com_ui_autosave_failed')}
-            >
-              {localize('com_ui_autosave_failed')}
-            </span>
-          )}
-        </>
+      {/* Non-blocking autosave-failed indicator (Task 9): edits are
+          autosaved via a debounced, serialized queue rather than an
+          explicit Save button. Local edits are never lost when this
+          shows — only server persistence lags — so nothing here disables
+          further editing. */}
+      {autosaveFailed && (
+        <span
+          className="flex h-7 items-center px-2 text-xs text-red-500"
+          title={localize('com_ui_autosave_failed')}
+        >
+          {localize('com_ui_autosave_failed')}
+        </span>
       )}
+    </>
+  );
+
+  if (!isPresentationArtifact) {
+    // Non-presentation (DOCX/XLSX-only) artifacts are out of scope for the
+    // download-menu consolidation — unchanged flat button row.
+    return (
+      <div className="relative flex flex-wrap items-center justify-end gap-1">
+        {nativeFormats.map((fmt) => (
+          <React.Fragment key={fmt.ext}>
+            {/* Wrapped in its own `relative` container (not the whole, now-wrappable
+                toolbar) so each popover anchors under ITS OWN button — with
+                flex-wrap on the outer row, a later button can land on a second
+                line, and `absolute top-8` relative to the whole toolbar would then
+                detach the popover from the button that opened it. */}
+            <div className="relative inline-flex">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs font-medium"
+                onClick={() => handleDownloadClick(fmt)}
+                aria-label={`Download as ${fmt.label}`}
+              >
+                {done === fmt.ext && (
+                  <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+                )}
+                {fmt.label}
+              </Button>
+              {docxPicker?.ext === fmt.ext && exportOptionPickers}
+              {xlsxPicker?.fmt.ext === fmt.ext && exportOptionPickers}
+            </div>
+            {startupConfig?.googleDrivePickerEnabled && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs font-medium"
+                onClick={() => saveToDrive(fmt)}
+                disabled={driveSaving === fmt.ext}
+                aria-label={`Save ${fmt.label} to Google Drive`}
+              >
+                {driveSaving === fmt.ext && <Loader2 size={12} className="mr-1 animate-spin" />}
+                {driveSaving === fmt.ext ? 'Saving...' : 'Drive'}
+              </Button>
+            )}
+            {driveError && driveSaving === null && (
+              <span className="flex h-7 items-center px-2 text-xs text-red-500" title={driveError}>
+                Drive failed
+              </span>
+            )}
+            {driveLink && driveSaving === null && (
+              <a
+                href={driveLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-7 items-center px-2 text-xs font-medium text-primary hover:underline"
+              >
+                Open ↗
+              </a>
+            )}
+            {downloadError && (
+              <span
+                className="flex h-7 items-center px-2 text-xs text-red-500"
+                title={downloadError}
+              >
+                Download failed
+              </span>
+            )}
+          </React.Fragment>
+        ))}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs font-medium"
+          onClick={downloadHtml}
+          aria-label={localize('com_ui_download_artifact')}
+        >
+          {done === 'html' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+          HTML
+        </Button>
+        {editButton}
+      </div>
+    );
+  }
+
+  // Presentation artifacts: every download FORMAT option (native format,
+  // PDF/PDF Compat/PDF HD/PPTX HD, HTML) consolidates into a single
+  // "Download" trigger + dropdown menu, per the UI-polish fix — the same
+  // handlers/checkmark/disabled logic as before, just rendered as menu items
+  // instead of a flat row of 6-7 separate buttons.
+  return (
+    <div className="relative flex flex-wrap items-center justify-end gap-1">
+      <div className="relative inline-flex">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs font-medium"
+              aria-label={localize('com_ui_download')}
+            >
+              <Download size={13} className="mr-1" aria-hidden="true" />
+              {localize('com_ui_download')}
+              <ChevronDown size={13} className="ml-1" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {nativeFormats.map((fmt) => (
+              <DropdownMenuItem
+                key={fmt.ext}
+                onClick={() => handleDownloadClick(fmt)}
+                aria-label={`Download as ${fmt.label}`}
+              >
+                {done === fmt.ext && (
+                  <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+                )}
+                {fmt.label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem
+              onClick={printPdf}
+              aria-label="Export as PDF (opens print dialog)"
+              title="Opens in a new tab — use browser Save as PDF for pixel-perfect output"
+            >
+              {done === 'pdf' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+              PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={printPdfCompat}
+              aria-label="Export as PDF (compatibility mode — flattens glass effects)"
+              title="Strips backdrop-filter, blend modes, and SVG filters before printing — more compatible with PDF viewers"
+            >
+              {done === 'pdf-compat' && (
+                <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+              )}
+              PDF (Compat)
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={downloadPdfHD}
+              aria-label="Export as PDF (client-rendered, pixel-perfect)"
+              title="Screenshots each slide at 2× resolution in-browser and assembles a printable PDF — preserves visual fidelity but does not support backdrop-filter or blend modes"
+            >
+              {done === 'pdf-hd' && (
+                <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+              )}
+              PDF (HD)
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={downloadPptxHD}
+              aria-label="Export as PPTX (image-based, pixel-perfect)"
+              title="Screenshots each slide at 2× resolution and assembles as a full-bleed image PPTX"
+            >
+              {done === 'pptx-hd' && (
+                <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />
+              )}
+              PPTX (HD)
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={downloadHtml}
+              aria-label={localize('com_ui_download_artifact')}
+            >
+              {done === 'html' && <CircleCheckBig size={13} className="mr-1" aria-hidden="true" />}
+              HTML
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {/* Selecting DOCX/XLSX in the menu closes the menu (Radix's default
+            item-select behaviour) and opens this picker instead — same
+            confirm/cancel handlers as before, now anchored under the single
+            Download button rather than under a per-format button. */}
+        {exportOptionPickers}
+      </div>
+      {driveAndErrorFeedback}
+      {editButton}
     </div>
   );
 };
